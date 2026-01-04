@@ -1,35 +1,41 @@
-import { Search, Bell, Filter, Calendar } from 'lucide-react';
+import { Search, Bell, Calendar, LogOut, Settings } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { Assignee } from '@/types/task';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Profile, Department, frequencyLabels } from '@/types/database';
+import { useAuth } from '@/contexts/AuthContext';
 
-interface DashboardHeaderProps {
+interface DashboardHeaderNewProps {
   searchQuery: string;
   onSearchChange: (value: string) => void;
   selectedAssignee: string;
   onAssigneeChange: (value: string) => void;
   selectedFrequency: string;
   onFrequencyChange: (value: string) => void;
-  assignees: Assignee[];
+  selectedDepartment: string;
+  onDepartmentChange: (value: string) => void;
+  profiles: Profile[];
+  departments: Department[];
 }
 
-export function DashboardHeader({
+export function DashboardHeaderNew({
   searchQuery,
   onSearchChange,
   selectedAssignee,
   onAssigneeChange,
   selectedFrequency,
   onFrequencyChange,
-  assignees,
-}: DashboardHeaderProps) {
+  selectedDepartment,
+  onDepartmentChange,
+  profiles,
+  departments,
+}: DashboardHeaderNewProps) {
+  const navigate = useNavigate();
+  const { profile, signOut, isAdmin } = useAuth();
+
   return (
     <header className="bg-card border-b sticky top-0 z-10">
       <div className="px-6 py-4">
@@ -62,6 +68,37 @@ export function DashboardHeader({
                 3
               </span>
             </Button>
+
+            {/* User Menu */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" className="relative h-9 w-9 rounded-full">
+                  <Avatar className="h-9 w-9">
+                    {profile?.avatar_url && <AvatarImage src={profile.avatar_url} />}
+                    <AvatarFallback className="bg-primary text-primary-foreground">
+                      {profile?.full_name?.split(' ').map(n => n[0]).join('').slice(0, 2) || '??'}
+                    </AvatarFallback>
+                  </Avatar>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <div className="px-2 py-1.5">
+                  <p className="text-sm font-medium">{profile?.full_name || 'Usuário'}</p>
+                  <p className="text-xs text-muted-foreground">{profile?.department?.name || 'Sem departamento'}</p>
+                </div>
+                <DropdownMenuSeparator />
+                {isAdmin && (
+                  <DropdownMenuItem onClick={() => navigate('/settings')}>
+                    <Settings className="w-4 h-4 mr-2" />
+                    Configurações
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuItem onClick={signOut} className="text-destructive">
+                  <LogOut className="w-4 h-4 mr-2" />
+                  Sair
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
 
@@ -78,6 +115,21 @@ export function DashboardHeader({
             />
           </div>
 
+          {/* Department Filter */}
+          <Select value={selectedDepartment} onValueChange={onDepartmentChange}>
+            <SelectTrigger className="w-[180px] bg-background">
+              <SelectValue placeholder="Departamento" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos</SelectItem>
+              {departments.map((dept) => (
+                <SelectItem key={dept.id} value={dept.id}>
+                  {dept.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
           {/* Assignee Filter */}
           <Select value={selectedAssignee} onValueChange={onAssigneeChange}>
             <SelectTrigger className="w-[180px] bg-background">
@@ -85,9 +137,9 @@ export function DashboardHeader({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todos</SelectItem>
-              {assignees.map((assignee) => (
-                <SelectItem key={assignee.id} value={assignee.id}>
-                  {assignee.name}
+              {profiles.map((profile) => (
+                <SelectItem key={profile.id} value={profile.id}>
+                  {profile.full_name || 'Sem nome'}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -100,20 +152,21 @@ export function DashboardHeader({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todas</SelectItem>
-              <SelectItem value="Diário">Diário</SelectItem>
-              <SelectItem value="Semanal">Semanal</SelectItem>
-              <SelectItem value="Mensal">Mensal</SelectItem>
+              {Object.entries(frequencyLabels).map(([value, label]) => (
+                <SelectItem key={value} value={value}>{label}</SelectItem>
+              ))}
             </SelectContent>
           </Select>
 
-          {/* Active Filters */}
-          {(selectedAssignee !== 'all' || selectedFrequency !== 'all') && (
+          {/* Clear Filters */}
+          {(selectedAssignee !== 'all' || selectedFrequency !== 'all' || selectedDepartment !== 'all') && (
             <Button 
               variant="ghost" 
               size="sm" 
               onClick={() => {
                 onAssigneeChange('all');
                 onFrequencyChange('all');
+                onDepartmentChange('all');
               }}
               className="text-muted-foreground hover:text-foreground"
             >
