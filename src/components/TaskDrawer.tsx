@@ -3,7 +3,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sh
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Calendar, Flag, User, Building2, RefreshCw } from 'lucide-react';
+import { Calendar, Flag, User, Building2, RefreshCw, FolderOpen } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface TaskDrawerProps {
@@ -118,6 +118,21 @@ export function TaskDrawer({ task, open, onClose }: TaskDrawerProps) {
               <p className="text-sm text-muted-foreground leading-relaxed bg-muted/50 p-4 rounded-lg">
                 {task.description}
               </p>
+            </div>
+          )}
+
+          {/* Procedure Path */}
+          {task.procedurePath && (
+            <div className="space-y-2">
+              <h4 className="font-semibold text-sm text-foreground flex items-center gap-2">
+                <FolderOpen className="w-4 h-4" />
+                Caminho no Sistema
+              </h4>
+              <div className="bg-primary/5 border border-primary/10 p-4 rounded-lg">
+                <code className="text-sm font-mono text-primary break-all">
+                  {task.procedurePath}
+                </code>
+              </div>
             </div>
           )}
 

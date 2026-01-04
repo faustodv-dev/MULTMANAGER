@@ -14,6 +14,7 @@ export interface Task {
   id: string;
   title: string;
   description?: string;
+  procedurePath?: string;
   status: TaskStatus;
   frequency: TaskFrequency;
   department: Department;
