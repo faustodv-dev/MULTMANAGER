@@ -38,6 +38,85 @@ export type Database = {
         }
         Relationships: []
       }
+      notifications: {
+        Row: {
+          created_at: string
+          id: string
+          message: string | null
+          read: boolean
+          task_id: string | null
+          title: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          message?: string | null
+          read?: boolean
+          task_id?: string | null
+          title: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          message?: string | null
+          read?: boolean
+          task_id?: string | null
+          title?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notifications_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      processes: {
+        Row: {
+          checklist: Json | null
+          created_at: string
+          department_id: string | null
+          description: string | null
+          id: string
+          procedure_path: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          checklist?: Json | null
+          created_at?: string
+          department_id?: string | null
+          description?: string | null
+          id?: string
+          procedure_path?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          checklist?: Json | null
+          created_at?: string
+          department_id?: string | null
+          description?: string | null
+          id?: string
+          procedure_path?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "processes_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -85,6 +164,7 @@ export type Database = {
           id: string
           priority: Database["public"]["Enums"]["task_priority"]
           procedure_path: string | null
+          process_id: string | null
           status: Database["public"]["Enums"]["task_status"]
           title: string
           updated_at: string
@@ -100,6 +180,7 @@ export type Database = {
           id?: string
           priority?: Database["public"]["Enums"]["task_priority"]
           procedure_path?: string | null
+          process_id?: string | null
           status?: Database["public"]["Enums"]["task_status"]
           title: string
           updated_at?: string
@@ -115,6 +196,7 @@ export type Database = {
           id?: string
           priority?: Database["public"]["Enums"]["task_priority"]
           procedure_path?: string | null
+          process_id?: string | null
           status?: Database["public"]["Enums"]["task_status"]
           title?: string
           updated_at?: string
@@ -132,6 +214,13 @@ export type Database = {
             columns: ["department_id"]
             isOneToOne: false
             referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_process_id_fkey"
+            columns: ["process_id"]
+            isOneToOne: false
+            referencedRelation: "processes"
             referencedColumns: ["id"]
           },
         ]

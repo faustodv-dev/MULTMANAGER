@@ -71,6 +71,7 @@ interface CreateTaskInput {
   due_date?: string | null;
   assignee_id?: string | null;
   department_id?: string | null;
+  process_id?: string | null;
   checklist?: ChecklistItem[];
 }
 
@@ -91,6 +92,7 @@ export function useCreateTask() {
           due_date: task.due_date || null,
           assignee_id: task.assignee_id || null,
           department_id: task.department_id || null,
+          process_id: task.process_id || null,
           checklist: (task.checklist || []) as unknown as Json,
         })
         .select()
