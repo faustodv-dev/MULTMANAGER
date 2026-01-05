@@ -6,6 +6,7 @@ import { MetricCard } from '@/components/MetricCard';
 import { KanbanBoardNew } from '@/components/KanbanBoardNew';
 import { TaskDrawerEdit } from '@/components/TaskDrawerEdit';
 import { CreateTaskModal } from '@/components/CreateTaskModal';
+import { ProcessModal } from '@/components/ProcessModal';
 import { Task } from '@/types/database';
 import { useTasks } from '@/hooks/useTasks';
 import { useProfiles } from '@/hooks/useProfiles';
@@ -13,6 +14,7 @@ import { useDepartments } from '@/hooks/useDepartments';
 import { useAuth } from '@/contexts/AuthContext';
 import { CalendarCheck, AlertTriangle, CheckCircle2, TrendingUp, Loader2, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -28,6 +30,9 @@ const Dashboard = () => {
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [processModalOpen, setProcessModalOpen] = useState(false);
+  const [draggedProcessId, setDraggedProcessId] = useState<string | null>(null);
+  const [isDragOver, setIsDragOver] = useState(false);
 
   // Redirect to auth if not logged in
   useEffect(() => {
@@ -75,6 +80,33 @@ const Dashboard = () => {
     setDrawerOpen(true);
   };
 
+  // Drag and drop handlers
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+    setIsDragOver(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    const processId = e.dataTransfer.getData('processId');
+    if (processId) {
+      setDraggedProcessId(processId);
+      setCreateModalOpen(true);
+    }
+  };
+
+  const handleCreateModalClose = () => {
+    setCreateModalOpen(false);
+    setDraggedProcessId(null);
+  };
+
   if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -89,9 +121,28 @@ const Dashboard = () => {
 
   return (
     <div className="min-h-screen flex w-full bg-background">
-      <AppSidebar />
+      <AppSidebar 
+        onCreateProcess={() => setProcessModalOpen(true)}
+      />
       
-      <main className="flex-1 flex flex-col min-w-0">
+      <main 
+        className={cn(
+          "flex-1 flex flex-col min-w-0 transition-colors",
+          isDragOver && "bg-accent/20"
+        )}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+      >
+        {/* Drop zone indicator */}
+        {isDragOver && (
+          <div className="fixed inset-0 pointer-events-none z-50 flex items-center justify-center">
+            <div className="bg-primary/90 text-primary-foreground px-6 py-4 rounded-xl shadow-2xl animate-pulse">
+              <p className="font-semibold">Solte para criar uma nova tarefa</p>
+            </div>
+          </div>
+        )}
+
         <DashboardHeaderNew
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
@@ -174,7 +225,14 @@ const Dashboard = () => {
         {/* Create Task Modal */}
         <CreateTaskModal
           open={createModalOpen}
-          onClose={() => setCreateModalOpen(false)}
+          onClose={handleCreateModalClose}
+          initialProcessId={draggedProcessId}
+        />
+
+        {/* Process Modal (Admin only) */}
+        <ProcessModal
+          open={processModalOpen}
+          onClose={() => setProcessModalOpen(false)}
         />
       </main>
     </div>

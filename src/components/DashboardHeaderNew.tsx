@@ -1,4 +1,4 @@
-import { Search, Bell, Calendar, LogOut, Settings } from 'lucide-react';
+import { Search, Calendar, LogOut, Settings } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -7,6 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Profile, Department, frequencyLabels } from '@/types/database';
 import { useAuth } from '@/contexts/AuthContext';
+import { NotificationBell } from '@/components/NotificationBell';
 
 interface DashboardHeaderNewProps {
   searchQuery: string;
@@ -62,12 +63,7 @@ export function DashboardHeaderNew({
             </div>
 
             {/* Notifications */}
-            <Button variant="ghost" size="icon" className="relative">
-              <Bell className="w-5 h-5" />
-              <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-destructive text-destructive-foreground text-[10px] font-bold rounded-full flex items-center justify-center">
-                3
-              </span>
-            </Button>
+            <NotificationBell />
 
             {/* User Menu */}
             <DropdownMenu>

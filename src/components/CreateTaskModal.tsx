@@ -5,16 +5,12 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { 
-  DropdownMenu, 
-  DropdownMenuContent, 
-  DropdownMenuItem, 
-  DropdownMenuTrigger 
-} from '@/components/ui/dropdown-menu';
-import { Plus, X, FileText, ChevronDown } from 'lucide-react';
+import { Plus, X } from 'lucide-react';
 import { useCreateTask } from '@/hooks/useTasks';
 import { useDepartments } from '@/hooks/useDepartments';
 import { useProfiles } from '@/hooks/useProfiles';
+import { useProcesses } from '@/hooks/useProcesses';
+import { useCreateNotification } from '@/hooks/useNotifications';
 import { 
   TaskStatus, 
   TaskFrequency, 
@@ -22,12 +18,12 @@ import {
   ChecklistItem,
   frequencyLabels 
 } from '@/types/database';
-import { getTemplatesForDepartment, TaskTemplate } from '@/data/taskTemplates';
 import { cn } from '@/lib/utils';
 
 interface CreateTaskModalProps {
   open: boolean;
   onClose: () => void;
+  initialProcessId?: string | null;
 }
 
 const priorityLabels: Record<TaskPriority, string> = {
@@ -42,10 +38,12 @@ const priorityColors: Record<TaskPriority, string> = {
   high: 'bg-red-500',
 };
 
-export function CreateTaskModal({ open, onClose }: CreateTaskModalProps) {
+export function CreateTaskModal({ open, onClose, initialProcessId }: CreateTaskModalProps) {
   const { mutate: createTask, isPending } = useCreateTask();
   const { data: departments = [] } = useDepartments();
   const { data: profiles = [] } = useProfiles();
+  const { data: processes = [] } = useProcesses();
+  const { mutate: createNotification } = useCreateNotification();
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -55,14 +53,43 @@ export function CreateTaskModal({ open, onClose }: CreateTaskModalProps) {
   const [priority, setPriority] = useState<TaskPriority>('medium');
   const [departmentId, setDepartmentId] = useState<string>('');
   const [assigneeId, setAssigneeId] = useState<string>('');
+  const [processId, setProcessId] = useState<string>('');
   const [checklist, setChecklist] = useState<ChecklistItem[]>([]);
   const [newChecklistItem, setNewChecklistItem] = useState('');
 
-  // Get templates for selected department
-  const selectedDepartment = departments.find(d => d.id === departmentId);
-  const availableTemplates = selectedDepartment 
-    ? getTemplatesForDepartment(selectedDepartment.name) 
-    : [];
+  // Filter processes by selected department
+  const filteredProcesses = departmentId 
+    ? processes.filter(p => p.department_id === departmentId)
+    : processes;
+
+  // Load process when selected
+  const handleProcessChange = (selectedProcessId: string) => {
+    setProcessId(selectedProcessId);
+    
+    if (selectedProcessId) {
+      const selectedProcess = processes.find(p => p.id === selectedProcessId);
+      if (selectedProcess) {
+        setTitle(selectedProcess.title);
+        setDescription(selectedProcess.description || '');
+        setProcedurePath(selectedProcess.procedure_path || '');
+        if (selectedProcess.department_id) {
+          setDepartmentId(selectedProcess.department_id);
+        }
+        setChecklist(selectedProcess.checklist.map((item, index) => ({
+          id: `new-${Date.now()}-${index}`,
+          text: item.text,
+          completed: false,
+        })));
+      }
+    }
+  };
+
+  // Load initial process if provided (from drag-and-drop)
+  useEffect(() => {
+    if (open && initialProcessId) {
+      handleProcessChange(initialProcessId);
+    }
+  }, [open, initialProcessId]);
 
   // Reset form when modal closes
   useEffect(() => {
@@ -75,24 +102,11 @@ export function CreateTaskModal({ open, onClose }: CreateTaskModalProps) {
       setPriority('medium');
       setDepartmentId('');
       setAssigneeId('');
+      setProcessId('');
       setChecklist([]);
       setNewChecklistItem('');
     }
   }, [open]);
-
-  const handleLoadTemplate = (template: TaskTemplate) => {
-    setTitle(template.title);
-    setDescription(template.description);
-    setProcedurePath(template.procedure_path);
-    setFrequency(template.frequency);
-    setPriority(template.priority);
-    // Create new checklist items with unique IDs
-    setChecklist(template.checklist.map((item, index) => ({
-      id: `new-${Date.now()}-${index}`,
-      text: item.text,
-      completed: false,
-    })));
-  };
 
   const handleAddChecklistItem = () => {
     if (newChecklistItem.trim()) {
@@ -122,9 +136,19 @@ export function CreateTaskModal({ open, onClose }: CreateTaskModalProps) {
       priority,
       department_id: departmentId || null,
       assignee_id: assigneeId || null,
+      process_id: processId || null,
       checklist,
     }, {
-      onSuccess: () => {
+      onSuccess: (data) => {
+        // Create notification for the assignee
+        if (assigneeId && data?.id) {
+          createNotification({
+            user_id: assigneeId,
+            task_id: data.id,
+            title: 'Nova tarefa atribuída',
+            message: `Você foi atribuído à tarefa: ${title.trim()}`,
+          });
+        }
         onClose();
       },
     });
@@ -138,9 +162,9 @@ export function CreateTaskModal({ open, onClose }: CreateTaskModalProps) {
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Department & Template Row */}
-          <div className="flex gap-4">
-            <div className="flex-1">
+          {/* Department & Process Row */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
               <Label htmlFor="department">Departamento</Label>
               <Select value={departmentId} onValueChange={setDepartmentId}>
                 <SelectTrigger id="department" className="mt-1.5">
@@ -156,41 +180,28 @@ export function CreateTaskModal({ open, onClose }: CreateTaskModalProps) {
               </Select>
             </div>
 
-            {/* Template Dropdown */}
-            {availableTemplates.length > 0 && (
-              <div className="flex-1">
-                <Label>Modelo Padrão</Label>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button 
-                      type="button" 
-                      variant="outline" 
-                      className="w-full mt-1.5 justify-between"
-                    >
-                      <span className="flex items-center gap-2">
-                        <FileText className="w-4 h-4" />
-                        Carregar Modelo Padrão
-                      </span>
-                      <ChevronDown className="w-4 h-4 opacity-50" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-[300px]">
-                    {availableTemplates.map((template) => (
-                      <DropdownMenuItem 
-                        key={template.id}
-                        onClick={() => handleLoadTemplate(template)}
-                        className="flex flex-col items-start py-2"
-                      >
-                        <span className="font-medium">{template.title}</span>
-                        <span className="text-xs text-muted-foreground">
-                          {frequencyLabels[template.frequency]} • {priorityLabels[template.priority]}
-                        </span>
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-            )}
+            {/* Process Selection */}
+            <div>
+              <Label htmlFor="process">Processo *</Label>
+              <Select value={processId} onValueChange={handleProcessChange}>
+                <SelectTrigger id="process" className="mt-1.5">
+                  <SelectValue placeholder="Selecione um processo" />
+                </SelectTrigger>
+                <SelectContent>
+                  {filteredProcesses.length === 0 ? (
+                    <SelectItem value="" disabled>
+                      {departmentId ? 'Nenhum processo neste departamento' : 'Selecione um departamento primeiro'}
+                    </SelectItem>
+                  ) : (
+                    filteredProcesses.map((proc) => (
+                      <SelectItem key={proc.id} value={proc.id}>
+                        {proc.title}
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           {/* Title */}
