@@ -5,12 +5,14 @@ import { DashboardHeaderNew } from '@/components/DashboardHeaderNew';
 import { MetricCard } from '@/components/MetricCard';
 import { KanbanBoardNew } from '@/components/KanbanBoardNew';
 import { TaskDrawerEdit } from '@/components/TaskDrawerEdit';
+import { CreateTaskModal } from '@/components/CreateTaskModal';
 import { Task } from '@/types/database';
 import { useTasks } from '@/hooks/useTasks';
 import { useProfiles } from '@/hooks/useProfiles';
 import { useDepartments } from '@/hooks/useDepartments';
 import { useAuth } from '@/contexts/AuthContext';
-import { CalendarCheck, AlertTriangle, CheckCircle2, TrendingUp, Loader2 } from 'lucide-react';
+import { CalendarCheck, AlertTriangle, CheckCircle2, TrendingUp, Loader2, Plus } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -25,6 +27,7 @@ const Dashboard = () => {
   const [selectedDepartment, setSelectedDepartment] = useState('all');
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [createModalOpen, setCreateModalOpen] = useState(false);
 
   // Redirect to auth if not logged in
   useEffect(() => {
@@ -152,11 +155,26 @@ const Dashboard = () => {
           )}
         </div>
 
+        {/* Floating Action Button */}
+        <Button
+          onClick={() => setCreateModalOpen(true)}
+          className="fixed bottom-6 right-6 h-14 w-14 rounded-full shadow-lg hover:shadow-xl transition-shadow"
+          size="icon"
+        >
+          <Plus className="w-6 h-6" />
+        </Button>
+
         {/* Task Details Drawer */}
         <TaskDrawerEdit
           task={selectedTask}
           open={drawerOpen}
           onClose={() => setDrawerOpen(false)}
+        />
+
+        {/* Create Task Modal */}
+        <CreateTaskModal
+          open={createModalOpen}
+          onClose={() => setCreateModalOpen(false)}
         />
       </main>
     </div>
