@@ -189,7 +189,7 @@ export function CreateTaskModal({ open, onClose, initialProcessId }: CreateTaskM
                 </SelectTrigger>
                 <SelectContent>
                   {filteredProcesses.length === 0 ? (
-                    <SelectItem value="" disabled>
+                    <SelectItem value="__empty__" disabled>
                       {departmentId ? 'Nenhum processo neste departamento' : 'Selecione um departamento primeiro'}
                     </SelectItem>
                   ) : (
@@ -278,12 +278,12 @@ export function CreateTaskModal({ open, onClose, initialProcessId }: CreateTaskM
 
             <div>
               <Label htmlFor="assignee">Responsável</Label>
-              <Select value={assigneeId} onValueChange={setAssigneeId}>
+              <Select value={assigneeId || "none"} onValueChange={(v) => setAssigneeId(v === "none" ? "" : v)}>
                 <SelectTrigger id="assignee" className="mt-1.5">
                   <SelectValue placeholder="Nenhum" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Nenhum</SelectItem>
+                  <SelectItem value="none">Nenhum</SelectItem>
                   {profiles.map((profile) => (
                     <SelectItem key={profile.id} value={profile.id}>
                       {profile.full_name || 'Sem nome'}

@@ -118,12 +118,12 @@ export function ProcessModal({ open, onClose, editProcess }: ProcessModalProps) 
           {/* Department */}
           <div>
             <Label htmlFor="process-department">Departamento</Label>
-            <Select value={departmentId} onValueChange={setDepartmentId}>
+            <Select value={departmentId || "none"} onValueChange={(v) => setDepartmentId(v === "none" ? "" : v)}>
               <SelectTrigger id="process-department" className="mt-1.5">
                 <SelectValue placeholder="Selecione um departamento" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Nenhum</SelectItem>
+                <SelectItem value="none">Nenhum</SelectItem>
                 {departments.map((dept) => (
                   <SelectItem key={dept.id} value={dept.id}>
                     {dept.name}
