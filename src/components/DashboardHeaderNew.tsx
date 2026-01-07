@@ -1,13 +1,17 @@
-import { Search, Calendar, LogOut, Settings } from 'lucide-react';
+import { Search, Calendar, LogOut, Settings, CalendarDays, Filter } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Profile, Department, frequencyLabels } from '@/types/database';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar as CalendarComponent } from '@/components/ui/calendar';
+import { Profile, Department, frequencyLabels, statusLabels, TaskStatus } from '@/types/database';
 import { useAuth } from '@/contexts/AuthContext';
 import { NotificationBell } from '@/components/NotificationBell';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 interface DashboardHeaderNewProps {
   searchQuery: string;
@@ -18,6 +22,10 @@ interface DashboardHeaderNewProps {
   onFrequencyChange: (value: string) => void;
   selectedDepartment: string;
   onDepartmentChange: (value: string) => void;
+  selectedStatus: string;
+  onStatusChange: (value: string) => void;
+  selectedDateRange: { from: Date | undefined; to: Date | undefined };
+  onDateRangeChange: (range: { from: Date | undefined; to: Date | undefined }) => void;
   profiles: Profile[];
   departments: Department[];
 }
@@ -31,6 +39,10 @@ export function DashboardHeaderNew({
   onFrequencyChange,
   selectedDepartment,
   onDepartmentChange,
+  selectedStatus,
+  onStatusChange,
+  selectedDateRange,
+  onDateRangeChange,
   profiles,
   departments,
 }: DashboardHeaderNewProps) {
@@ -141,6 +153,48 @@ export function DashboardHeaderNew({
             </SelectContent>
           </Select>
 
+          {/* Status Filter */}
+          <Select value={selectedStatus} onValueChange={onStatusChange}>
+            <SelectTrigger className="w-[160px] bg-background">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos</SelectItem>
+              {Object.entries(statusLabels).map(([value, label]) => (
+                <SelectItem key={value} value={value}>{label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {/* Date Range Filter */}
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" className="w-[200px] justify-start text-left font-normal bg-background">
+                <CalendarDays className="mr-2 h-4 w-4" />
+                {selectedDateRange.from ? (
+                  selectedDateRange.to ? (
+                    <>
+                      {format(selectedDateRange.from, "dd/MM", { locale: ptBR })} - {format(selectedDateRange.to, "dd/MM", { locale: ptBR })}
+                    </>
+                  ) : (
+                    format(selectedDateRange.from, "dd/MM/yyyy", { locale: ptBR })
+                  )
+                ) : (
+                  <span className="text-muted-foreground">Data criação</span>
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <CalendarComponent
+                initialFocus
+                mode="range"
+                selected={selectedDateRange}
+                onSelect={(range) => onDateRangeChange({ from: range?.from, to: range?.to })}
+                numberOfMonths={2}
+              />
+            </PopoverContent>
+          </Popover>
+
           {/* Frequency Filter */}
           <Select value={selectedFrequency} onValueChange={onFrequencyChange}>
             <SelectTrigger className="w-[160px] bg-background">
@@ -155,7 +209,7 @@ export function DashboardHeaderNew({
           </Select>
 
           {/* Clear Filters */}
-          {(selectedAssignee !== 'all' || selectedFrequency !== 'all' || selectedDepartment !== 'all') && (
+          {(selectedAssignee !== 'all' || selectedFrequency !== 'all' || selectedDepartment !== 'all' || selectedStatus !== 'all' || selectedDateRange.from) && (
             <Button 
               variant="ghost" 
               size="sm" 
@@ -163,6 +217,8 @@ export function DashboardHeaderNew({
                 onAssigneeChange('all');
                 onFrequencyChange('all');
                 onDepartmentChange('all');
+                onStatusChange('all');
+                onDateRangeChange({ from: undefined, to: undefined });
               }}
               className="text-muted-foreground hover:text-foreground"
             >
