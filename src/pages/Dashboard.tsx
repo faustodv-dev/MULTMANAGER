@@ -28,6 +28,8 @@ const Dashboard = () => {
   const [selectedAssignee, setSelectedAssignee] = useState('all');
   const [selectedFrequency, setSelectedFrequency] = useState('all');
   const [selectedDepartment, setSelectedDepartment] = useState('all');
+  const [selectedStatus, setSelectedStatus] = useState('all');
+  const [selectedDateRange, setSelectedDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({ from: undefined, to: undefined });
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [createModalOpen, setCreateModalOpen] = useState(false);
@@ -50,9 +52,27 @@ const Dashboard = () => {
       const matchesAssignee = selectedAssignee === 'all' || task.assignee_id === selectedAssignee;
       const matchesFrequency = selectedFrequency === 'all' || task.frequency === selectedFrequency;
       const matchesDepartment = selectedDepartment === 'all' || task.department_id === selectedDepartment;
-      return matchesSearch && matchesAssignee && matchesFrequency && matchesDepartment;
+      const matchesStatus = selectedStatus === 'all' || task.status === selectedStatus;
+      
+      // Date range filter
+      let matchesDateRange = true;
+      if (selectedDateRange.from) {
+        const taskCreatedAt = new Date(task.created_at);
+        const fromDate = new Date(selectedDateRange.from);
+        fromDate.setHours(0, 0, 0, 0);
+        
+        if (selectedDateRange.to) {
+          const toDate = new Date(selectedDateRange.to);
+          toDate.setHours(23, 59, 59, 999);
+          matchesDateRange = taskCreatedAt >= fromDate && taskCreatedAt <= toDate;
+        } else {
+          matchesDateRange = taskCreatedAt >= fromDate;
+        }
+      }
+      
+      return matchesSearch && matchesAssignee && matchesFrequency && matchesDepartment && matchesStatus && matchesDateRange;
     });
-  }, [tasks, searchQuery, selectedAssignee, selectedFrequency, selectedDepartment]);
+  }, [tasks, searchQuery, selectedAssignee, selectedFrequency, selectedDepartment, selectedStatus, selectedDateRange]);
 
   // Calculate metrics
   const metrics = useMemo(() => {
@@ -165,6 +185,10 @@ const Dashboard = () => {
           onFrequencyChange={setSelectedFrequency}
           selectedDepartment={selectedDepartment}
           onDepartmentChange={setSelectedDepartment}
+          selectedStatus={selectedStatus}
+          onStatusChange={setSelectedStatus}
+          selectedDateRange={selectedDateRange}
+          onDateRangeChange={setSelectedDateRange}
           profiles={profiles}
           departments={departments}
         />
