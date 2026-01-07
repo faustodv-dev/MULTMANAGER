@@ -12,8 +12,10 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { useDepartments, useCreateDepartment, useDeleteDepartment } from '@/hooks/useDepartments';
 import { useProfiles, useUserRoles, useUpdateUserRole, useUpdateProfile } from '@/hooks/useProfiles';
+import { useProcesses, useDeleteProcess, Process } from '@/hooks/useProcesses';
+import { ProcessModal } from '@/components/ProcessModal';
 import { AppRole, roleLabels, departmentColors } from '@/types/database';
-import { ArrowLeft, Plus, Trash2, Building2, Users, Loader2, Shield } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Building2, Users, Loader2, Shield, FileText, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
@@ -30,14 +32,19 @@ export default function Settings() {
   const { isAdmin } = useAuth();
   const { data: departments, isLoading: loadingDepts } = useDepartments();
   const { data: profiles, isLoading: loadingProfiles } = useProfiles();
+  const { data: processes, isLoading: loadingProcesses } = useProcesses();
   const { data: userRoles } = useUserRoles();
   const createDepartment = useCreateDepartment();
   const deleteDepartment = useDeleteDepartment();
+  const deleteProcess = useDeleteProcess();
   const updateUserRole = useUpdateUserRole();
   const updateProfile = useUpdateProfile();
 
   const [newDeptName, setNewDeptName] = useState('');
   const [newDeptColor, setNewDeptColor] = useState('blue');
+  const [processModalOpen, setProcessModalOpen] = useState(false);
+  const [editingProcess, setEditingProcess] = useState<Process | null>(null);
+  const [filterDepartmentId, setFilterDepartmentId] = useState<string>('all');
 
   if (!isAdmin) {
     return (
@@ -101,6 +108,26 @@ export default function Settings() {
     return role?.role ?? 'employee';
   };
 
+  const handleDeleteProcess = async (id: string) => {
+    if (confirm('Tem certeza que deseja excluir este processo?')) {
+      await deleteProcess.mutateAsync(id);
+    }
+  };
+
+  const handleEditProcess = (process: Process) => {
+    setEditingProcess(process);
+    setProcessModalOpen(true);
+  };
+
+  const handleProcessModalClose = () => {
+    setProcessModalOpen(false);
+    setEditingProcess(null);
+  };
+
+  const filteredProcesses = processes?.filter(p => 
+    filterDepartmentId === 'all' || p.department_id === filterDepartmentId
+  ) || [];
+
   return (
     <div className="min-h-screen flex w-full bg-background">
       <AppSidebar />
@@ -114,7 +141,7 @@ export default function Settings() {
             <div>
               <h1 className="text-2xl font-bold text-foreground">Configurações</h1>
               <p className="text-sm text-muted-foreground">
-                Gerencie departamentos e usuários do sistema
+                Gerencie departamentos, processos e usuários do sistema
               </p>
             </div>
           </div>
@@ -126,6 +153,10 @@ export default function Settings() {
               <TabsTrigger value="departments" className="gap-2">
                 <Building2 className="w-4 h-4" />
                 Departamentos
+              </TabsTrigger>
+              <TabsTrigger value="processes" className="gap-2">
+                <FileText className="w-4 h-4" />
+                Processos
               </TabsTrigger>
               <TabsTrigger value="users" className="gap-2">
                 <Users className="w-4 h-4" />
@@ -301,8 +332,106 @@ export default function Settings() {
                 </CardContent>
               </Card>
             </TabsContent>
+
+            <TabsContent value="processes" className="space-y-6">
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <div>
+                    <CardTitle>Processos</CardTitle>
+                    <CardDescription>Lista de todos os processos cadastrados</CardDescription>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <Select value={filterDepartmentId} onValueChange={setFilterDepartmentId}>
+                      <SelectTrigger className="w-[180px]">
+                        <SelectValue placeholder="Filtrar por departamento" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todos os departamentos</SelectItem>
+                        {departments?.map((dept) => (
+                          <SelectItem key={dept.id} value={dept.id}>
+                            {dept.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button onClick={() => setProcessModalOpen(true)}>
+                      <Plus className="w-4 h-4 mr-2" />
+                      Novo Processo
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {loadingProcesses ? (
+                    <div className="flex justify-center py-8">
+                      <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : filteredProcesses.length === 0 ? (
+                    <p className="text-center py-8 text-muted-foreground">
+                      Nenhum processo cadastrado
+                    </p>
+                  ) : (
+                    <div className="space-y-3">
+                      {filteredProcesses.map((process) => (
+                        <div
+                          key={process.id}
+                          className="flex items-center justify-between p-4 rounded-lg border bg-card hover:bg-muted/50 transition-colors"
+                        >
+                          <div className="flex items-center gap-3 flex-1 min-w-0">
+                            <FileText className="w-5 h-5 text-muted-foreground shrink-0" />
+                            <div className="min-w-0">
+                              <p className="font-medium truncate">{process.title}</p>
+                              <div className="flex items-center gap-2 mt-1">
+                                {process.department && (
+                                  <Badge variant="outline" className="text-xs">
+                                    <div className={cn(
+                                      "w-2 h-2 rounded-full mr-1.5",
+                                      departmentColors[process.department.color_theme] || 'bg-gray-500'
+                                    )} />
+                                    {process.department.name}
+                                  </Badge>
+                                )}
+                                {process.checklist.length > 0 && (
+                                  <span className="text-xs text-muted-foreground">
+                                    {process.checklist.length} itens no checklist
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleEditProcess(process)}
+                              className="text-muted-foreground hover:text-foreground"
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleDeleteProcess(process.id)}
+                              className="text-muted-foreground hover:text-destructive"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
           </Tabs>
         </div>
+
+        {/* Process Modal */}
+        <ProcessModal
+          open={processModalOpen}
+          onClose={handleProcessModalClose}
+          editProcess={editingProcess}
+        />
       </main>
     </div>
   );
