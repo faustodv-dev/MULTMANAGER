@@ -1,5 +1,5 @@
 import { useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Settings, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, FileText, Plus, GripVertical } from 'lucide-react';
+import { LayoutDashboard, Settings, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, FileText, Plus, GripVertical, Pencil } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -9,13 +9,16 @@ import { useDepartments } from '@/hooks/useDepartments';
 import { useProcesses, Process } from '@/hooks/useProcesses';
 import { departmentColors } from '@/types/database';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+
 interface AppSidebarProps {
   onProcessDrag?: (processId: string) => void;
   onCreateProcess?: () => void;
+  onEditProcess?: (process: Process) => void;
 }
 export function AppSidebar({
   onProcessDrag,
-  onCreateProcess
+  onCreateProcess,
+  onEditProcess
 }: AppSidebarProps) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -113,6 +116,19 @@ export function AppSidebar({
                           <GripVertical className="w-3 h-3 opacity-0 group-hover:opacity-50 shrink-0" />
                           <FileText className="w-4 h-4 shrink-0" />
                           <span className="text-sm truncate flex-1">{process.title}</span>
+                          {isAdmin && onEditProcess && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-5 w-5 opacity-0 group-hover:opacity-100 text-sidebar-foreground/50 hover:text-sidebar-foreground"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onEditProcess(process);
+                              }}
+                            >
+                              <Pencil className="w-3 h-3" />
+                            </Button>
+                          )}
                         </div>)}
                   </CollapsibleContent>
                 </Collapsible>;
@@ -125,6 +141,19 @@ export function AppSidebar({
                     <GripVertical className="w-3 h-3 opacity-0 group-hover:opacity-50 shrink-0" />
                     <FileText className="w-4 h-4 shrink-0" />
                     <span className="text-sm truncate flex-1">{process.title}</span>
+                    {isAdmin && onEditProcess && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-5 w-5 opacity-0 group-hover:opacity-100 text-sidebar-foreground/50 hover:text-sidebar-foreground"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onEditProcess(process);
+                        }}
+                      >
+                        <Pencil className="w-3 h-3" />
+                      </Button>
+                    )}
                   </div>)}
               </div>}
           </div>}

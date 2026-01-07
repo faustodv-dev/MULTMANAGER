@@ -8,6 +8,7 @@ import { TaskDrawerEdit } from '@/components/TaskDrawerEdit';
 import { CreateTaskModal } from '@/components/CreateTaskModal';
 import { ProcessModal } from '@/components/ProcessModal';
 import { Task } from '@/types/database';
+import { Process } from '@/hooks/useProcesses';
 import { useTasks } from '@/hooks/useTasks';
 import { useProfiles } from '@/hooks/useProfiles';
 import { useDepartments } from '@/hooks/useDepartments';
@@ -31,6 +32,7 @@ const Dashboard = () => {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [processModalOpen, setProcessModalOpen] = useState(false);
+  const [editingProcess, setEditingProcess] = useState<Process | null>(null);
   const [draggedProcessId, setDraggedProcessId] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
 
@@ -107,6 +109,16 @@ const Dashboard = () => {
     setDraggedProcessId(null);
   };
 
+  const handleEditProcess = (process: Process) => {
+    setEditingProcess(process);
+    setProcessModalOpen(true);
+  };
+
+  const handleProcessModalClose = () => {
+    setProcessModalOpen(false);
+    setEditingProcess(null);
+  };
+
   if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -123,6 +135,7 @@ const Dashboard = () => {
     <div className="min-h-screen flex w-full bg-background">
       <AppSidebar 
         onCreateProcess={() => setProcessModalOpen(true)}
+        onEditProcess={handleEditProcess}
       />
       
       <main 
@@ -232,7 +245,8 @@ const Dashboard = () => {
         {/* Process Modal (Admin only) */}
         <ProcessModal
           open={processModalOpen}
-          onClose={() => setProcessModalOpen(false)}
+          onClose={handleProcessModalClose}
+          editProcess={editingProcess}
         />
       </main>
     </div>
