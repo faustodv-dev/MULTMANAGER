@@ -48,7 +48,10 @@ const Dashboard = () => {
   // Filter tasks
   const filteredTasks = useMemo(() => {
     return tasks.filter(task => {
-      const matchesSearch = task.title.toLowerCase().includes(searchQuery.toLowerCase());
+      const searchLower = searchQuery.toLowerCase();
+      const matchesSearch = !searchQuery || 
+        task.title.toLowerCase().includes(searchLower) ||
+        (task.description && task.description.toLowerCase().includes(searchLower));
       const matchesAssignee = selectedAssignee === 'all' || task.assignee_id === selectedAssignee;
       const matchesFrequency = selectedFrequency === 'all' || task.frequency === selectedFrequency;
       const matchesDepartment = selectedDepartment === 'all' || task.department_id === selectedDepartment;
