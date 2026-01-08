@@ -81,26 +81,24 @@ export function useMarkAllNotificationsRead() {
   });
 }
 
-export function useCreateNotification() {
+export function useCreateTaskNotification() {
   const queryClient = useQueryClient();
   
   return useMutation({
     mutationFn: async (notification: { 
-      user_id: string; 
-      task_id?: string | null; 
+      task_id: string; 
+      assignee_id: string;
       title: string; 
       message?: string | null;
     }) => {
+      // Use secure RPC function that validates authorization
       const { data, error } = await supabase
-        .from('notifications')
-        .insert({
-          user_id: notification.user_id,
-          task_id: notification.task_id || null,
-          title: notification.title,
-          message: notification.message || null,
-        })
-        .select()
-        .single();
+        .rpc('create_task_notification', {
+          _task_id: notification.task_id,
+          _assignee_id: notification.assignee_id,
+          _title: notification.title.substring(0, 200), // Enforce limit
+          _message: notification.message?.substring(0, 1000) || null,
+        });
       
       if (error) throw error;
       return data;

@@ -10,7 +10,7 @@ import { useCreateTask } from '@/hooks/useTasks';
 import { useDepartments } from '@/hooks/useDepartments';
 import { useProfiles } from '@/hooks/useProfiles';
 import { useProcesses } from '@/hooks/useProcesses';
-import { useCreateNotification } from '@/hooks/useNotifications';
+import { useCreateTaskNotification } from '@/hooks/useNotifications';
 import { 
   TaskStatus, 
   TaskFrequency, 
@@ -43,7 +43,7 @@ export function CreateTaskModal({ open, onClose, initialProcessId }: CreateTaskM
   const { data: departments = [] } = useDepartments();
   const { data: profiles = [] } = useProfiles();
   const { data: processes = [] } = useProcesses();
-  const { mutate: createNotification } = useCreateNotification();
+  const { mutate: createTaskNotification } = useCreateTaskNotification();
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -140,11 +140,11 @@ export function CreateTaskModal({ open, onClose, initialProcessId }: CreateTaskM
       checklist,
     }, {
       onSuccess: (data) => {
-        // Create notification for the assignee
+        // Create notification for the assignee using secure RPC function
         if (assigneeId && data?.id) {
-          createNotification({
-            user_id: assigneeId,
+          createTaskNotification({
             task_id: data.id,
+            assignee_id: assigneeId,
             title: 'Nova tarefa atribuída',
             message: `Você foi atribuído à tarefa: ${title.trim()}`,
           });
