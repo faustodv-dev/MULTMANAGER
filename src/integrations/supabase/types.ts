@@ -38,6 +38,187 @@ export type Database = {
         }
         Relationships: []
       }
+      lead_activities: {
+        Row: {
+          activity_type: string
+          created_at: string
+          description: string
+          id: string
+          lead_id: string
+          new_stage: Database["public"]["Enums"]["lead_stage"] | null
+          old_stage: Database["public"]["Enums"]["lead_stage"] | null
+          scheduled_at: string | null
+          user_id: string
+        }
+        Insert: {
+          activity_type: string
+          created_at?: string
+          description: string
+          id?: string
+          lead_id: string
+          new_stage?: Database["public"]["Enums"]["lead_stage"] | null
+          old_stage?: Database["public"]["Enums"]["lead_stage"] | null
+          scheduled_at?: string | null
+          user_id: string
+        }
+        Update: {
+          activity_type?: string
+          created_at?: string
+          description?: string
+          id?: string
+          lead_id?: string
+          new_stage?: Database["public"]["Enums"]["lead_stage"] | null
+          old_stage?: Database["public"]["Enums"]["lead_stage"] | null
+          scheduled_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_activities_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_activities_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      leads: {
+        Row: {
+          assigned_to: string | null
+          birth_date: string | null
+          campaign: string | null
+          converted_at: string | null
+          course_interest: string | null
+          cpf: string | null
+          created_at: string
+          department_id: string | null
+          discount_percent: number | null
+          education_level: string | null
+          email: string | null
+          final_value: number | null
+          has_diploma: boolean | null
+          id: string
+          lost_at: string | null
+          lost_reason: string | null
+          media_source_id: string | null
+          name: string
+          next_contact_date: string | null
+          notes: string | null
+          phone: string
+          quote_value: number | null
+          stage: Database["public"]["Enums"]["lead_stage"]
+          status: Database["public"]["Enums"]["lead_status"]
+          updated_at: string
+          whatsapp: string | null
+        }
+        Insert: {
+          assigned_to?: string | null
+          birth_date?: string | null
+          campaign?: string | null
+          converted_at?: string | null
+          course_interest?: string | null
+          cpf?: string | null
+          created_at?: string
+          department_id?: string | null
+          discount_percent?: number | null
+          education_level?: string | null
+          email?: string | null
+          final_value?: number | null
+          has_diploma?: boolean | null
+          id?: string
+          lost_at?: string | null
+          lost_reason?: string | null
+          media_source_id?: string | null
+          name: string
+          next_contact_date?: string | null
+          notes?: string | null
+          phone: string
+          quote_value?: number | null
+          stage?: Database["public"]["Enums"]["lead_stage"]
+          status?: Database["public"]["Enums"]["lead_status"]
+          updated_at?: string
+          whatsapp?: string | null
+        }
+        Update: {
+          assigned_to?: string | null
+          birth_date?: string | null
+          campaign?: string | null
+          converted_at?: string | null
+          course_interest?: string | null
+          cpf?: string | null
+          created_at?: string
+          department_id?: string | null
+          discount_percent?: number | null
+          education_level?: string | null
+          email?: string | null
+          final_value?: number | null
+          has_diploma?: boolean | null
+          id?: string
+          lost_at?: string | null
+          lost_reason?: string | null
+          media_source_id?: string | null
+          name?: string
+          next_contact_date?: string | null
+          notes?: string | null
+          phone?: string
+          quote_value?: number | null
+          stage?: Database["public"]["Enums"]["lead_stage"]
+          status?: Database["public"]["Enums"]["lead_status"]
+          updated_at?: string
+          whatsapp?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "leads_assigned_to_fkey"
+            columns: ["assigned_to"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leads_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leads_media_source_id_fkey"
+            columns: ["media_source_id"]
+            isOneToOne: false
+            referencedRelation: "media_sources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      media_sources: {
+        Row: {
+          active: boolean
+          created_at: string
+          id: string
+          name: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          id?: string
+          name: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          id?: string
+          name?: string
+        }
+        Relationships: []
+      }
       notifications: {
         Row: {
           created_at: string
@@ -248,6 +429,15 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      admin_create_user_profile: {
+        Args: {
+          _department_id?: string
+          _full_name: string
+          _role?: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: string
+      }
       create_task_notification: {
         Args: {
           _assignee_id: string
@@ -271,6 +461,15 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "manager" | "employee"
+      lead_stage:
+        | "novo"
+        | "contato_inicial"
+        | "qualificacao"
+        | "apresentacao"
+        | "negociacao"
+        | "matricula"
+        | "perdido"
+      lead_status: "ativo" | "inativo" | "convertido" | "perdido"
       task_frequency: "daily" | "weekly" | "monthly"
       task_priority: "low" | "medium" | "high"
       task_status: "todo" | "in_progress" | "review" | "done"
@@ -402,6 +601,16 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "manager", "employee"],
+      lead_stage: [
+        "novo",
+        "contato_inicial",
+        "qualificacao",
+        "apresentacao",
+        "negociacao",
+        "matricula",
+        "perdido",
+      ],
+      lead_status: ["ativo", "inativo", "convertido", "perdido"],
       task_frequency: ["daily", "weekly", "monthly"],
       task_priority: ["low", "medium", "high"],
       task_status: ["todo", "in_progress", "review", "done"],
