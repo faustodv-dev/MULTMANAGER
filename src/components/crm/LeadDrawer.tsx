@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -16,6 +16,8 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import {
   Select,
   SelectContent,
@@ -27,6 +29,7 @@ import {
   useLeadActivities, useUpdateLead, useUpdateLeadStage, 
   useCreateLeadActivity 
 } from '@/hooks/useLeads';
+import { useDepartments } from '@/hooks/useDepartments';
 import { useAuth } from '@/contexts/AuthContext';
 import { 
   Lead, MediaSource, LeadStage, stageLabels, stageColors,
@@ -38,9 +41,10 @@ import { ptBR } from 'date-fns/locale';
 import { 
   Phone, Mail, Calendar, MessageCircle, FileText, 
   ArrowRight, Users, Loader2, Send, User, Building,
-  DollarSign, GraduationCap, Clock
+  DollarSign, GraduationCap, Clock, Pencil, Save, X
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
 interface LeadDrawerProps {
   lead: Lead | null;
@@ -55,7 +59,29 @@ const activitySchema = z.object({
   description: z.string().min(1, 'Descrição é obrigatória'),
 });
 
+const leadEditSchema = z.object({
+  name: z.string().min(1, 'Nome é obrigatório'),
+  phone: z.string().min(1, 'Telefone é obrigatório'),
+  email: z.string().email('Email inválido').optional().or(z.literal('')),
+  whatsapp: z.string().optional(),
+  cpf: z.string().optional(),
+  birth_date: z.string().optional(),
+  course_interest: z.string().optional(),
+  education_level: z.string().optional(),
+  has_diploma: z.boolean().optional(),
+  media_source_id: z.string().optional(),
+  campaign: z.string().optional(),
+  quote_value: z.number().optional().nullable(),
+  discount_percent: z.number().optional().nullable(),
+  final_value: z.number().optional().nullable(),
+  assigned_to: z.string().optional(),
+  department_id: z.string().optional(),
+  next_contact_date: z.string().optional(),
+  notes: z.string().optional(),
+});
+
 type ActivityForm = z.infer<typeof activitySchema>;
+type LeadEditForm = z.infer<typeof leadEditSchema>;
 
 const activityIcons: Record<string, React.ReactNode> = {
   call: <Phone className="w-4 h-4" />,
@@ -66,15 +92,57 @@ const activityIcons: Record<string, React.ReactNode> = {
   stage_change: <ArrowRight className="w-4 h-4" />,
 };
 
+const educationLevels = [
+  'Ensino Fundamental',
+  'Ensino Médio',
+  'Ensino Superior Incompleto',
+  'Ensino Superior Completo',
+  'Pós-Graduação',
+  'Mestrado',
+  'Doutorado',
+];
+
 export function LeadDrawer({ lead, open, onClose, mediaSources, profiles }: LeadDrawerProps) {
   const { user } = useAuth();
   const { data: activities = [], isLoading: loadingActivities } = useLeadActivities(lead?.id);
+  const { data: departments = [] } = useDepartments();
   const updateLead = useUpdateLead();
   const updateLeadStage = useUpdateLeadStage();
   const createActivity = useCreateLeadActivity();
   
   const [activityType, setActivityType] = useState('');
   const [activityDescription, setActivityDescription] = useState('');
+  const [isEditing, setIsEditing] = useState(false);
+  const [editData, setEditData] = useState<LeadEditForm | null>(null);
+
+  // Initialize edit data when lead changes
+  useEffect(() => {
+    if (lead) {
+      setEditData({
+        name: lead.name,
+        phone: lead.phone,
+        email: lead.email || '',
+        whatsapp: lead.whatsapp || '',
+        cpf: lead.cpf || '',
+        birth_date: lead.birth_date || '',
+        course_interest: lead.course_interest || '',
+        education_level: lead.education_level || '',
+        has_diploma: lead.has_diploma || false,
+        media_source_id: lead.media_source_id || '',
+        campaign: lead.campaign || '',
+        quote_value: lead.quote_value,
+        discount_percent: lead.discount_percent,
+        final_value: lead.final_value,
+        assigned_to: lead.assigned_to || '',
+        department_id: lead.department_id || '',
+        next_contact_date: lead.next_contact_date 
+          ? format(new Date(lead.next_contact_date), "yyyy-MM-dd'T'HH:mm")
+          : '',
+        notes: lead.notes || '',
+      });
+      setIsEditing(false);
+    }
+  }, [lead]);
 
   const handleStageChange = async (stage: LeadStage) => {
     if (!lead || !user) return;
@@ -100,7 +168,94 @@ export function LeadDrawer({ lead, open, onClose, mediaSources, profiles }: Lead
     setActivityDescription('');
   };
 
-  if (!lead) return null;
+  const handleSaveEdit = async () => {
+    if (!lead || !editData) return;
+
+    try {
+      await updateLead.mutateAsync({
+        id: lead.id,
+        updates: {
+          name: editData.name,
+          phone: editData.phone,
+          email: editData.email || null,
+          whatsapp: editData.whatsapp || null,
+          cpf: editData.cpf || null,
+          birth_date: editData.birth_date || null,
+          course_interest: editData.course_interest || null,
+          education_level: editData.education_level || null,
+          has_diploma: editData.has_diploma || false,
+          media_source_id: editData.media_source_id || null,
+          campaign: editData.campaign || null,
+          quote_value: editData.quote_value,
+          discount_percent: editData.discount_percent,
+          final_value: editData.final_value,
+          assigned_to: editData.assigned_to || null,
+          department_id: editData.department_id || null,
+          next_contact_date: editData.next_contact_date 
+            ? new Date(editData.next_contact_date).toISOString()
+            : null,
+          notes: editData.notes || null,
+        },
+      });
+      toast.success('Lead atualizado com sucesso!');
+      setIsEditing(false);
+    } catch (error) {
+      toast.error('Erro ao atualizar lead');
+    }
+  };
+
+  const handleCancelEdit = () => {
+    if (lead) {
+      setEditData({
+        name: lead.name,
+        phone: lead.phone,
+        email: lead.email || '',
+        whatsapp: lead.whatsapp || '',
+        cpf: lead.cpf || '',
+        birth_date: lead.birth_date || '',
+        course_interest: lead.course_interest || '',
+        education_level: lead.education_level || '',
+        has_diploma: lead.has_diploma || false,
+        media_source_id: lead.media_source_id || '',
+        campaign: lead.campaign || '',
+        quote_value: lead.quote_value,
+        discount_percent: lead.discount_percent,
+        final_value: lead.final_value,
+        assigned_to: lead.assigned_to || '',
+        department_id: lead.department_id || '',
+        next_contact_date: lead.next_contact_date 
+          ? format(new Date(lead.next_contact_date), "yyyy-MM-dd'T'HH:mm")
+          : '',
+        notes: lead.notes || '',
+      });
+    }
+    setIsEditing(false);
+  };
+
+  // Calculate final value when quote_value or discount changes
+  const calculateFinalValue = (quoteValue: number | null | undefined, discountPercent: number | null | undefined) => {
+    if (!quoteValue) return null;
+    if (!discountPercent) return quoteValue;
+    return quoteValue * (1 - discountPercent / 100);
+  };
+
+  const updateEditField = (field: keyof LeadEditForm, value: any) => {
+    if (!editData) return;
+    
+    const newData = { ...editData, [field]: value };
+    
+    // Auto-calculate final value
+    if (field === 'quote_value' || field === 'discount_percent') {
+      newData.final_value = calculateFinalValue(
+        field === 'quote_value' ? value : editData.quote_value,
+        field === 'discount_percent' ? value : editData.discount_percent
+      );
+    }
+    
+    setEditData(newData);
+  };
+
+  if (!lead || !editData) return null;
 
   return (
     <Sheet open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
@@ -112,7 +267,7 @@ export function LeadDrawer({ lead, open, onClose, mediaSources, profiles }: Lead
                 {lead.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
               </AvatarFallback>
             </Avatar>
-            <div>
+            <div className="flex-1">
               <SheetTitle className="text-left">{lead.name}</SheetTitle>
               <SheetDescription className="text-left flex items-center gap-2">
                 <Badge className={cn("text-white", stageColors[lead.stage])}>
@@ -123,6 +278,33 @@ export function LeadDrawer({ lead, open, onClose, mediaSources, profiles }: Lead
                 )}
               </SheetDescription>
             </div>
+            {!isEditing ? (
+              <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
+                <Pencil className="w-4 h-4 mr-1" />
+                Editar
+              </Button>
+            ) : (
+              <div className="flex gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={handleCancelEdit}
+                >
+                  <X className="w-4 h-4" />
+                </Button>
+                <Button 
+                  size="sm" 
+                  onClick={handleSaveEdit}
+                  disabled={updateLead.isPending}
+                >
+                  {updateLead.isPending ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Save className="w-4 h-4" />
+                  )}
+                </Button>
+              </div>
+            )}
           </div>
         </SheetHeader>
 
@@ -133,126 +315,406 @@ export function LeadDrawer({ lead, open, onClose, mediaSources, profiles }: Lead
             <TabsTrigger value="activities">Atividades</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="info" className="space-y-4 pt-4">
-            {/* Contact Info */}
-            <div className="space-y-3">
-              <h4 className="text-sm font-medium text-muted-foreground">Contato</h4>
-              
-              <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
-                <Phone className="w-4 h-4 text-muted-foreground" />
-                <span>{lead.phone}</span>
-              </div>
-              
-              {lead.whatsapp && (
-                <a 
-                  href={`https://wa.me/55${lead.whatsapp.replace(/\D/g, '')}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-3 p-3 bg-green-50 dark:bg-green-950 rounded-lg text-green-600 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900 transition-colors"
-                >
-                  <MessageCircle className="w-4 h-4" />
-                  <span>{lead.whatsapp}</span>
-                </a>
-              )}
-              
-              {lead.email && (
-                <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
-                  <Mail className="w-4 h-4 text-muted-foreground" />
-                  <span>{lead.email}</span>
-                </div>
-              )}
-            </div>
-
-            {/* Education Info */}
-            {(lead.course_interest || lead.education_level) && (
-              <div className="space-y-3">
-                <h4 className="text-sm font-medium text-muted-foreground">Educação</h4>
-                
-                {lead.course_interest && (
-                  <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
-                    <GraduationCap className="w-4 h-4 text-muted-foreground" />
-                    <span>{lead.course_interest}</span>
-                  </div>
-                )}
-                
-                {lead.education_level && (
-                  <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
-                    <FileText className="w-4 h-4 text-muted-foreground" />
-                    <span>{lead.education_level}</span>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Financial Info */}
-            {lead.quote_value && (
-              <div className="space-y-3">
-                <h4 className="text-sm font-medium text-muted-foreground">Financeiro</h4>
-                
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="p-3 bg-muted/50 rounded-lg">
-                    <p className="text-xs text-muted-foreground">Orçamento</p>
-                    <p className="font-medium">
-                      {lead.quote_value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                    </p>
-                  </div>
+          <TabsContent value="info" className="pt-4">
+            <ScrollArea className="h-[calc(100vh-220px)]">
+              <div className="space-y-6 pr-4">
+                {/* Contact Info */}
+                <div className="space-y-3">
+                  <h4 className="text-sm font-medium text-muted-foreground">Contato</h4>
                   
-                  {lead.discount_percent && (
-                    <div className="p-3 bg-muted/50 rounded-lg">
-                      <p className="text-xs text-muted-foreground">Desconto</p>
-                      <p className="font-medium">{lead.discount_percent}%</p>
+                  {isEditing ? (
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <Label htmlFor="edit-name">Nome *</Label>
+                          <Input
+                            id="edit-name"
+                            value={editData.name}
+                            onChange={(e) => updateEditField('name', e.target.value)}
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="edit-phone">Telefone *</Label>
+                          <Input
+                            id="edit-phone"
+                            value={editData.phone}
+                            onChange={(e) => updateEditField('phone', e.target.value)}
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <Label htmlFor="edit-whatsapp">WhatsApp</Label>
+                          <Input
+                            id="edit-whatsapp"
+                            value={editData.whatsapp}
+                            onChange={(e) => updateEditField('whatsapp', e.target.value)}
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="edit-email">Email</Label>
+                          <Input
+                            id="edit-email"
+                            type="email"
+                            value={editData.email}
+                            onChange={(e) => updateEditField('email', e.target.value)}
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <Label htmlFor="edit-cpf">CPF</Label>
+                          <Input
+                            id="edit-cpf"
+                            value={editData.cpf}
+                            onChange={(e) => updateEditField('cpf', e.target.value)}
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="edit-birth">Data de Nascimento</Label>
+                          <Input
+                            id="edit-birth"
+                            type="date"
+                            value={editData.birth_date}
+                            onChange={(e) => updateEditField('birth_date', e.target.value)}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
+                        <Phone className="w-4 h-4 text-muted-foreground" />
+                        <span>{lead.phone}</span>
+                      </div>
+                      
+                      {lead.whatsapp && (
+                        <a 
+                          href={`https://wa.me/55${lead.whatsapp.replace(/\D/g, '')}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-3 p-3 bg-green-50 dark:bg-green-950 rounded-lg text-green-600 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900 transition-colors"
+                        >
+                          <MessageCircle className="w-4 h-4" />
+                          <span>{lead.whatsapp}</span>
+                        </a>
+                      )}
+                      
+                      {lead.email && (
+                        <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
+                          <Mail className="w-4 h-4 text-muted-foreground" />
+                          <span>{lead.email}</span>
+                        </div>
+                      )}
+
+                      {lead.cpf && (
+                        <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
+                          <User className="w-4 h-4 text-muted-foreground" />
+                          <span>CPF: {lead.cpf}</span>
+                        </div>
+                      )}
+
+                      {lead.birth_date && (
+                        <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
+                          <Calendar className="w-4 h-4 text-muted-foreground" />
+                          <span>{format(new Date(lead.birth_date), "dd/MM/yyyy")}</span>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+
+                {/* Education Info */}
+                <div className="space-y-3">
+                  <h4 className="text-sm font-medium text-muted-foreground">Educação</h4>
+                  
+                  {isEditing ? (
+                    <div className="space-y-3">
+                      <div>
+                        <Label htmlFor="edit-course">Curso de Interesse</Label>
+                        <Input
+                          id="edit-course"
+                          value={editData.course_interest}
+                          onChange={(e) => updateEditField('course_interest', e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="edit-education">Nível de Escolaridade</Label>
+                        <Select 
+                          value={editData.education_level || ''} 
+                          onValueChange={(v) => updateEditField('education_level', v)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Selecione" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {educationLevels.map((level) => (
+                              <SelectItem key={level} value={level}>{level}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <Switch
+                          id="edit-diploma"
+                          checked={editData.has_diploma || false}
+                          onCheckedChange={(checked) => updateEditField('has_diploma', checked)}
+                        />
+                        <Label htmlFor="edit-diploma">Possui diploma</Label>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      {lead.course_interest && (
+                        <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
+                          <GraduationCap className="w-4 h-4 text-muted-foreground" />
+                          <span>{lead.course_interest}</span>
+                        </div>
+                      )}
+                      
+                      {lead.education_level && (
+                        <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
+                          <FileText className="w-4 h-4 text-muted-foreground" />
+                          <span>{lead.education_level}</span>
+                        </div>
+                      )}
+
+                      {lead.has_diploma !== null && (
+                        <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
+                          <GraduationCap className="w-4 h-4 text-muted-foreground" />
+                          <span>{lead.has_diploma ? 'Possui diploma' : 'Não possui diploma'}</span>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+
+                {/* Source Info */}
+                <div className="space-y-3">
+                  <h4 className="text-sm font-medium text-muted-foreground">Origem</h4>
+                  
+                  {isEditing ? (
+                    <div className="space-y-3">
+                      <div>
+                        <Label htmlFor="edit-source">Mídia de Origem</Label>
+                        <Select 
+                          value={editData.media_source_id || ''} 
+                          onValueChange={(v) => updateEditField('media_source_id', v === 'none' ? '' : v)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Selecione" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">Nenhuma</SelectItem>
+                            {mediaSources.map((source) => (
+                              <SelectItem key={source.id} value={source.id}>{source.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label htmlFor="edit-campaign">Campanha</Label>
+                        <Input
+                          id="edit-campaign"
+                          value={editData.campaign}
+                          onChange={(e) => updateEditField('campaign', e.target.value)}
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      {lead.media_source && (
+                        <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
+                          <Building className="w-4 h-4 text-muted-foreground" />
+                          <span>{lead.media_source.name}</span>
+                        </div>
+                      )}
+                      {lead.campaign && (
+                        <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
+                          <FileText className="w-4 h-4 text-muted-foreground" />
+                          <span>Campanha: {lead.campaign}</span>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+
+                {/* Financial Info */}
+                <div className="space-y-3">
+                  <h4 className="text-sm font-medium text-muted-foreground">Financeiro</h4>
+                  
+                  {isEditing ? (
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <Label htmlFor="edit-quote">Valor do Orçamento (R$)</Label>
+                          <Input
+                            id="edit-quote"
+                            type="number"
+                            step="0.01"
+                            value={editData.quote_value ?? ''}
+                            onChange={(e) => updateEditField('quote_value', e.target.value ? parseFloat(e.target.value) : null)}
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="edit-discount">Desconto (%)</Label>
+                          <Input
+                            id="edit-discount"
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            max="100"
+                            value={editData.discount_percent ?? ''}
+                            onChange={(e) => updateEditField('discount_percent', e.target.value ? parseFloat(e.target.value) : null)}
+                          />
+                        </div>
+                      </div>
+                      <div className="p-3 bg-green-50 dark:bg-green-950 rounded-lg">
+                        <p className="text-xs text-green-600 dark:text-green-400">Valor Final (calculado)</p>
+                        <p className="font-medium text-green-700 dark:text-green-300">
+                          {editData.final_value 
+                            ? editData.final_value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+                            : 'R$ 0,00'
+                          }
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="p-3 bg-muted/50 rounded-lg">
+                        <p className="text-xs text-muted-foreground">Orçamento</p>
+                        <p className="font-medium">
+                          {lead.quote_value 
+                            ? lead.quote_value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+                            : 'Não informado'
+                          }
+                        </p>
+                      </div>
+                      
+                      <div className="p-3 bg-muted/50 rounded-lg">
+                        <p className="text-xs text-muted-foreground">Desconto</p>
+                        <p className="font-medium">{lead.discount_percent ? `${lead.discount_percent}%` : '-'}</p>
+                      </div>
+                      
+                      <div className="p-3 bg-green-50 dark:bg-green-950 rounded-lg col-span-2">
+                        <p className="text-xs text-green-600 dark:text-green-400">Valor Final</p>
+                        <p className="font-medium text-green-700 dark:text-green-300">
+                          {lead.final_value 
+                            ? lead.final_value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+                            : 'Não calculado'
+                          }
+                        </p>
+                      </div>
                     </div>
                   )}
+                </div>
+
+                {/* Assignment */}
+                <div className="space-y-3">
+                  <h4 className="text-sm font-medium text-muted-foreground">Atribuição</h4>
                   
-                  {lead.final_value && (
-                    <div className="p-3 bg-green-50 dark:bg-green-950 rounded-lg col-span-2">
-                      <p className="text-xs text-green-600 dark:text-green-400">Valor Final</p>
-                      <p className="font-medium text-green-700 dark:text-green-300">
-                        {lead.final_value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                  {isEditing ? (
+                    <div className="space-y-3">
+                      <div>
+                        <Label htmlFor="edit-assignee">Responsável</Label>
+                        <Select 
+                          value={editData.assigned_to || ''} 
+                          onValueChange={(v) => updateEditField('assigned_to', v === 'none' ? '' : v)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Selecione" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">Não atribuído</SelectItem>
+                            {profiles.map((profile) => (
+                              <SelectItem key={profile.id} value={profile.id}>
+                                {profile.full_name || 'Sem nome'}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label htmlFor="edit-department">Departamento</Label>
+                        <Select 
+                          value={editData.department_id || ''} 
+                          onValueChange={(v) => updateEditField('department_id', v === 'none' ? '' : v)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Selecione" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">Não atribuído</SelectItem>
+                            {departments.map((dept) => (
+                              <SelectItem key={dept.id} value={dept.id}>{dept.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="p-3 bg-muted/50 rounded-lg">
+                        <p className="text-xs text-muted-foreground">Responsável</p>
+                        <p className="font-medium">{lead.assignee?.full_name || 'Não atribuído'}</p>
+                      </div>
+                      
+                      <div className="p-3 bg-muted/50 rounded-lg">
+                        <p className="text-xs text-muted-foreground">Departamento</p>
+                        <p className="font-medium">{lead.department?.name || 'Não atribuído'}</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Next Contact */}
+                <div className="space-y-3">
+                  <h4 className="text-sm font-medium text-muted-foreground">Próximo Contato</h4>
+                  
+                  {isEditing ? (
+                    <div>
+                      <Label htmlFor="edit-next-contact">Data e Hora</Label>
+                      <Input
+                        id="edit-next-contact"
+                        type="datetime-local"
+                        value={editData.next_contact_date}
+                        onChange={(e) => updateEditField('next_contact_date', e.target.value)}
+                      />
+                    </div>
+                  ) : lead.next_contact_date ? (
+                    <div className="p-3 bg-amber-50 dark:bg-amber-950 rounded-lg">
+                      <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
+                        <Clock className="w-4 h-4" />
+                        <span className="text-sm font-medium">Próximo contato</span>
+                      </div>
+                      <p className="mt-1 text-amber-700 dark:text-amber-300">
+                        {format(new Date(lead.next_contact_date), "dd 'de' MMMM 'às' HH:mm", { locale: ptBR })}
                       </p>
                     </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Nenhum contato agendado</p>
+                  )}
+                </div>
+
+                {/* Notes */}
+                <div className="space-y-3">
+                  <h4 className="text-sm font-medium text-muted-foreground">Observações</h4>
+                  
+                  {isEditing ? (
+                    <Textarea
+                      value={editData.notes}
+                      onChange={(e) => updateEditField('notes', e.target.value)}
+                      className="min-h-[100px]"
+                      placeholder="Adicione observações sobre o lead..."
+                    />
+                  ) : lead.notes ? (
+                    <p className="text-sm p-3 bg-muted/50 rounded-lg whitespace-pre-wrap">{lead.notes}</p>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Nenhuma observação</p>
                   )}
                 </div>
               </div>
-            )}
-
-            {/* Assignment */}
-            <div className="space-y-3">
-              <h4 className="text-sm font-medium text-muted-foreground">Atribuição</h4>
-              
-              <div className="grid grid-cols-2 gap-2">
-                <div className="p-3 bg-muted/50 rounded-lg">
-                  <p className="text-xs text-muted-foreground">Responsável</p>
-                  <p className="font-medium">{lead.assignee?.full_name || 'Não atribuído'}</p>
-                </div>
-                
-                <div className="p-3 bg-muted/50 rounded-lg">
-                  <p className="text-xs text-muted-foreground">Departamento</p>
-                  <p className="font-medium">{lead.department?.name || 'Não atribuído'}</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Next Contact */}
-            {lead.next_contact_date && (
-              <div className="p-3 bg-amber-50 dark:bg-amber-950 rounded-lg">
-                <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
-                  <Clock className="w-4 h-4" />
-                  <span className="text-sm font-medium">Próximo contato</span>
-                </div>
-                <p className="mt-1 text-amber-700 dark:text-amber-300">
-                  {format(new Date(lead.next_contact_date), "dd 'de' MMMM 'às' HH:mm", { locale: ptBR })}
-                </p>
-              </div>
-            )}
-
-            {/* Notes */}
-            {lead.notes && (
-              <div className="space-y-2">
-                <h4 className="text-sm font-medium text-muted-foreground">Observações</h4>
-                <p className="text-sm p-3 bg-muted/50 rounded-lg whitespace-pre-wrap">{lead.notes}</p>
-              </div>
-            )}
+            </ScrollArea>
           </TabsContent>
 
           <TabsContent value="stage" className="space-y-4 pt-4">
