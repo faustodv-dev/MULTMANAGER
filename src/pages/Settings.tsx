@@ -15,7 +15,8 @@ import { useProfiles, useUserRoles, useUpdateUserRole, useUpdateProfile } from '
 import { useProcesses, useDeleteProcess, Process } from '@/hooks/useProcesses';
 import { ProcessModal } from '@/components/ProcessModal';
 import { AppRole, roleLabels, departmentColors } from '@/types/database';
-import { ArrowLeft, Plus, Trash2, Building2, Users, Loader2, Shield, FileText, Pencil } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Building2, Users, Loader2, Shield, FileText, Pencil, UserPlus } from 'lucide-react';
+import { CreateUserModal } from '@/components/CreateUserModal';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
@@ -45,6 +46,7 @@ export default function Settings() {
   const [processModalOpen, setProcessModalOpen] = useState(false);
   const [editingProcess, setEditingProcess] = useState<Process | null>(null);
   const [filterDepartmentId, setFilterDepartmentId] = useState<string>('all');
+  const [createUserModalOpen, setCreateUserModalOpen] = useState(false);
 
   if (!isAdmin) {
     return (
@@ -259,9 +261,15 @@ export default function Settings() {
 
             <TabsContent value="users" className="space-y-6">
               <Card>
-                <CardHeader>
-                  <CardTitle>Usuários do Sistema</CardTitle>
-                  <CardDescription>Gerencie funções e departamentos dos usuários</CardDescription>
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <div>
+                    <CardTitle>Usuários do Sistema</CardTitle>
+                    <CardDescription>Gerencie funções e departamentos dos usuários</CardDescription>
+                  </div>
+                  <Button onClick={() => setCreateUserModalOpen(true)}>
+                    <UserPlus className="w-4 h-4 mr-2" />
+                    Criar Usuário
+                  </Button>
                 </CardHeader>
                 <CardContent>
                   {loadingProfiles ? (
@@ -431,6 +439,11 @@ export default function Settings() {
           open={processModalOpen}
           onClose={handleProcessModalClose}
           editProcess={editingProcess}
+        />
+
+        <CreateUserModal
+          open={createUserModalOpen}
+          onClose={() => setCreateUserModalOpen(false)}
         />
       </main>
     </div>
