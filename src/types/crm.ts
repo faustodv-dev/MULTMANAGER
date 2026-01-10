@@ -37,6 +37,15 @@ export interface Lead {
   discount_percent: number | null;
   final_value: number | null;
   
+  // Payment tracking
+  enrollment_fee_paid: boolean | null;
+  enrollment_fee_value: number | null;
+  first_installment_paid: boolean | null;
+  first_installment_value: number | null;
+  uniform_paid: boolean | null;
+  uniform_value: number | null;
+  payment_method: string | null;
+  
   // Assignment
   assigned_to: string | null;
   department_id: string | null;

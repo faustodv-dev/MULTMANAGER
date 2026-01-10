@@ -102,7 +102,11 @@ export type Database = {
           discount_percent: number | null
           education_level: string | null
           email: string | null
+          enrollment_fee_paid: boolean | null
+          enrollment_fee_value: number | null
           final_value: number | null
+          first_installment_paid: boolean | null
+          first_installment_value: number | null
           has_diploma: boolean | null
           id: string
           lost_at: string | null
@@ -111,10 +115,13 @@ export type Database = {
           name: string
           next_contact_date: string | null
           notes: string | null
+          payment_method: string | null
           phone: string
           quote_value: number | null
           stage: Database["public"]["Enums"]["lead_stage"]
           status: Database["public"]["Enums"]["lead_status"]
+          uniform_paid: boolean | null
+          uniform_value: number | null
           updated_at: string
           whatsapp: string | null
         }
@@ -130,7 +137,11 @@ export type Database = {
           discount_percent?: number | null
           education_level?: string | null
           email?: string | null
+          enrollment_fee_paid?: boolean | null
+          enrollment_fee_value?: number | null
           final_value?: number | null
+          first_installment_paid?: boolean | null
+          first_installment_value?: number | null
           has_diploma?: boolean | null
           id?: string
           lost_at?: string | null
@@ -139,10 +150,13 @@ export type Database = {
           name: string
           next_contact_date?: string | null
           notes?: string | null
+          payment_method?: string | null
           phone: string
           quote_value?: number | null
           stage?: Database["public"]["Enums"]["lead_stage"]
           status?: Database["public"]["Enums"]["lead_status"]
+          uniform_paid?: boolean | null
+          uniform_value?: number | null
           updated_at?: string
           whatsapp?: string | null
         }
@@ -158,7 +172,11 @@ export type Database = {
           discount_percent?: number | null
           education_level?: string | null
           email?: string | null
+          enrollment_fee_paid?: boolean | null
+          enrollment_fee_value?: number | null
           final_value?: number | null
+          first_installment_paid?: boolean | null
+          first_installment_value?: number | null
           has_diploma?: boolean | null
           id?: string
           lost_at?: string | null
@@ -167,10 +185,13 @@ export type Database = {
           name?: string
           next_contact_date?: string | null
           notes?: string | null
+          payment_method?: string | null
           phone?: string
           quote_value?: number | null
           stage?: Database["public"]["Enums"]["lead_stage"]
           status?: Database["public"]["Enums"]["lead_status"]
+          uniform_paid?: boolean | null
+          uniform_value?: number | null
           updated_at?: string
           whatsapp?: string | null
         }

@@ -41,7 +41,8 @@ import { ptBR } from 'date-fns/locale';
 import { 
   Phone, Mail, Calendar, MessageCircle, FileText, 
   ArrowRight, Users, Loader2, Send, User, Building,
-  DollarSign, GraduationCap, Clock, Pencil, Save, X
+  DollarSign, GraduationCap, Clock, Pencil, Save, X,
+  CreditCard, Banknote, Receipt, Shirt
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -74,6 +75,13 @@ const leadEditSchema = z.object({
   quote_value: z.number().optional().nullable(),
   discount_percent: z.number().optional().nullable(),
   final_value: z.number().optional().nullable(),
+  enrollment_fee_paid: z.boolean().optional(),
+  enrollment_fee_value: z.number().optional().nullable(),
+  first_installment_paid: z.boolean().optional(),
+  first_installment_value: z.number().optional().nullable(),
+  uniform_paid: z.boolean().optional(),
+  uniform_value: z.number().optional().nullable(),
+  payment_method: z.string().optional().nullable(),
   assigned_to: z.string().optional(),
   department_id: z.string().optional(),
   next_contact_date: z.string().optional(),
@@ -100,6 +108,12 @@ const educationLevels = [
   'Pós-Graduação',
   'Mestrado',
   'Doutorado',
+];
+
+const paymentMethods = [
+  { value: 'cartao', label: 'Cartão' },
+  { value: 'pix', label: 'PIX' },
+  { value: 'dinheiro', label: 'Dinheiro' },
 ];
 
 export function LeadDrawer({ lead, open, onClose, mediaSources, profiles }: LeadDrawerProps) {
@@ -133,6 +147,13 @@ export function LeadDrawer({ lead, open, onClose, mediaSources, profiles }: Lead
         quote_value: lead.quote_value,
         discount_percent: lead.discount_percent,
         final_value: lead.final_value,
+        enrollment_fee_paid: lead.enrollment_fee_paid || false,
+        enrollment_fee_value: lead.enrollment_fee_value,
+        first_installment_paid: lead.first_installment_paid || false,
+        first_installment_value: lead.first_installment_value,
+        uniform_paid: lead.uniform_paid || false,
+        uniform_value: lead.uniform_value,
+        payment_method: lead.payment_method || '',
         assigned_to: lead.assigned_to || '',
         department_id: lead.department_id || '',
         next_contact_date: lead.next_contact_date 
@@ -189,6 +210,13 @@ export function LeadDrawer({ lead, open, onClose, mediaSources, profiles }: Lead
           quote_value: editData.quote_value,
           discount_percent: editData.discount_percent,
           final_value: editData.final_value,
+          enrollment_fee_paid: editData.enrollment_fee_paid || false,
+          enrollment_fee_value: editData.enrollment_fee_value,
+          first_installment_paid: editData.first_installment_paid || false,
+          first_installment_value: editData.first_installment_value,
+          uniform_paid: editData.uniform_paid || false,
+          uniform_value: editData.uniform_value,
+          payment_method: editData.payment_method || null,
           assigned_to: editData.assigned_to || null,
           department_id: editData.department_id || null,
           next_contact_date: editData.next_contact_date 
@@ -221,6 +249,13 @@ export function LeadDrawer({ lead, open, onClose, mediaSources, profiles }: Lead
         quote_value: lead.quote_value,
         discount_percent: lead.discount_percent,
         final_value: lead.final_value,
+        enrollment_fee_paid: lead.enrollment_fee_paid || false,
+        enrollment_fee_value: lead.enrollment_fee_value,
+        first_installment_paid: lead.first_installment_paid || false,
+        first_installment_value: lead.first_installment_value,
+        uniform_paid: lead.uniform_paid || false,
+        uniform_value: lead.uniform_value,
+        payment_method: lead.payment_method || '',
         assigned_to: lead.assigned_to || '',
         department_id: lead.department_id || '',
         next_contact_date: lead.next_contact_date 
@@ -604,7 +639,180 @@ export function LeadDrawer({ lead, open, onClose, mediaSources, profiles }: Lead
                             : 'Não calculado'
                           }
                         </p>
+                </div>
+
+                {/* Payment Tracking (only show if stage is matricula) */}
+                {(lead.stage === 'matricula' || isEditing) && (
+                  <div className="space-y-3">
+                    <h4 className="text-sm font-medium text-muted-foreground">Pagamentos</h4>
+                    
+                    {isEditing ? (
+                      <div className="space-y-4">
+                        {/* Payment Method */}
+                        <div>
+                          <Label htmlFor="edit-payment-method">Forma de Pagamento</Label>
+                          <Select 
+                            value={editData.payment_method || ''} 
+                            onValueChange={(v) => updateEditField('payment_method', v === 'none' ? '' : v)}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Selecione" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">Não informado</SelectItem>
+                              {paymentMethods.map((method) => (
+                                <SelectItem key={method.value} value={method.value}>
+                                  {method.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        {/* Enrollment Fee */}
+                        <div className="p-3 border rounded-lg space-y-2">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <GraduationCap className="w-4 h-4 text-blue-500" />
+                              <span className="text-sm font-medium">Matrícula</span>
+                            </div>
+                            <Switch
+                              checked={editData.enrollment_fee_paid || false}
+                              onCheckedChange={(checked) => updateEditField('enrollment_fee_paid', checked)}
+                            />
+                          </div>
+                          <div>
+                            <Label htmlFor="edit-enrollment-value">Valor (R$)</Label>
+                            <Input
+                              id="edit-enrollment-value"
+                              type="number"
+                              step="0.01"
+                              value={editData.enrollment_fee_value ?? ''}
+                              onChange={(e) => updateEditField('enrollment_fee_value', e.target.value ? parseFloat(e.target.value) : null)}
+                            />
+                          </div>
+                        </div>
+
+                        {/* First Installment */}
+                        <div className="p-3 border rounded-lg space-y-2">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <Receipt className="w-4 h-4 text-purple-500" />
+                              <span className="text-sm font-medium">1ª Parcela</span>
+                            </div>
+                            <Switch
+                              checked={editData.first_installment_paid || false}
+                              onCheckedChange={(checked) => updateEditField('first_installment_paid', checked)}
+                            />
+                          </div>
+                          <div>
+                            <Label htmlFor="edit-installment-value">Valor (R$)</Label>
+                            <Input
+                              id="edit-installment-value"
+                              type="number"
+                              step="0.01"
+                              value={editData.first_installment_value ?? ''}
+                              onChange={(e) => updateEditField('first_installment_value', e.target.value ? parseFloat(e.target.value) : null)}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Uniform */}
+                        <div className="p-3 border rounded-lg space-y-2">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <Shirt className="w-4 h-4 text-orange-500" />
+                              <span className="text-sm font-medium">Uniforme</span>
+                            </div>
+                            <Switch
+                              checked={editData.uniform_paid || false}
+                              onCheckedChange={(checked) => updateEditField('uniform_paid', checked)}
+                            />
+                          </div>
+                          <div>
+                            <Label htmlFor="edit-uniform-value">Valor (R$)</Label>
+                            <Input
+                              id="edit-uniform-value"
+                              type="number"
+                              step="0.01"
+                              value={editData.uniform_value ?? ''}
+                              onChange={(e) => updateEditField('uniform_value', e.target.value ? parseFloat(e.target.value) : null)}
+                            />
+                          </div>
+                        </div>
                       </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {/* Payment Method Display */}
+                        <div className="p-3 bg-muted/50 rounded-lg">
+                          <p className="text-xs text-muted-foreground">Forma de Pagamento</p>
+                          <div className="flex items-center gap-2 mt-1">
+                            {lead.payment_method === 'cartao' && <CreditCard className="w-4 h-4 text-blue-500" />}
+                            {lead.payment_method === 'pix' && <Banknote className="w-4 h-4 text-green-500" />}
+                            {lead.payment_method === 'dinheiro' && <DollarSign className="w-4 h-4 text-yellow-600" />}
+                            <span className="font-medium">
+                              {paymentMethods.find(m => m.value === lead.payment_method)?.label || 'Não informado'}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Payment Status Grid */}
+                        <div className="grid grid-cols-3 gap-2">
+                          <div className={cn(
+                            "p-3 rounded-lg text-center",
+                            lead.enrollment_fee_paid ? "bg-green-50 dark:bg-green-950" : "bg-muted/50"
+                          )}>
+                            <GraduationCap className={cn(
+                              "w-5 h-5 mx-auto mb-1",
+                              lead.enrollment_fee_paid ? "text-green-500" : "text-muted-foreground"
+                            )} />
+                            <p className="text-xs text-muted-foreground">Matrícula</p>
+                            <p className="text-sm font-medium">
+                              {lead.enrollment_fee_value?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) || '-'}
+                            </p>
+                            <Badge variant={lead.enrollment_fee_paid ? "default" : "outline"} className="mt-1 text-xs">
+                              {lead.enrollment_fee_paid ? 'Pago' : 'Pendente'}
+                            </Badge>
+                          </div>
+
+                          <div className={cn(
+                            "p-3 rounded-lg text-center",
+                            lead.first_installment_paid ? "bg-green-50 dark:bg-green-950" : "bg-muted/50"
+                          )}>
+                            <Receipt className={cn(
+                              "w-5 h-5 mx-auto mb-1",
+                              lead.first_installment_paid ? "text-green-500" : "text-muted-foreground"
+                            )} />
+                            <p className="text-xs text-muted-foreground">1ª Parcela</p>
+                            <p className="text-sm font-medium">
+                              {lead.first_installment_value?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) || '-'}
+                            </p>
+                            <Badge variant={lead.first_installment_paid ? "default" : "outline"} className="mt-1 text-xs">
+                              {lead.first_installment_paid ? 'Pago' : 'Pendente'}
+                            </Badge>
+                          </div>
+
+                          <div className={cn(
+                            "p-3 rounded-lg text-center",
+                            lead.uniform_paid ? "bg-green-50 dark:bg-green-950" : "bg-muted/50"
+                          )}>
+                            <Shirt className={cn(
+                              "w-5 h-5 mx-auto mb-1",
+                              lead.uniform_paid ? "text-green-500" : "text-muted-foreground"
+                            )} />
+                            <p className="text-xs text-muted-foreground">Uniforme</p>
+                            <p className="text-sm font-medium">
+                              {lead.uniform_value?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) || '-'}
+                            </p>
+                            <Badge variant={lead.uniform_paid ? "default" : "outline"} className="mt-1 text-xs">
+                              {lead.uniform_paid ? 'Pago' : 'Pendente'}
+                            </Badge>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
                     </div>
                   )}
                 </div>

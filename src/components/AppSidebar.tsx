@@ -1,5 +1,5 @@
 import { useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Settings, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, FileText, Plus, GripVertical, Pencil, Users } from 'lucide-react';
+import { LayoutDashboard, Settings, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, FileText, Plus, GripVertical, Pencil, Users, BarChart3 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -44,6 +44,11 @@ export function AppSidebar({
     label: 'CRM',
     path: '/crm',
     active: location.pathname === '/crm'
+  }, {
+    icon: BarChart3,
+    label: 'Rel. Financeiro',
+    path: '/relatorio-financeiro',
+    active: location.pathname === '/relatorio-financeiro'
   }, ...(isAdmin ? [{
     icon: Settings,
     label: 'Configurações',
