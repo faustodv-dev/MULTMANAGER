@@ -8,6 +8,7 @@ import Dashboard from "./pages/Dashboard";
 import Auth from "./pages/Auth";
 import Settings from "./pages/Settings";
 import CRM from "./pages/CRM";
+import FinancialReport from "./pages/FinancialReport";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -24,6 +25,7 @@ const App = () => (
             <Route path="/auth" element={<Auth />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="/crm" element={<CRM />} />
+            <Route path="/relatorio-financeiro" element={<FinancialReport />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
