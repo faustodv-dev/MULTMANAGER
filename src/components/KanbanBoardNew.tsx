@@ -202,23 +202,28 @@ export function KanbanBoardNew({ tasks, onTaskClick }: KanbanBoardNewProps) {
       onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
     >
-      <ScrollArea className="w-full">
-        <div className="flex gap-6 p-6 min-w-max">
-          {columns.map((status) => {
-            const columnTasks = getTasksByStatus(status);
-            return (
-              <DroppableColumn
-                key={status}
-                status={status}
-                tasks={columnTasks}
-                onTaskClick={onTaskClick}
-                isOver={overColumn === status}
-              />
-            );
-          })}
-        </div>
-        <ScrollBar orientation="horizontal" />
-      </ScrollArea>
+      <div className="relative">
+        <ScrollArea className="w-full pb-4">
+          <div className="flex gap-6 p-6 min-w-max">
+            {columns.map((status) => {
+              const columnTasks = getTasksByStatus(status);
+              return (
+                <DroppableColumn
+                  key={status}
+                  status={status}
+                  tasks={columnTasks}
+                  onTaskClick={onTaskClick}
+                  isOver={overColumn === status}
+                />
+              );
+            })}
+          </div>
+          <ScrollBar 
+            orientation="horizontal" 
+            className="h-3 bg-muted/50 rounded-full mx-4 mb-2"
+          />
+        </ScrollArea>
+      </div>
 
       <DragOverlay dropAnimation={null}>
         {activeTask ? (
