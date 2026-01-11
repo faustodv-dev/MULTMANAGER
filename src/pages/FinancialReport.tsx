@@ -1,8 +1,12 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useLeads } from "@/hooks/useLeads";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
 import { 
   DollarSign, 
   CreditCard, 
@@ -12,16 +16,49 @@ import {
   Receipt,
   TrendingUp,
   CheckCircle2,
-  XCircle
+  XCircle,
+  CalendarIcon,
+  X
 } from "lucide-react";
-import { format } from "date-fns";
+import { format, isWithinInterval, startOfDay, endOfDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 const FinancialReport = () => {
   const { data: leads = [] } = useLeads();
+  const [startDate, setStartDate] = useState<Date | undefined>(undefined);
+  const [endDate, setEndDate] = useState<Date | undefined>(undefined);
   
-  // Filter only leads in "matricula" stage
-  const enrolledLeads = leads.filter(lead => lead.stage === "matricula");
+  // Filter only leads in "matricula" stage and within date range
+  const enrolledLeads = useMemo(() => {
+    return leads.filter(lead => {
+      if (lead.stage !== "matricula") return false;
+      
+      // If no date filter, include all enrolled leads
+      if (!startDate && !endDate) return true;
+      
+      // Use converted_at date for filtering
+      const leadDate = lead.converted_at ? new Date(lead.converted_at) : null;
+      if (!leadDate) return !startDate && !endDate;
+      
+      // Apply date range filter
+      if (startDate && endDate) {
+        return isWithinInterval(leadDate, {
+          start: startOfDay(startDate),
+          end: endOfDay(endDate)
+        });
+      }
+      
+      if (startDate) {
+        return leadDate >= startOfDay(startDate);
+      }
+      
+      if (endDate) {
+        return leadDate <= endOfDay(endDate);
+      }
+      
+      return true;
+    });
+  }, [leads, startDate, endDate]);
 
   // Calculate totals
   const totals = enrolledLeads.reduce((acc, lead) => {
@@ -74,14 +111,81 @@ const FinancialReport = () => {
     }
   };
 
+  const clearDateFilters = () => {
+    setStartDate(undefined);
+    setEndDate(undefined);
+  };
+
   return (
     <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-2xl font-bold">Relatório Financeiro</h1>
           <p className="text-muted-foreground">
             Leads em fase de matrícula: {enrolledLeads.length}
           </p>
+        </div>
+
+        {/* Date Range Filter */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                className={cn(
+                  "w-[160px] justify-start text-left font-normal",
+                  !startDate && "text-muted-foreground"
+                )}
+              >
+                <CalendarIcon className="mr-2 h-4 w-4" />
+                {startDate ? format(startDate, "dd/MM/yyyy", { locale: ptBR }) : "Data inicial"}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar
+                mode="single"
+                selected={startDate}
+                onSelect={setStartDate}
+                initialFocus
+                locale={ptBR}
+                className="pointer-events-auto"
+              />
+            </PopoverContent>
+          </Popover>
+
+          <span className="text-muted-foreground">até</span>
+
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                className={cn(
+                  "w-[160px] justify-start text-left font-normal",
+                  !endDate && "text-muted-foreground"
+                )}
+              >
+                <CalendarIcon className="mr-2 h-4 w-4" />
+                {endDate ? format(endDate, "dd/MM/yyyy", { locale: ptBR }) : "Data final"}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar
+                mode="single"
+                selected={endDate}
+                onSelect={setEndDate}
+                initialFocus
+                locale={ptBR}
+                className="pointer-events-auto"
+                disabled={(date) => startDate ? date < startDate : false}
+              />
+            </PopoverContent>
+          </Popover>
+
+          {(startDate || endDate) && (
+            <Button variant="ghost" size="icon" onClick={clearDateFilters}>
+              <X className="h-4 w-4" />
+            </Button>
+          )}
         </div>
       </div>
 
