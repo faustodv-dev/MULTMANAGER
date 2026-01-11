@@ -7,7 +7,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useUpdateTask } from '@/hooks/useTasks';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { useUpdateTask, useDeleteTask } from '@/hooks/useTasks';
 import { useDepartments } from '@/hooks/useDepartments';
 import { useProfiles } from '@/hooks/useProfiles';
 import { useAuth } from '@/contexts/AuthContext';
@@ -28,6 +29,7 @@ export function TaskDrawerEdit({ task, open, onClose }: TaskDrawerEditProps) {
   const [newChecklistItem, setNewChecklistItem] = useState('');
   
   const updateTask = useUpdateTask();
+  const deleteTask = useDeleteTask();
   const { data: departments } = useDepartments();
   const { data: profiles } = useProfiles();
 
@@ -61,6 +63,11 @@ export function TaskDrawerEdit({ task, open, onClose }: TaskDrawerEditProps) {
     });
     
     setIsEditing(false);
+  };
+
+  const handleDelete = async () => {
+    await deleteTask.mutateAsync(task.id);
+    onClose();
   };
 
   const handleChecklistToggle = async (itemId: string) => {
@@ -138,14 +145,48 @@ export function TaskDrawerEdit({ task, open, onClose }: TaskDrawerEditProps) {
                     </Button>
                   </>
                 ) : (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setIsEditing(true)}
-                  >
-                    <Pencil className="w-4 h-4 mr-1" />
-                    Editar
-                  </Button>
+                  <>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Excluir tarefa?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Esta ação não pode ser desfeita. A tarefa "{task.title}" será permanentemente excluída.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                          <AlertDialogAction
+                            onClick={handleDelete}
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                            disabled={deleteTask.isPending}
+                          >
+                            {deleteTask.isPending ? (
+                              <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                            ) : null}
+                            Excluir
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setIsEditing(true)}
+                    >
+                      <Pencil className="w-4 h-4 mr-1" />
+                      Editar
+                    </Button>
+                  </>
                 )}
               </div>
             )}
