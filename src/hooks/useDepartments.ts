@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Department } from '@/types/database';
 import { toast } from 'sonner';
+import { mapDatabaseError } from '@/lib/errorHandler';
 
 export function useDepartments() {
   return useQuery({
@@ -37,7 +38,7 @@ export function useCreateDepartment() {
       toast.success('Departamento criado com sucesso!');
     },
     onError: (error) => {
-      toast.error('Erro ao criar departamento: ' + error.message);
+      toast.error(mapDatabaseError(error));
     },
   });
 }
@@ -62,7 +63,7 @@ export function useUpdateDepartment() {
       toast.success('Departamento atualizado com sucesso!');
     },
     onError: (error) => {
-      toast.error('Erro ao atualizar departamento: ' + error.message);
+      toast.error(mapDatabaseError(error));
     },
   });
 }
@@ -84,7 +85,7 @@ export function useDeleteDepartment() {
       toast.success('Departamento excluído com sucesso!');
     },
     onError: (error) => {
-      toast.error('Erro ao excluir departamento: ' + error.message);
+      toast.error(mapDatabaseError(error));
     },
   });
 }

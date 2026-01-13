@@ -3,6 +3,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { Task, ChecklistItem, TaskStatus, TaskFrequency, TaskPriority } from '@/types/database';
 import { toast } from 'sonner';
 import { Json } from '@/integrations/supabase/types';
+import { mapDatabaseError } from '@/lib/errorHandler';
+import { taskSchema, validateInput } from '@/lib/validation';
 
 export function useTasks() {
   return useQuery({
@@ -56,7 +58,7 @@ export function useUpdateTask() {
       toast.success('Tarefa atualizada com sucesso!');
     },
     onError: (error) => {
-      toast.error('Erro ao atualizar tarefa: ' + error.message);
+      toast.error(mapDatabaseError(error));
     },
   });
 }
@@ -80,6 +82,24 @@ export function useCreateTask() {
   
   return useMutation({
     mutationFn: async (task: CreateTaskInput) => {
+      // Validate input before sending to database
+      const validation = validateInput(taskSchema, {
+        title: task.title,
+        description: task.description,
+        procedure_path: task.procedure_path,
+        status: task.status,
+        frequency: task.frequency,
+        priority: task.priority,
+        assignee_id: task.assignee_id,
+        department_id: task.department_id,
+        process_id: task.process_id,
+        due_date: task.due_date,
+      });
+      
+      if (!validation.success && 'error' in validation) {
+        throw new Error(validation.error);
+      }
+      
       const { data, error } = await supabase
         .from('tasks')
         .insert({
@@ -106,7 +126,7 @@ export function useCreateTask() {
       toast.success('Tarefa criada com sucesso!');
     },
     onError: (error) => {
-      toast.error('Erro ao criar tarefa: ' + error.message);
+      toast.error(mapDatabaseError(error));
     },
   });
 }
@@ -128,7 +148,7 @@ export function useDeleteTask() {
       toast.success('Tarefa excluída com sucesso!');
     },
     onError: (error) => {
-      toast.error('Erro ao excluir tarefa: ' + error.message);
+      toast.error(mapDatabaseError(error));
     },
   });
 }

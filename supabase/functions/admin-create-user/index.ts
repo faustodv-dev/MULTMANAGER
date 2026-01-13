@@ -1,11 +1,40 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+// Define allowed origins for CORS security
+const getAllowedOrigins = (): string[] => {
+  const frontendUrl = Deno.env.get('FRONTEND_URL');
+  const origins = [
+    'http://localhost:5173',
+    'http://localhost:3000',
+  ];
+  
+  if (frontendUrl) {
+    origins.push(frontendUrl);
+  }
+  
+  // Add Lovable preview domains
+  origins.push('https://lovable.dev');
+  
+  return origins;
+};
+
+const getCorsHeaders = (req: Request): Record<string, string> => {
+  const origin = req.headers.get('Origin') || '';
+  const allowedOrigins = getAllowedOrigins();
+  
+  // Check if the origin is allowed, otherwise use a safe default
+  const allowedOrigin = allowedOrigins.includes(origin) ? origin : allowedOrigins[0];
+  
+  return {
+    'Access-Control-Allow-Origin': allowedOrigin,
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Credentials': 'true',
+  };
+};
 
 Deno.serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
+  
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
@@ -76,6 +105,32 @@ Deno.serve(async (req) => {
       )
     }
 
+    // Validate full_name length (prevent excessively long names)
+    if (typeof full_name !== 'string' || full_name.length < 2 || full_name.length > 200) {
+      return new Response(
+        JSON.stringify({ error: 'Full name must be between 2 and 200 characters' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    // Validate role if provided
+    const validRoles = ['admin', 'manager', 'employee'];
+    if (role && !validRoles.includes(role)) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid role' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    // Validate department_id format if provided
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (department_id && !uuidRegex.test(department_id)) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid department ID format' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
     // Create admin client with service role key to create users
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
@@ -88,12 +143,14 @@ Deno.serve(async (req) => {
       email,
       password,
       email_confirm: true, // Auto-confirm the email
-      user_metadata: { full_name }
+      user_metadata: { full_name: full_name.substring(0, 200) } // Ensure truncation
     })
 
     if (createError) {
+      // Return generic error message to avoid leaking internal details
+      console.error('User creation error:', createError);
       return new Response(
-        JSON.stringify({ error: createError.message }),
+        JSON.stringify({ error: 'Failed to create user. Please check the email is not already in use.' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
@@ -130,9 +187,10 @@ Deno.serve(async (req) => {
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    // Log the actual error for debugging, but return generic message
+    console.error('Edge function error:', error);
     return new Response(
-      JSON.stringify({ error: errorMessage }),
+      JSON.stringify({ error: 'An unexpected error occurred' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   }
