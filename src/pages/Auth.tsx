@@ -54,17 +54,23 @@ export default function Auth() {
     }
     
     setIsLoading(true);
-    const { error } = await signIn(loginEmail, loginPassword);
-    setIsLoading(false);
-    
-    if (error) {
-      if (error.message.includes('Invalid login credentials')) {
-        toast.error('Email ou senha incorretos');
+    try {
+      const { error } = await signIn(loginEmail, loginPassword);
+      
+      if (error) {
+        if (error.message?.includes('Invalid login credentials')) {
+          toast.error('Email ou senha incorretos');
+        } else {
+          toast.error(error.message || 'Erro ao fazer login');
+        }
       } else {
-        toast.error(error.message);
+        toast.success('Login realizado com sucesso!');
       }
-    } else {
-      toast.success('Login realizado com sucesso!');
+    } catch (err) {
+      console.error('Login error:', err);
+      toast.error('Erro inesperado ao fazer login');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -84,17 +90,23 @@ export default function Auth() {
     }
     
     setIsLoading(true);
-    const { error } = await signUp(signupEmail, signupPassword, signupFullName);
-    setIsLoading(false);
-    
-    if (error) {
-      if (error.message.includes('User already registered')) {
-        toast.error('Este email já está cadastrado');
+    try {
+      const { error } = await signUp(signupEmail, signupPassword, signupFullName);
+      
+      if (error) {
+        if (error.message?.includes('User already registered')) {
+          toast.error('Este email já está cadastrado');
+        } else {
+          toast.error(error.message || 'Erro ao criar conta');
+        }
       } else {
-        toast.error(error.message);
+        toast.success('Conta criada com sucesso! Você já pode fazer login.');
       }
-    } else {
-      toast.success('Conta criada com sucesso! Você já pode fazer login.');
+    } catch (err) {
+      console.error('Signup error:', err);
+      toast.error('Erro inesperado ao criar conta');
+    } finally {
+      setIsLoading(false);
     }
   };
 
