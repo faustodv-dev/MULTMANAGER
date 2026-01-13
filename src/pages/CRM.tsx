@@ -1,5 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 import { useAuth } from '@/contexts/AuthContext';
 import { AppSidebar } from '@/components/AppSidebar';
 import { Button } from '@/components/ui/button';
@@ -8,6 +10,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
 import { useLeads, useUpdateLeadStage, useMediaSources } from '@/hooks/useLeads';
 import { useProfiles } from '@/hooks/useProfiles';
 import { useDepartments } from '@/hooks/useDepartments';
@@ -17,7 +21,7 @@ import { LeadModal } from '@/components/crm/LeadModal';
 import { LeadDrawer } from '@/components/crm/LeadDrawer';
 import { 
   Search, Plus, Users, TrendingUp, Target, DollarSign, 
-  Loader2, Filter, GripVertical 
+  Loader2, Filter, GripVertical, CalendarIcon, X
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -35,6 +39,8 @@ export default function CRM() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedMedia, setSelectedMedia] = useState('all');
   const [selectedAssignee, setSelectedAssignee] = useState('all');
+  const [startDate, setStartDate] = useState<Date | undefined>(undefined);
+  const [endDate, setEndDate] = useState<Date | undefined>(undefined);
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -56,9 +62,24 @@ export default function CRM() {
       const matchesMedia = selectedMedia === 'all' || lead.media_source_id === selectedMedia;
       const matchesAssignee = selectedAssignee === 'all' || lead.assigned_to === selectedAssignee;
       
-      return matchesSearch && matchesMedia && matchesAssignee;
+      // Filter by date range (created_at)
+      const leadDate = new Date(lead.created_at);
+      const matchesStartDate = !startDate || leadDate >= startDate;
+      const matchesEndDate = !endDate || leadDate <= new Date(endDate.getTime() + 24 * 60 * 60 * 1000 - 1);
+      
+      return matchesSearch && matchesMedia && matchesAssignee && matchesStartDate && matchesEndDate;
     });
-  }, [leads, searchQuery, selectedMedia, selectedAssignee]);
+  }, [leads, searchQuery, selectedMedia, selectedAssignee, startDate, endDate]);
+
+  const hasFilters = searchQuery || selectedMedia !== 'all' || selectedAssignee !== 'all' || startDate || endDate;
+
+  const clearFilters = () => {
+    setSearchQuery('');
+    setSelectedMedia('all');
+    setSelectedAssignee('all');
+    setStartDate(undefined);
+    setEndDate(undefined);
+  };
 
   // Group leads by stage
   const leadsByStage = useMemo(() => {
@@ -192,6 +213,50 @@ export default function CRM() {
                 ))}
               </SelectContent>
             </Select>
+
+            {/* Date Range Filter */}
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" className="bg-background">
+                  <CalendarIcon className="w-4 h-4 mr-2" />
+                  {startDate ? format(startDate, 'dd/MM/yy', { locale: ptBR }) : 'Início'}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={startDate}
+                  onSelect={setStartDate}
+                  locale={ptBR}
+                  initialFocus
+                />
+              </PopoverContent>
+            </Popover>
+
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" className="bg-background">
+                  <CalendarIcon className="w-4 h-4 mr-2" />
+                  {endDate ? format(endDate, 'dd/MM/yy', { locale: ptBR }) : 'Fim'}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={endDate}
+                  onSelect={setEndDate}
+                  locale={ptBR}
+                  initialFocus
+                />
+              </PopoverContent>
+            </Popover>
+
+            {hasFilters && (
+              <Button variant="ghost" size="sm" onClick={clearFilters}>
+                <X className="w-4 h-4 mr-1" />
+                Limpar filtros
+              </Button>
+            )}
           </div>
         </header>
 
