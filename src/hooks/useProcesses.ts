@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Json } from '@/integrations/supabase/types';
 import { ChecklistItem } from '@/types/database';
+import { mapDatabaseError } from '@/lib/errorHandler';
 
 export interface Process {
   id: string;
@@ -75,7 +76,7 @@ export function useCreateProcess() {
       toast.success('Processo criado com sucesso!');
     },
     onError: (error) => {
-      toast.error('Erro ao criar processo: ' + error.message);
+      toast.error(mapDatabaseError(error));
     },
   });
 }
@@ -107,7 +108,7 @@ export function useUpdateProcess() {
       toast.success('Processo atualizado com sucesso!');
     },
     onError: (error) => {
-      toast.error('Erro ao atualizar processo: ' + error.message);
+      toast.error(mapDatabaseError(error));
     },
   });
 }
@@ -129,7 +130,7 @@ export function useDeleteProcess() {
       toast.success('Processo excluído com sucesso!');
     },
     onError: (error) => {
-      toast.error('Erro ao excluir processo: ' + error.message);
+      toast.error(mapDatabaseError(error));
     },
   });
 }

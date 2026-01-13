@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Lead, LeadActivity, MediaSource, LeadStage, LeadStatus } from '@/types/crm';
 import { toast } from 'sonner';
+import { mapDatabaseError } from '@/lib/errorHandler';
 
 export function useMediaSources() {
   return useQuery({
@@ -127,7 +128,7 @@ export function useCreateLead() {
       toast.success('Lead cadastrado com sucesso!');
     },
     onError: (error) => {
-      toast.error('Erro ao cadastrar lead: ' + error.message);
+      toast.error(mapDatabaseError(error));
     },
   });
 }
@@ -153,7 +154,7 @@ export function useUpdateLead() {
       toast.success('Lead atualizado com sucesso!');
     },
     onError: (error) => {
-      toast.error('Erro ao atualizar lead: ' + error.message);
+      toast.error(mapDatabaseError(error));
     },
   });
 }
@@ -212,7 +213,7 @@ export function useUpdateLeadStage() {
       toast.success('Etapa atualizada!');
     },
     onError: (error) => {
-      toast.error('Erro ao atualizar etapa: ' + error.message);
+      toast.error(mapDatabaseError(error));
     },
   });
 }
@@ -234,7 +235,7 @@ export function useDeleteLead() {
       toast.success('Lead excluído com sucesso!');
     },
     onError: (error) => {
-      toast.error('Erro ao excluir lead: ' + error.message);
+      toast.error(mapDatabaseError(error));
     },
   });
 }
@@ -264,7 +265,7 @@ export function useCreateLeadActivity() {
       toast.success('Atividade registrada!');
     },
     onError: (error) => {
-      toast.error('Erro ao registrar atividade: ' + error.message);
+      toast.error(mapDatabaseError(error));
     },
   });
 }
