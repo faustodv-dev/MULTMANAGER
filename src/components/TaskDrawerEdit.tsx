@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Task, ChecklistItem, TaskStatus, TaskFrequency, TaskPriority, statusLabels, frequencyLabels } from '@/types/database';
+import { format } from 'date-fns';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -42,6 +43,7 @@ export function TaskDrawerEdit({ task, open, onClose }: TaskDrawerEditProps) {
         status: task.status,
         frequency: task.frequency,
         priority: task.priority,
+        due_date: task.due_date,
         assignee_id: task.assignee_id,
         department_id: task.department_id,
         checklist: task.checklist || [],
@@ -54,6 +56,11 @@ export function TaskDrawerEdit({ task, open, onClose }: TaskDrawerEditProps) {
   const handleSave = async () => {
     if (!editedTask.title?.trim()) {
       toast.error('O título é obrigatório');
+      return;
+    }
+    
+    if (!editedTask.due_date) {
+      toast.error('A data limite é obrigatória');
       return;
     }
     
@@ -252,7 +259,7 @@ export function TaskDrawerEdit({ task, open, onClose }: TaskDrawerEditProps) {
             </div>
           </div>
 
-          {/* Frequency & Assignee */}
+          {/* Frequency & Due Date */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Frequência</Label>
@@ -276,28 +283,51 @@ export function TaskDrawerEdit({ task, open, onClose }: TaskDrawerEditProps) {
             </div>
 
             <div className="space-y-2">
-              <Label>Responsável</Label>
+              <Label>Data Limite *</Label>
               {isEditing ? (
-                <Select
-                  value={editedTask.assignee_id || 'none'}
-                  onValueChange={(value) => setEditedTask({ ...editedTask, assignee_id: value === 'none' ? null : value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecionar" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Nenhum</SelectItem>
-                    {profiles?.map((profile) => (
-                      <SelectItem key={profile.id} value={profile.id}>
-                        {profile.full_name || 'Sem nome'}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Input
+                  type="datetime-local"
+                  value={editedTask.due_date ? format(new Date(editedTask.due_date), "yyyy-MM-dd'T'HH:mm") : ''}
+                  onChange={(e) => setEditedTask({ 
+                    ...editedTask, 
+                    due_date: e.target.value ? new Date(e.target.value).toISOString() : null 
+                  })}
+                  required
+                />
               ) : (
-                <p className="text-sm">{task.assignee?.full_name || 'Não atribuído'}</p>
+                <p className="text-sm">
+                  {task.due_date 
+                    ? format(new Date(task.due_date), "dd/MM/yyyy 'às' HH:mm")
+                    : 'Não definida'
+                  }
+                </p>
               )}
             </div>
+          </div>
+
+          {/* Assignee */}
+          <div className="space-y-2">
+            <Label>Responsável</Label>
+            {isEditing ? (
+              <Select
+                value={editedTask.assignee_id || 'none'}
+                onValueChange={(value) => setEditedTask({ ...editedTask, assignee_id: value === 'none' ? null : value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecionar" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Nenhum</SelectItem>
+                  {profiles?.map((profile) => (
+                    <SelectItem key={profile.id} value={profile.id}>
+                      {profile.full_name || 'Sem nome'}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <p className="text-sm">{task.assignee?.full_name || 'Não atribuído'}</p>
+            )}
           </div>
 
           {/* Department */}

@@ -54,6 +54,7 @@ export function CreateTaskModal({ open, onClose, initialProcessId }: CreateTaskM
   const [departmentId, setDepartmentId] = useState<string>('');
   const [assigneeId, setAssigneeId] = useState<string>('');
   const [processId, setProcessId] = useState<string>('');
+  const [dueDate, setDueDate] = useState<string>('');
   const [checklist, setChecklist] = useState<ChecklistItem[]>([]);
   const [newChecklistItem, setNewChecklistItem] = useState('');
 
@@ -103,6 +104,7 @@ export function CreateTaskModal({ open, onClose, initialProcessId }: CreateTaskM
       setDepartmentId('');
       setAssigneeId('');
       setProcessId('');
+      setDueDate('');
       setChecklist([]);
       setNewChecklistItem('');
     }
@@ -125,7 +127,7 @@ export function CreateTaskModal({ open, onClose, initialProcessId }: CreateTaskM
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!title.trim()) return;
+    if (!title.trim() || !dueDate) return;
 
     createTask({
       title: title.trim(),
@@ -137,6 +139,7 @@ export function CreateTaskModal({ open, onClose, initialProcessId }: CreateTaskM
       department_id: departmentId || null,
       assignee_id: assigneeId || null,
       process_id: processId || null,
+      due_date: new Date(dueDate).toISOString(),
       checklist,
     }, {
       onSuccess: (data) => {
@@ -238,6 +241,19 @@ export function CreateTaskModal({ open, onClose, initialProcessId }: CreateTaskM
               onChange={(e) => setProcedurePath(e.target.value)}
               placeholder="Ex: RELATÓRIO > FINANCEIRO > PARCELAS"
               className="mt-1.5"
+            />
+          </div>
+
+          {/* Due Date - Required */}
+          <div>
+            <Label htmlFor="dueDate">Data Limite *</Label>
+            <Input
+              id="dueDate"
+              type="datetime-local"
+              value={dueDate}
+              onChange={(e) => setDueDate(e.target.value)}
+              className="mt-1.5"
+              required
             />
           </div>
 
@@ -343,7 +359,7 @@ export function CreateTaskModal({ open, onClose, initialProcessId }: CreateTaskM
             <Button type="button" variant="outline" onClick={onClose}>
               Cancelar
             </Button>
-            <Button type="submit" disabled={!title.trim() || isPending}>
+            <Button type="submit" disabled={!title.trim() || !dueDate || isPending}>
               {isPending ? 'Criando...' : 'Criar Tarefa'}
             </Button>
           </div>

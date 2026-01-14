@@ -48,7 +48,7 @@ const createLeadSchema = z.object({
   discount_percent: z.string().optional(),
   assigned_to: z.string().optional(),
   department_id: z.string().optional(),
-  next_contact_date: z.string().optional(),
+  next_contact_date: z.string().min(1, 'Data de retorno é obrigatória'),
   notes: z.string().optional(),
 });
 
@@ -400,9 +400,9 @@ export function LeadModal({ open, onClose, mediaSources, profiles, departments }
                   name="next_contact_date"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Próximo Contato</FormLabel>
+                      <FormLabel>Próximo Contato *</FormLabel>
                       <FormControl>
-                        <Input type="datetime-local" {...field} />
+                        <Input type="datetime-local" {...field} required />
                       </FormControl>
                       <FormMessage />
                     </FormItem>

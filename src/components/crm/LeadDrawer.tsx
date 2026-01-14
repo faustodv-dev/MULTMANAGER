@@ -192,6 +192,12 @@ export function LeadDrawer({ lead, open, onClose, mediaSources, profiles }: Lead
   const handleSaveEdit = async () => {
     if (!lead || !editData) return;
 
+    // Validate next_contact_date is required if stage is not 'matricula'
+    if (lead.stage !== 'matricula' && !editData.next_contact_date) {
+      toast.error('Data de retorno é obrigatória para leads que não estão matriculados');
+      return;
+    }
+
     try {
       await updateLead.mutateAsync({
         id: lead.id,
