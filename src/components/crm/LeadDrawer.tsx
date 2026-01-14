@@ -32,8 +32,8 @@ import {
 import { useDepartments } from '@/hooks/useDepartments';
 import { useAuth } from '@/contexts/AuthContext';
 import { 
-  Lead, MediaSource, LeadStage, stageLabels, stageColors,
-  activityTypeLabels
+  Lead, MediaSource, LeadStage, LeadStatus, stageLabels, stageColors,
+  activityTypeLabels, statusLabels
 } from '@/types/crm';
 import { Profile } from '@/types/database';
 import { format } from 'date-fns';
@@ -175,6 +175,27 @@ export function LeadDrawer({ lead, open, onClose, mediaSources, profiles }: Lead
     });
   };
 
+  const handleStatusChange = async (newStatus: LeadStatus) => {
+    if (!lead || !user) return;
+    
+    try {
+      await updateLead.mutateAsync({
+        id: lead.id,
+        updates: { status: newStatus },
+      });
+      
+      // Create activity for status change
+      await createActivity.mutateAsync({
+        lead_id: lead.id,
+        user_id: user.id,
+        activity_type: 'note',
+        description: `Status alterado para ${statusLabels[newStatus]}`,
+      });
+    } catch (error) {
+      // Error already handled by mutation
+    }
+  };
+
   const handleAddActivity = async () => {
     if (!lead || !user || !activityType || !activityDescription) return;
     
@@ -310,9 +331,19 @@ export function LeadDrawer({ lead, open, onClose, mediaSources, profiles }: Lead
             </Avatar>
             <div className="flex-1">
               <SheetTitle className="text-left">{lead.name}</SheetTitle>
-              <SheetDescription className="text-left flex items-center gap-2">
+              <SheetDescription className="text-left flex items-center gap-2 flex-wrap">
                 <Badge className={cn("text-white", stageColors[lead.stage])}>
                   {stageLabels[lead.stage]}
+                </Badge>
+                <Badge 
+                  variant={lead.status === 'ativo' ? 'default' : 'secondary'}
+                  className={cn(
+                    lead.status === 'inativo' && 'bg-gray-500 text-white',
+                    lead.status === 'convertido' && 'bg-green-500 text-white',
+                    lead.status === 'perdido' && 'bg-red-500 text-white'
+                  )}
+                >
+                  {statusLabels[lead.status]}
                 </Badge>
                 {lead.media_source && (
                   <Badge variant="outline">{lead.media_source.name}</Badge>
@@ -931,31 +962,83 @@ export function LeadDrawer({ lead, open, onClose, mediaSources, profiles }: Lead
             </ScrollArea>
           </TabsContent>
 
-          <TabsContent value="stage" className="space-y-4 pt-4">
-            <p className="text-sm text-muted-foreground">
-              Mova o lead para uma nova etapa do funil:
-            </p>
-            
-            <div className="space-y-2">
-              {(Object.keys(stageLabels) as LeadStage[]).map((stage) => (
-                <button
-                  key={stage}
-                  onClick={() => handleStageChange(stage)}
-                  disabled={lead.stage === stage || updateLeadStage.isPending}
+          <TabsContent value="stage" className="space-y-6 pt-4">
+            {/* Lead Status Control */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h4 className="text-sm font-medium">Status do Lead</h4>
+                <Badge 
+                  variant={lead.status === 'ativo' ? 'default' : 'secondary'}
                   className={cn(
-                    "w-full flex items-center gap-3 p-3 rounded-lg border transition-colors text-left",
-                    lead.stage === stage 
-                      ? "bg-primary text-primary-foreground border-primary"
-                      : "hover:bg-muted border-border"
+                    lead.status === 'inativo' && 'bg-gray-500 text-white',
+                    lead.status === 'convertido' && 'bg-green-500 text-white',
+                    lead.status === 'perdido' && 'bg-red-500 text-white'
                   )}
                 >
-                  <div className={cn("w-3 h-3 rounded-full", stageColors[stage])} />
-                  <span className="font-medium">{stageLabels[stage]}</span>
-                  {lead.stage === stage && (
-                    <Badge variant="secondary" className="ml-auto">Atual</Badge>
-                  )}
-                </button>
-              ))}
+                  {statusLabels[lead.status]}
+                </Badge>
+              </div>
+              
+              <p className="text-xs text-muted-foreground">
+                Use para controlar se o lead deve ser contatado ou não.
+              </p>
+              
+              <div className="flex gap-2">
+                <Button
+                  variant={lead.status === 'ativo' ? 'default' : 'outline'}
+                  size="sm"
+                  className="flex-1"
+                  onClick={() => handleStatusChange('ativo')}
+                  disabled={lead.status === 'ativo' || updateLead.isPending}
+                >
+                  ✓ Ativo
+                </Button>
+                <Button
+                  variant={lead.status === 'inativo' ? 'default' : 'outline'}
+                  size="sm"
+                  className={cn("flex-1", lead.status === 'inativo' && 'bg-gray-500 hover:bg-gray-600')}
+                  onClick={() => handleStatusChange('inativo')}
+                  disabled={lead.status === 'inativo' || updateLead.isPending}
+                >
+                  ✕ Inativo
+                </Button>
+              </div>
+              
+              {lead.status === 'inativo' && (
+                <div className="p-3 bg-gray-100 dark:bg-gray-800 rounded-lg text-sm">
+                  <p className="text-gray-600 dark:text-gray-400">
+                    Este lead está marcado como <strong>inativo</strong>. Ele não aparecerá nos retornos agendados e não deve ser contatado.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div className="border-t pt-4">
+              <p className="text-sm text-muted-foreground mb-3">
+                Mova o lead para uma nova etapa do funil:
+              </p>
+              
+              <div className="space-y-2">
+                {(Object.keys(stageLabels) as LeadStage[]).map((stage) => (
+                  <button
+                    key={stage}
+                    onClick={() => handleStageChange(stage)}
+                    disabled={lead.stage === stage || updateLeadStage.isPending}
+                    className={cn(
+                      "w-full flex items-center gap-3 p-3 rounded-lg border transition-colors text-left",
+                      lead.stage === stage 
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "hover:bg-muted border-border"
+                    )}
+                  >
+                    <div className={cn("w-3 h-3 rounded-full", stageColors[stage])} />
+                    <span className="font-medium">{stageLabels[stage]}</span>
+                    {lead.stage === stage && (
+                      <Badge variant="secondary" className="ml-auto">Atual</Badge>
+                    )}
+                  </button>
+                ))}
+              </div>
             </div>
           </TabsContent>
 

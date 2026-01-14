@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { format } from 'date-fns';
+import { format, isToday, isBefore, startOfDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useAuth } from '@/contexts/AuthContext';
 import { AppSidebar } from '@/components/AppSidebar';
@@ -15,13 +15,14 @@ import { Calendar } from '@/components/ui/calendar';
 import { useLeads, useUpdateLeadStage, useMediaSources } from '@/hooks/useLeads';
 import { useProfiles } from '@/hooks/useProfiles';
 import { useDepartments } from '@/hooks/useDepartments';
-import { LeadStage, stageLabels, stageColors, Lead } from '@/types/crm';
+import { LeadStage, stageLabels, stageColors, Lead, statusLabels } from '@/types/crm';
 import { LeadCard } from '@/components/crm/LeadCard';
 import { LeadModal } from '@/components/crm/LeadModal';
 import { LeadDrawer } from '@/components/crm/LeadDrawer';
 import { 
   Search, Plus, Users, TrendingUp, Target, DollarSign, 
-  Loader2, Filter, GripVertical, CalendarIcon, X
+  Loader2, Filter, GripVertical, CalendarIcon, X, PhoneCall,
+  AlertTriangle, Clock
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -39,6 +40,8 @@ export default function CRM() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedMedia, setSelectedMedia] = useState('all');
   const [selectedAssignee, setSelectedAssignee] = useState('all');
+  const [selectedStatus, setSelectedStatus] = useState('all');
+  const [filterType, setFilterType] = useState<'created' | 'return'>('created');
   const [startDate, setStartDate] = useState<Date | undefined>(undefined);
   const [endDate, setEndDate] = useState<Date | undefined>(undefined);
   const [createModalOpen, setCreateModalOpen] = useState(false);
@@ -61,22 +64,35 @@ export default function CRM() {
         (lead.email && lead.email.toLowerCase().includes(searchQuery.toLowerCase()));
       const matchesMedia = selectedMedia === 'all' || lead.media_source_id === selectedMedia;
       const matchesAssignee = selectedAssignee === 'all' || lead.assigned_to === selectedAssignee;
+      const matchesStatus = selectedStatus === 'all' || lead.status === selectedStatus;
       
-      // Filter by date range (created_at)
-      const leadDate = new Date(lead.created_at);
-      const matchesStartDate = !startDate || leadDate >= startDate;
-      const matchesEndDate = !endDate || leadDate <= new Date(endDate.getTime() + 24 * 60 * 60 * 1000 - 1);
+      // Filter by date range based on filterType
+      const dateToFilter = filterType === 'return' 
+        ? (lead.next_contact_date ? new Date(lead.next_contact_date) : null)
+        : new Date(lead.created_at);
       
-      return matchesSearch && matchesMedia && matchesAssignee && matchesStartDate && matchesEndDate;
+      let matchesDateRange = true;
+      if (dateToFilter) {
+        const matchesStartDate = !startDate || dateToFilter >= startOfDay(startDate);
+        const matchesEndDate = !endDate || dateToFilter <= new Date(endDate.getTime() + 24 * 60 * 60 * 1000 - 1);
+        matchesDateRange = matchesStartDate && matchesEndDate;
+      } else if (filterType === 'return' && (startDate || endDate)) {
+        // If filtering by return date and lead has no return date, exclude it
+        matchesDateRange = false;
+      }
+      
+      return matchesSearch && matchesMedia && matchesAssignee && matchesStatus && matchesDateRange;
     });
-  }, [leads, searchQuery, selectedMedia, selectedAssignee, startDate, endDate]);
+  }, [leads, searchQuery, selectedMedia, selectedAssignee, selectedStatus, filterType, startDate, endDate]);
 
-  const hasFilters = searchQuery || selectedMedia !== 'all' || selectedAssignee !== 'all' || startDate || endDate;
+  const hasFilters = searchQuery || selectedMedia !== 'all' || selectedAssignee !== 'all' || selectedStatus !== 'all' || startDate || endDate;
 
   const clearFilters = () => {
     setSearchQuery('');
     setSelectedMedia('all');
     setSelectedAssignee('all');
+    setSelectedStatus('all');
+    setFilterType('created');
     setStartDate(undefined);
     setEndDate(undefined);
   };
@@ -102,18 +118,56 @@ export default function CRM() {
     return grouped;
   }, [filteredLeads]);
 
-  // Calculate metrics
+  // Calculate metrics with improved data for salespeople
   const metrics = useMemo(() => {
-    const activeLeads = leads.filter(l => l.status === 'ativo').length;
+    const today = startOfDay(new Date());
+    
+    // Only count active leads (not inactive, not converted, not lost)
+    const activeLeads = leads.filter(l => l.status === 'ativo');
+    
+    // Leads with return scheduled for today
+    const returnsToday = leads.filter(l => 
+      l.status === 'ativo' && 
+      l.next_contact_date && 
+      isToday(new Date(l.next_contact_date))
+    ).length;
+    
+    // Overdue returns - leads that have next_contact_date in the past and still active
+    const overdueReturns = leads.filter(l => 
+      l.status === 'ativo' && 
+      l.next_contact_date && 
+      isBefore(new Date(l.next_contact_date), today) &&
+      !isToday(new Date(l.next_contact_date))
+    ).length;
+    
+    // Converted leads (matricula)
     const convertedLeads = leads.filter(l => l.status === 'convertido').length;
-    const conversionRate = leads.length > 0 
-      ? Math.round((convertedLeads / leads.length) * 100) 
+    
+    // Conversion rate (only considering leads that exited the funnel - converted or lost)
+    const closedLeads = leads.filter(l => l.status === 'convertido' || l.status === 'perdido');
+    const conversionRate = closedLeads.length > 0 
+      ? Math.round((convertedLeads / closedLeads.length) * 100) 
       : 0;
-    const totalQuoteValue = leads
+    
+    // Total quote value only from active leads
+    const totalQuoteValue = activeLeads
       .filter(l => l.quote_value)
       .reduce((sum, l) => sum + (l.quote_value || 0), 0);
     
-    return { activeLeads, convertedLeads, conversionRate, totalQuoteValue };
+    // Pipeline value (leads in negotiation stage)
+    const pipelineValue = leads
+      .filter(l => l.stage === 'negociacao' && l.status === 'ativo' && l.quote_value)
+      .reduce((sum, l) => sum + (l.quote_value || 0), 0);
+    
+    return { 
+      activeLeads: activeLeads.length, 
+      returnsToday,
+      overdueReturns,
+      convertedLeads, 
+      conversionRate, 
+      totalQuoteValue,
+      pipelineValue
+    };
   }, [leads]);
 
   const handleDragStart = (e: React.DragEvent, lead: Lead) => {
@@ -214,6 +268,31 @@ export default function CRM() {
               </SelectContent>
             </Select>
 
+            {/* Status Filter */}
+            <Select value={selectedStatus} onValueChange={setSelectedStatus}>
+              <SelectTrigger className="w-[150px] bg-background">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos status</SelectItem>
+                <SelectItem value="ativo">Ativo</SelectItem>
+                <SelectItem value="inativo">Inativo</SelectItem>
+                <SelectItem value="convertido">Convertido</SelectItem>
+                <SelectItem value="perdido">Perdido</SelectItem>
+              </SelectContent>
+            </Select>
+
+            {/* Date Filter Type */}
+            <Select value={filterType} onValueChange={(v) => setFilterType(v as 'created' | 'return')}>
+              <SelectTrigger className="w-[160px] bg-background">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="created">Data criação</SelectItem>
+                <SelectItem value="return">Data retorno</SelectItem>
+              </SelectContent>
+            </Select>
+
             {/* Date Range Filter */}
             <Popover>
               <PopoverTrigger asChild>
@@ -262,53 +341,121 @@ export default function CRM() {
 
         {/* Metrics */}
         <div className="p-6 pb-0">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+            {/* Retornos Hoje - Destaque para o vendedor */}
+            <Card 
+              className={cn(
+                "bg-gradient-to-br border cursor-pointer hover:shadow-lg transition-shadow",
+                metrics.returnsToday > 0 
+                  ? "from-cyan-50 to-cyan-100 dark:from-cyan-950 dark:to-cyan-900 border-cyan-200 dark:border-cyan-800"
+                  : "from-gray-50 to-gray-100 dark:from-gray-950 dark:to-gray-900 border-gray-200 dark:border-gray-800"
+              )}
+              onClick={() => {
+                setFilterType('return');
+                setStartDate(new Date());
+                setEndDate(new Date());
+              }}
+            >
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-cyan-600 dark:text-cyan-400">Retornos Hoje</p>
+                    <p className={cn(
+                      "text-2xl font-bold",
+                      metrics.returnsToday > 0 ? "text-cyan-700 dark:text-cyan-300" : "text-gray-500"
+                    )}>{metrics.returnsToday}</p>
+                  </div>
+                  <PhoneCall className={cn(
+                    "w-6 h-6",
+                    metrics.returnsToday > 0 ? "text-cyan-500" : "text-gray-400"
+                  )} />
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Retornos Atrasados */}
+            <Card 
+              className={cn(
+                "bg-gradient-to-br border cursor-pointer hover:shadow-lg transition-shadow",
+                metrics.overdueReturns > 0 
+                  ? "from-red-50 to-red-100 dark:from-red-950 dark:to-red-900 border-red-200 dark:border-red-800 animate-pulse"
+                  : "from-gray-50 to-gray-100 dark:from-gray-950 dark:to-gray-900 border-gray-200 dark:border-gray-800"
+              )}
+              onClick={() => {
+                setFilterType('return');
+                const yesterday = new Date();
+                yesterday.setDate(yesterday.getDate() - 1);
+                setStartDate(undefined);
+                setEndDate(yesterday);
+              }}
+            >
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-red-600 dark:text-red-400">Atrasados</p>
+                    <p className={cn(
+                      "text-2xl font-bold",
+                      metrics.overdueReturns > 0 ? "text-red-700 dark:text-red-300" : "text-gray-500"
+                    )}>{metrics.overdueReturns}</p>
+                  </div>
+                  <AlertTriangle className={cn(
+                    "w-6 h-6",
+                    metrics.overdueReturns > 0 ? "text-red-500" : "text-gray-400"
+                  )} />
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Leads Ativos */}
             <Card className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950 dark:to-blue-900 border-blue-200 dark:border-blue-800">
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-blue-600 dark:text-blue-400">Leads Ativos</p>
+                    <p className="text-xs text-blue-600 dark:text-blue-400">Leads Ativos</p>
                     <p className="text-2xl font-bold text-blue-700 dark:text-blue-300">{metrics.activeLeads}</p>
                   </div>
-                  <Users className="w-8 h-8 text-blue-500" />
+                  <Users className="w-6 h-6 text-blue-500" />
                 </div>
               </CardContent>
             </Card>
 
+            {/* Matrículas */}
             <Card className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-950 dark:to-green-900 border-green-200 dark:border-green-800">
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-green-600 dark:text-green-400">Matrículas</p>
+                    <p className="text-xs text-green-600 dark:text-green-400">Matrículas</p>
                     <p className="text-2xl font-bold text-green-700 dark:text-green-300">{metrics.convertedLeads}</p>
                   </div>
-                  <Target className="w-8 h-8 text-green-500" />
+                  <Target className="w-6 h-6 text-green-500" />
                 </div>
               </CardContent>
             </Card>
 
+            {/* Taxa de Conversão */}
             <Card className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-950 dark:to-purple-900 border-purple-200 dark:border-purple-800">
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-purple-600 dark:text-purple-400">Taxa de Conversão</p>
+                    <p className="text-xs text-purple-600 dark:text-purple-400">Conversão</p>
                     <p className="text-2xl font-bold text-purple-700 dark:text-purple-300">{metrics.conversionRate}%</p>
                   </div>
-                  <TrendingUp className="w-8 h-8 text-purple-500" />
+                  <TrendingUp className="w-6 h-6 text-purple-500" />
                 </div>
               </CardContent>
             </Card>
 
+            {/* Pipeline */}
             <Card className="bg-gradient-to-br from-amber-50 to-amber-100 dark:from-amber-950 dark:to-amber-900 border-amber-200 dark:border-amber-800">
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-amber-600 dark:text-amber-400">Valor em Orçamentos</p>
-                    <p className="text-2xl font-bold text-amber-700 dark:text-amber-300">
-                      {metrics.totalQuoteValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                    <p className="text-xs text-amber-600 dark:text-amber-400">Pipeline</p>
+                    <p className="text-lg font-bold text-amber-700 dark:text-amber-300">
+                      {metrics.pipelineValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', notation: 'compact' })}
                     </p>
                   </div>
-                  <DollarSign className="w-8 h-8 text-amber-500" />
+                  <DollarSign className="w-6 h-6 text-amber-500" />
                 </div>
               </CardContent>
             </Card>
