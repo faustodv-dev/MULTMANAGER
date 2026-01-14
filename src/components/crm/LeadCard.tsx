@@ -1,9 +1,9 @@
-import { Lead, stageColors } from '@/types/crm';
+import { Lead, statusLabels } from '@/types/crm';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Phone, Mail, Calendar, GripVertical } from 'lucide-react';
-import { format } from 'date-fns';
+import { Phone, Mail, Calendar, GripVertical, AlertTriangle, Clock, Ban } from 'lucide-react';
+import { format, isToday, isBefore, startOfDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 
@@ -15,6 +15,13 @@ interface LeadCardProps {
 }
 
 export function LeadCard({ lead, onClick, onDragStart, isDragging }: LeadCardProps) {
+  const today = startOfDay(new Date());
+  const nextContactDate = lead.next_contact_date ? new Date(lead.next_contact_date) : null;
+  
+  const isOverdue = nextContactDate && isBefore(nextContactDate, today) && !isToday(nextContactDate);
+  const isReturnToday = nextContactDate && isToday(nextContactDate);
+  const isInactive = lead.status === 'inativo';
+
   return (
     <Card
       draggable
@@ -22,7 +29,10 @@ export function LeadCard({ lead, onClick, onDragStart, isDragging }: LeadCardPro
       onClick={onClick}
       className={cn(
         "cursor-pointer hover:shadow-md transition-all group",
-        isDragging && "opacity-50 scale-95"
+        isDragging && "opacity-50 scale-95",
+        isInactive && "opacity-60 bg-gray-50 dark:bg-gray-900",
+        isOverdue && !isInactive && "border-red-300 dark:border-red-700",
+        isReturnToday && !isInactive && "border-cyan-300 dark:border-cyan-700 bg-cyan-50/50 dark:bg-cyan-950/30"
       )}
     >
       <CardContent className="p-3">
@@ -31,15 +41,38 @@ export function LeadCard({ lead, onClick, onDragStart, isDragging }: LeadCardPro
           
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between gap-2 mb-2">
-              <p className="font-medium text-sm truncate">{lead.name}</p>
-              {lead.assignee && (
-                <Avatar className="w-6 h-6 shrink-0">
-                  <AvatarFallback className="text-[10px] bg-primary/10">
-                    {lead.assignee.full_name?.split(' ').map(n => n[0]).join('').slice(0, 2) || '??'}
-                  </AvatarFallback>
-                </Avatar>
-              )}
+              <div className="flex items-center gap-1.5 min-w-0">
+                {isInactive && (
+                  <Ban className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                )}
+                <p className={cn(
+                  "font-medium text-sm truncate",
+                  isInactive && "text-muted-foreground"
+                )}>{lead.name}</p>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                {isOverdue && !isInactive && (
+                  <AlertTriangle className="w-4 h-4 text-red-500" />
+                )}
+                {isReturnToday && !isInactive && (
+                  <Clock className="w-4 h-4 text-cyan-500" />
+                )}
+                {lead.assignee && (
+                  <Avatar className="w-6 h-6">
+                    <AvatarFallback className="text-[10px] bg-primary/10">
+                      {lead.assignee.full_name?.split(' ').map(n => n[0]).join('').slice(0, 2) || '??'}
+                    </AvatarFallback>
+                  </Avatar>
+                )}
+              </div>
             </div>
+
+            {/* Status badge for inactive leads */}
+            {isInactive && (
+              <Badge variant="secondary" className="mb-2 text-[10px] bg-gray-200 dark:bg-gray-700">
+                {statusLabels[lead.status]}
+              </Badge>
+            )}
 
             <div className="space-y-1 text-xs text-muted-foreground">
               <div className="flex items-center gap-1">
@@ -70,10 +103,17 @@ export function LeadCard({ lead, onClick, onDragStart, isDragging }: LeadCardPro
             </div>
 
             {lead.next_contact_date && (
-              <div className="flex items-center gap-1 mt-2 text-[10px] text-amber-600 dark:text-amber-400">
+              <div className={cn(
+                "flex items-center gap-1 mt-2 text-[10px]",
+                isOverdue && !isInactive && "text-red-600 dark:text-red-400 font-medium",
+                isReturnToday && !isInactive && "text-cyan-600 dark:text-cyan-400 font-medium",
+                !isOverdue && !isReturnToday && "text-amber-600 dark:text-amber-400"
+              )}>
                 <Calendar className="w-3 h-3" />
                 <span>
-                  Próximo contato: {format(new Date(lead.next_contact_date), "dd/MM 'às' HH:mm", { locale: ptBR })}
+                  {isOverdue && !isInactive && "⚠ Atrasado: "}
+                  {isReturnToday && !isInactive && "🔔 Hoje: "}
+                  {format(new Date(lead.next_contact_date), "dd/MM 'às' HH:mm", { locale: ptBR })}
                 </span>
               </div>
             )}
