@@ -11,14 +11,25 @@ export interface Department {
   updated_at: string;
 }
 
+export interface SchoolUnit {
+  id: string;
+  name: string;
+  city: string;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Profile {
   id: string;
   full_name: string | null;
   avatar_url: string | null;
   department_id: string | null;
+  unit_id: string | null;
   created_at: string;
   updated_at: string;
   department?: Department | null;
+  unit?: SchoolUnit | null;
 }
 
 export interface UserRole {
@@ -44,11 +55,13 @@ export interface Task {
   due_date: string | null;
   assignee_id: string | null;
   department_id: string | null;
+  unit_id: string | null;
   checklist: ChecklistItem[];
   created_at: string;
   updated_at: string;
   assignee?: Profile | null;
   department?: Department | null;
+  unit?: SchoolUnit | null;
 }
 
 export const statusLabels: Record<TaskStatus, string> = {

@@ -12,6 +12,7 @@ import { Process } from '@/hooks/useProcesses';
 import { useTasks } from '@/hooks/useTasks';
 import { useProfiles } from '@/hooks/useProfiles';
 import { useDepartments } from '@/hooks/useDepartments';
+import { useSchoolUnits } from '@/hooks/useSchoolUnits';
 import { useAuth } from '@/contexts/AuthContext';
 import { CalendarCheck, AlertTriangle, CheckCircle2, TrendingUp, Loader2, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -19,16 +20,22 @@ import { cn } from '@/lib/utils';
 
 const Dashboard = () => {
   const navigate = useNavigate();
-  const { user, loading: authLoading } = useAuth();
+  const { user, profile: authProfile, isAdmin, loading: authLoading } = useAuth();
   const { data: tasks = [], isLoading: loadingTasks } = useTasks();
   const { data: profiles = [] } = useProfiles();
   const { data: departments = [] } = useDepartments();
+  const { data: schoolUnits = [] } = useSchoolUnits();
   
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedAssignee, setSelectedAssignee] = useState('all');
   const [selectedFrequency, setSelectedFrequency] = useState('all');
   const [selectedDepartment, setSelectedDepartment] = useState('all');
   const [selectedStatus, setSelectedStatus] = useState('all');
+  const [selectedUnit, setSelectedUnit] = useState<string>(() => {
+    // Non-admins default to their own unit
+    if (authProfile?.unit_id) return authProfile.unit_id;
+    return 'all';
+  });
   const [selectedDateRange, setSelectedDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({ from: undefined, to: undefined });
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -45,9 +52,15 @@ const Dashboard = () => {
     }
   }, [user, authLoading, navigate]);
 
-  // Filter tasks
+  // Filter tasks based on user role and selected filters
   const filteredTasks = useMemo(() => {
     return tasks.filter(task => {
+      // Unit filter: non-admins only see their unit's tasks
+      const userUnitId = authProfile?.unit_id;
+      const matchesUnit = selectedUnit === 'all' 
+        ? (isAdmin || task.unit_id === userUnitId || !task.unit_id)
+        : task.unit_id === selectedUnit;
+      
       const searchLower = searchQuery.toLowerCase();
       const matchesSearch = !searchQuery || 
         task.title.toLowerCase().includes(searchLower) ||
@@ -73,9 +86,9 @@ const Dashboard = () => {
         }
       }
       
-      return matchesSearch && matchesAssignee && matchesFrequency && matchesDepartment && matchesStatus && matchesDateRange;
+      return matchesUnit && matchesSearch && matchesAssignee && matchesFrequency && matchesDepartment && matchesStatus && matchesDateRange;
     });
-  }, [tasks, searchQuery, selectedAssignee, selectedFrequency, selectedDepartment, selectedStatus, selectedDateRange]);
+  }, [tasks, searchQuery, selectedAssignee, selectedFrequency, selectedDepartment, selectedStatus, selectedUnit, selectedDateRange, isAdmin, authProfile?.unit_id]);
 
   // Calculate metrics
   const metrics = useMemo(() => {
@@ -190,10 +203,13 @@ const Dashboard = () => {
           onDepartmentChange={setSelectedDepartment}
           selectedStatus={selectedStatus}
           onStatusChange={setSelectedStatus}
+          selectedUnit={selectedUnit}
+          onUnitChange={setSelectedUnit}
           selectedDateRange={selectedDateRange}
           onDateRangeChange={setSelectedDateRange}
           profiles={profiles}
           departments={departments}
+          schoolUnits={schoolUnits}
         />
 
         {/* Metrics Section */}

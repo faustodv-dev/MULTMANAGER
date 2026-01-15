@@ -1,4 +1,4 @@
-import { Search, Calendar, LogOut, Settings, CalendarDays, Filter } from 'lucide-react';
+import { Search, Calendar, LogOut, Settings, CalendarDays, Filter, Building } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -7,7 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar as CalendarComponent } from '@/components/ui/calendar';
-import { Profile, Department, frequencyLabels, statusLabels, TaskStatus } from '@/types/database';
+import { Profile, Department, frequencyLabels, statusLabels, TaskStatus, SchoolUnit } from '@/types/database';
 import { useAuth } from '@/contexts/AuthContext';
 import { NotificationBell } from '@/components/NotificationBell';
 import { format } from 'date-fns';
@@ -24,10 +24,13 @@ interface DashboardHeaderNewProps {
   onDepartmentChange: (value: string) => void;
   selectedStatus: string;
   onStatusChange: (value: string) => void;
+  selectedUnit: string;
+  onUnitChange: (value: string) => void;
   selectedDateRange: { from: Date | undefined; to: Date | undefined };
   onDateRangeChange: (range: { from: Date | undefined; to: Date | undefined }) => void;
   profiles: Profile[];
   departments: Department[];
+  schoolUnits: SchoolUnit[];
 }
 
 export function DashboardHeaderNew({
@@ -41,10 +44,13 @@ export function DashboardHeaderNew({
   onDepartmentChange,
   selectedStatus,
   onStatusChange,
+  selectedUnit,
+  onUnitChange,
   selectedDateRange,
   onDateRangeChange,
   profiles,
   departments,
+  schoolUnits,
 }: DashboardHeaderNewProps) {
   const navigate = useNavigate();
   const { profile, signOut, isAdmin } = useAuth();
@@ -112,6 +118,24 @@ export function DashboardHeaderNew({
 
         {/* Filters Row */}
         <div className="flex flex-wrap items-center gap-3">
+          {/* Unit Filter (Admin only) */}
+          {isAdmin && schoolUnits.length > 0 && (
+            <Select value={selectedUnit} onValueChange={onUnitChange}>
+              <SelectTrigger className="w-[180px] bg-background">
+                <Building className="w-4 h-4 mr-2" />
+                <SelectValue placeholder="Unidade" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas as unidades</SelectItem>
+                {schoolUnits.map((unit) => (
+                  <SelectItem key={unit.id} value={unit.id}>
+                    {unit.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+
           {/* Search */}
           <div className="relative flex-1 min-w-[200px] max-w-sm">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -209,7 +233,7 @@ export function DashboardHeaderNew({
           </Select>
 
           {/* Clear Filters */}
-          {(selectedAssignee !== 'all' || selectedFrequency !== 'all' || selectedDepartment !== 'all' || selectedStatus !== 'all' || selectedDateRange.from) && (
+          {(selectedAssignee !== 'all' || selectedFrequency !== 'all' || selectedDepartment !== 'all' || selectedStatus !== 'all' || (isAdmin && selectedUnit !== 'all') || selectedDateRange.from) && (
             <Button 
               variant="ghost" 
               size="sm" 
@@ -218,6 +242,7 @@ export function DashboardHeaderNew({
                 onFrequencyChange('all');
                 onDepartmentChange('all');
                 onStatusChange('all');
+                if (isAdmin) onUnitChange('all');
                 onDateRangeChange({ from: undefined, to: undefined });
               }}
               className="text-muted-foreground hover:text-foreground"

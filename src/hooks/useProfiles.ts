@@ -10,7 +10,7 @@ export function useProfiles() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('profiles')
-        .select('*, department:departments(*)')
+        .select('*, department:departments(*), unit:school_units(*)')
         .order('full_name');
       
       if (error) throw error;
