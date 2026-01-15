@@ -15,6 +15,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { useLeads, useUpdateLeadStage, useMediaSources } from '@/hooks/useLeads';
 import { useProfiles } from '@/hooks/useProfiles';
 import { useDepartments } from '@/hooks/useDepartments';
+import { useSchoolUnits } from '@/hooks/useSchoolUnits';
 import { LeadStage, stageLabels, stageColors, Lead, statusLabels } from '@/types/crm';
 import { LeadCard } from '@/components/crm/LeadCard';
 import { LeadModal } from '@/components/crm/LeadModal';
@@ -22,7 +23,7 @@ import { LeadDrawer } from '@/components/crm/LeadDrawer';
 import { 
   Search, Plus, Users, TrendingUp, Target, DollarSign, 
   Loader2, Filter, GripVertical, CalendarIcon, X, PhoneCall,
-  AlertTriangle, Clock
+  AlertTriangle, Clock, Building
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -30,10 +31,11 @@ const funnelStages: LeadStage[] = ['novo', 'contato_inicial', 'qualificacao', 'a
 
 export default function CRM() {
   const navigate = useNavigate();
-  const { user, loading: authLoading } = useAuth();
+  const { user, profile: authProfile, isAdmin, loading: authLoading } = useAuth();
   const { data: leads = [], isLoading: loadingLeads } = useLeads();
   const { data: profiles = [] } = useProfiles();
   const { data: departments = [] } = useDepartments();
+  const { data: schoolUnits = [] } = useSchoolUnits();
   const { data: mediaSources = [] } = useMediaSources();
   const updateLeadStage = useUpdateLeadStage();
   
@@ -41,6 +43,11 @@ export default function CRM() {
   const [selectedMedia, setSelectedMedia] = useState('all');
   const [selectedAssignee, setSelectedAssignee] = useState('all');
   const [selectedStatus, setSelectedStatus] = useState('all');
+  const [selectedUnit, setSelectedUnit] = useState<string>(() => {
+    // Non-admins default to their own unit
+    if (authProfile?.unit_id) return authProfile.unit_id;
+    return 'all';
+  });
   const [filterType, setFilterType] = useState<'created' | 'return'>('created');
   const [startDate, setStartDate] = useState<Date | undefined>(undefined);
   const [endDate, setEndDate] = useState<Date | undefined>(undefined);
@@ -55,9 +62,15 @@ export default function CRM() {
     return null;
   }
 
-  // Filter leads
+  // Filter leads based on user role and selected filters
   const filteredLeads = useMemo(() => {
     return leads.filter(lead => {
+      // Unit filter: non-admins only see their unit's leads
+      const userUnitId = authProfile?.unit_id;
+      const matchesUnit = selectedUnit === 'all' 
+        ? (isAdmin || lead.unit_id === userUnitId)
+        : lead.unit_id === selectedUnit;
+      
       const matchesSearch = 
         lead.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         lead.phone.includes(searchQuery) ||
@@ -81,17 +94,18 @@ export default function CRM() {
         matchesDateRange = false;
       }
       
-      return matchesSearch && matchesMedia && matchesAssignee && matchesStatus && matchesDateRange;
+      return matchesUnit && matchesSearch && matchesMedia && matchesAssignee && matchesStatus && matchesDateRange;
     });
-  }, [leads, searchQuery, selectedMedia, selectedAssignee, selectedStatus, filterType, startDate, endDate]);
+  }, [leads, searchQuery, selectedMedia, selectedAssignee, selectedStatus, selectedUnit, filterType, startDate, endDate, isAdmin, authProfile?.unit_id]);
 
-  const hasFilters = searchQuery || selectedMedia !== 'all' || selectedAssignee !== 'all' || selectedStatus !== 'all' || startDate || endDate;
+  const hasFilters = searchQuery || selectedMedia !== 'all' || selectedAssignee !== 'all' || selectedStatus !== 'all' || (isAdmin && selectedUnit !== 'all') || startDate || endDate;
 
   const clearFilters = () => {
     setSearchQuery('');
     setSelectedMedia('all');
     setSelectedAssignee('all');
     setSelectedStatus('all');
+    if (isAdmin) setSelectedUnit('all');
     setFilterType('created');
     setStartDate(undefined);
     setEndDate(undefined);
@@ -230,6 +244,24 @@ export default function CRM() {
 
           {/* Filters */}
           <div className="flex flex-wrap items-center gap-3">
+            {/* Unit Filter (Admin only) */}
+            {isAdmin && schoolUnits.length > 0 && (
+              <Select value={selectedUnit} onValueChange={setSelectedUnit}>
+                <SelectTrigger className="w-[180px] bg-background">
+                  <Building className="w-4 h-4 mr-2" />
+                  <SelectValue placeholder="Unidade" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas as unidades</SelectItem>
+                  {schoolUnits.map((unit) => (
+                    <SelectItem key={unit.id} value={unit.id}>
+                      {unit.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+
             <div className="relative flex-1 min-w-[200px] max-w-sm">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input

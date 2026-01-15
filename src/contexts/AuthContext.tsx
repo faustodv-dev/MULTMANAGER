@@ -61,10 +61,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const fetchProfileAndRole = async (userId: string) => {
     try {
-      // Fetch profile
+      // Fetch profile with department and unit
       const { data: profileData } = await supabase
         .from('profiles')
-        .select('*, department:departments(*)')
+        .select('*, department:departments(*), unit:school_units(*)')
         .eq('id', userId)
         .maybeSingle();
       

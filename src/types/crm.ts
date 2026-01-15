@@ -1,4 +1,4 @@
-import { Profile, Department } from './database';
+import { Profile, Department, SchoolUnit } from './database';
 
 export type LeadStage = 'novo' | 'contato_inicial' | 'qualificacao' | 'apresentacao' | 'negociacao' | 'matricula' | 'perdido';
 export type LeadStatus = 'ativo' | 'inativo' | 'convertido' | 'perdido';
@@ -49,6 +49,7 @@ export interface Lead {
   // Assignment
   assigned_to: string | null;
   department_id: string | null;
+  unit_id: string | null;
   
   // Timestamps
   created_at: string;
@@ -66,6 +67,7 @@ export interface Lead {
   media_source?: MediaSource | null;
   assignee?: Profile | null;
   department?: Department | null;
+  unit?: SchoolUnit | null;
 }
 
 export interface LeadActivity {

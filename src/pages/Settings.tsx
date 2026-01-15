@@ -13,9 +13,10 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { useDepartments, useCreateDepartment, useDeleteDepartment } from '@/hooks/useDepartments';
 import { useProfiles, useUserRoles, useUpdateUserRole, useUpdateProfile } from '@/hooks/useProfiles';
 import { useProcesses, useDeleteProcess, Process } from '@/hooks/useProcesses';
+import { useSchoolUnits, useCreateSchoolUnit, useDeleteSchoolUnit } from '@/hooks/useSchoolUnits';
 import { ProcessModal } from '@/components/ProcessModal';
 import { AppRole, roleLabels, departmentColors } from '@/types/database';
-import { ArrowLeft, Plus, Trash2, Building2, Users, Loader2, Shield, FileText, Pencil, UserPlus } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Building2, Users, Loader2, Shield, FileText, Pencil, UserPlus, School, MapPin } from 'lucide-react';
 import { CreateUserModal } from '@/components/CreateUserModal';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -34,15 +35,20 @@ export default function Settings() {
   const { data: departments, isLoading: loadingDepts } = useDepartments();
   const { data: profiles, isLoading: loadingProfiles } = useProfiles();
   const { data: processes, isLoading: loadingProcesses } = useProcesses();
+  const { data: schoolUnits, isLoading: loadingUnits } = useSchoolUnits();
   const { data: userRoles } = useUserRoles();
   const createDepartment = useCreateDepartment();
   const deleteDepartment = useDeleteDepartment();
   const deleteProcess = useDeleteProcess();
+  const createSchoolUnit = useCreateSchoolUnit();
+  const deleteSchoolUnit = useDeleteSchoolUnit();
   const updateUserRole = useUpdateUserRole();
   const updateProfile = useUpdateProfile();
 
   const [newDeptName, setNewDeptName] = useState('');
   const [newDeptColor, setNewDeptColor] = useState('blue');
+  const [newUnitName, setNewUnitName] = useState('');
+  const [newUnitCity, setNewUnitCity] = useState('');
   const [processModalOpen, setProcessModalOpen] = useState(false);
   const [editingProcess, setEditingProcess] = useState<Process | null>(null);
   const [filterDepartmentId, setFilterDepartmentId] = useState<string>('all');
@@ -152,6 +158,10 @@ export default function Settings() {
         <div className="flex-1 p-6">
           <Tabs defaultValue="departments" className="space-y-6">
             <TabsList>
+              <TabsTrigger value="units" className="gap-2">
+                <School className="w-4 h-4" />
+                Unidades
+              </TabsTrigger>
               <TabsTrigger value="departments" className="gap-2">
                 <Building2 className="w-4 h-4" />
                 Departamentos
@@ -165,6 +175,77 @@ export default function Settings() {
                 Usuários
               </TabsTrigger>
             </TabsList>
+
+            {/* School Units Tab */}
+            <TabsContent value="units" className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Adicionar Unidade Escolar</CardTitle>
+                  <CardDescription>Crie novas unidades para organizar escolas</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <form onSubmit={async (e) => {
+                    e.preventDefault();
+                    if (!newUnitName.trim() || !newUnitCity.trim()) {
+                      toast.error('Nome e cidade são obrigatórios');
+                      return;
+                    }
+                    await createSchoolUnit.mutateAsync({ name: newUnitName, city: newUnitCity });
+                    setNewUnitName('');
+                    setNewUnitCity('');
+                  }} className="flex gap-4 items-end">
+                    <div className="flex-1 space-y-2">
+                      <Label>Nome da Unidade</Label>
+                      <Input placeholder="Ex: Rio Verde" value={newUnitName} onChange={(e) => setNewUnitName(e.target.value)} />
+                    </div>
+                    <div className="flex-1 space-y-2">
+                      <Label>Cidade</Label>
+                      <Input placeholder="Ex: Rio Verde" value={newUnitCity} onChange={(e) => setNewUnitCity(e.target.value)} />
+                    </div>
+                    <Button type="submit" disabled={createSchoolUnit.isPending}>
+                      {createSchoolUnit.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                      <span className="ml-2">Adicionar</span>
+                    </Button>
+                  </form>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Unidades Escolares</CardTitle>
+                  <CardDescription>Lista de todas as unidades cadastradas</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {loadingUnits ? (
+                    <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>
+                  ) : schoolUnits?.length === 0 ? (
+                    <p className="text-center py-8 text-muted-foreground">Nenhuma unidade cadastrada</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {schoolUnits?.map((unit) => (
+                        <div key={unit.id} className="flex items-center justify-between p-4 rounded-lg border bg-card hover:bg-muted/50 transition-colors">
+                          <div className="flex items-center gap-3">
+                            <School className="w-5 h-5 text-primary" />
+                            <div>
+                              <span className="font-medium">{unit.name}</span>
+                              <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                <MapPin className="w-3 h-3" />
+                                {unit.city}
+                              </div>
+                            </div>
+                          </div>
+                          <Button variant="ghost" size="icon" onClick={() => {
+                            if (confirm('Tem certeza que deseja excluir esta unidade?')) deleteSchoolUnit.mutateAsync(unit.id);
+                          }} className="text-muted-foreground hover:text-destructive">
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
 
             <TabsContent value="departments" className="space-y-6">
               {/* Add Department Form */}

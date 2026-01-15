@@ -122,6 +122,7 @@ export type Database = {
           status: Database["public"]["Enums"]["lead_status"]
           uniform_paid: boolean | null
           uniform_value: number | null
+          unit_id: string | null
           updated_at: string
           whatsapp: string | null
         }
@@ -157,6 +158,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["lead_status"]
           uniform_paid?: boolean | null
           uniform_value?: number | null
+          unit_id?: string | null
           updated_at?: string
           whatsapp?: string | null
         }
@@ -192,6 +194,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["lead_status"]
           uniform_paid?: boolean | null
           uniform_value?: number | null
+          unit_id?: string | null
           updated_at?: string
           whatsapp?: string | null
         }
@@ -215,6 +218,13 @@ export type Database = {
             columns: ["media_source_id"]
             isOneToOne: false
             referencedRelation: "media_sources"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leads_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "school_units"
             referencedColumns: ["id"]
           },
         ]
@@ -326,6 +336,7 @@ export type Database = {
           department_id: string | null
           full_name: string | null
           id: string
+          unit_id: string | null
           updated_at: string
         }
         Insert: {
@@ -334,6 +345,7 @@ export type Database = {
           department_id?: string | null
           full_name?: string | null
           id: string
+          unit_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -342,6 +354,7 @@ export type Database = {
           department_id?: string | null
           full_name?: string | null
           id?: string
+          unit_id?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -352,7 +365,41 @@ export type Database = {
             referencedRelation: "departments"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "profiles_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "school_units"
+            referencedColumns: ["id"]
+          },
         ]
+      }
+      school_units: {
+        Row: {
+          active: boolean
+          city: string
+          created_at: string
+          id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          city: string
+          created_at?: string
+          id?: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          city?: string
+          created_at?: string
+          id?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
       tasks: {
         Row: {
@@ -369,6 +416,7 @@ export type Database = {
           process_id: string | null
           status: Database["public"]["Enums"]["task_status"]
           title: string
+          unit_id: string | null
           updated_at: string
         }
         Insert: {
@@ -385,6 +433,7 @@ export type Database = {
           process_id?: string | null
           status?: Database["public"]["Enums"]["task_status"]
           title: string
+          unit_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -401,6 +450,7 @@ export type Database = {
           process_id?: string | null
           status?: Database["public"]["Enums"]["task_status"]
           title?: string
+          unit_id?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -423,6 +473,13 @@ export type Database = {
             columns: ["process_id"]
             isOneToOne: false
             referencedRelation: "processes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "school_units"
             referencedColumns: ["id"]
           },
         ]
