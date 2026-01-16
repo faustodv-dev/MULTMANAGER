@@ -105,6 +105,7 @@ export interface CreateLeadInput {
   final_value?: number | null;
   assigned_to?: string | null;
   department_id?: string | null;
+  unit_id?: string | null;
   next_contact_date?: string | null;
   notes?: string | null;
 }

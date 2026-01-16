@@ -78,7 +78,7 @@ Deno.serve(async (req) => {
     }
 
     // Get request body
-    const { email, password, full_name, department_id, role } = await req.json()
+    const { email, password, full_name, department_id, unit_id, role } = await req.json()
 
     // Validate required fields
     if (!email || !password || !full_name) {
@@ -131,6 +131,14 @@ Deno.serve(async (req) => {
       )
     }
 
+    // Validate unit_id format if provided
+    if (unit_id && !uuidRegex.test(unit_id)) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid unit ID format' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
     // Create admin client with service role key to create users
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
@@ -156,13 +164,17 @@ Deno.serve(async (req) => {
     }
 
     // The trigger handle_new_user should have already created the profile and role
-    // But we'll update department_id and role if provided
-    if (department_id || role) {
-      // Update profile with department_id if provided
-      if (department_id) {
+    // But we'll update department_id, unit_id and role if provided
+    if (department_id || unit_id || role) {
+      // Update profile with department_id and unit_id if provided
+      const profileUpdates: Record<string, string> = {};
+      if (department_id) profileUpdates.department_id = department_id;
+      if (unit_id) profileUpdates.unit_id = unit_id;
+      
+      if (Object.keys(profileUpdates).length > 0) {
         await supabaseAdmin
           .from('profiles')
-          .update({ department_id })
+          .update(profileUpdates)
           .eq('id', newUser.user.id)
       }
 

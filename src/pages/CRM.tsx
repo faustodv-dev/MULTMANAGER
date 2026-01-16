@@ -20,12 +20,14 @@ import { LeadStage, stageLabels, stageColors, Lead, statusLabels } from '@/types
 import { LeadCard } from '@/components/crm/LeadCard';
 import { LeadModal } from '@/components/crm/LeadModal';
 import { LeadDrawer } from '@/components/crm/LeadDrawer';
+import { SalesRanking } from '@/components/crm/SalesRanking';
 import { 
   Search, Plus, Users, TrendingUp, Target, DollarSign, 
   Loader2, Filter, GripVertical, CalendarIcon, X, PhoneCall,
-  AlertTriangle, Clock, Building
+  AlertTriangle, Clock, Building, User
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 const funnelStages: LeadStage[] = ['novo', 'contato_inicial', 'qualificacao', 'apresentacao', 'negociacao', 'matricula'];
 
@@ -41,7 +43,11 @@ export default function CRM() {
   
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedMedia, setSelectedMedia] = useState('all');
-  const [selectedAssignee, setSelectedAssignee] = useState('all');
+  const [selectedAssignee, setSelectedAssignee] = useState<string>(() => {
+    // Non-admins default to seeing only their own leads
+    if (authProfile && !authProfile.unit_id) return 'all';
+    return 'all';
+  });
   const [selectedStatus, setSelectedStatus] = useState('all');
   const [selectedUnit, setSelectedUnit] = useState<string>(() => {
     // Non-admins default to their own unit
@@ -55,6 +61,7 @@ export default function CRM() {
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [draggedLead, setDraggedLead] = useState<Lead | null>(null);
+  const [viewMode, setViewMode] = useState<'funnel' | 'personal' | 'ranking'>('funnel');
 
   // Redirect to auth if not logged in
   if (!authLoading && !user) {
@@ -135,19 +142,22 @@ export default function CRM() {
   // Calculate metrics with improved data for salespeople
   const metrics = useMemo(() => {
     const today = startOfDay(new Date());
+    const leadsForMetrics = viewMode === 'personal' && user 
+      ? leads.filter(l => l.assigned_to === user.id)
+      : leads;
     
     // Only count active leads (not inactive, not converted, not lost)
-    const activeLeads = leads.filter(l => l.status === 'ativo');
+    const activeLeads = leadsForMetrics.filter(l => l.status === 'ativo');
     
     // Leads with return scheduled for today
-    const returnsToday = leads.filter(l => 
+    const returnsToday = leadsForMetrics.filter(l => 
       l.status === 'ativo' && 
       l.next_contact_date && 
       isToday(new Date(l.next_contact_date))
     ).length;
     
     // Overdue returns - leads that have next_contact_date in the past and still active
-    const overdueReturns = leads.filter(l => 
+    const overdueReturns = leadsForMetrics.filter(l => 
       l.status === 'ativo' && 
       l.next_contact_date && 
       isBefore(new Date(l.next_contact_date), today) &&
@@ -155,10 +165,10 @@ export default function CRM() {
     ).length;
     
     // Converted leads (matricula)
-    const convertedLeads = leads.filter(l => l.status === 'convertido').length;
+    const convertedLeads = leadsForMetrics.filter(l => l.status === 'convertido').length;
     
     // Conversion rate (only considering leads that exited the funnel - converted or lost)
-    const closedLeads = leads.filter(l => l.status === 'convertido' || l.status === 'perdido');
+    const closedLeads = leadsForMetrics.filter(l => l.status === 'convertido' || l.status === 'perdido');
     const conversionRate = closedLeads.length > 0 
       ? Math.round((convertedLeads / closedLeads.length) * 100) 
       : 0;
@@ -169,7 +179,7 @@ export default function CRM() {
       .reduce((sum, l) => sum + (l.quote_value || 0), 0);
     
     // Pipeline value (leads in negotiation stage)
-    const pipelineValue = leads
+    const pipelineValue = leadsForMetrics
       .filter(l => l.stage === 'negociacao' && l.status === 'ativo' && l.quote_value)
       .reduce((sum, l) => sum + (l.quote_value || 0), 0);
     
@@ -182,7 +192,7 @@ export default function CRM() {
       totalQuoteValue,
       pipelineValue
     };
-  }, [leads]);
+  }, [leads, viewMode, user]);
 
   const handleDragStart = (e: React.DragEvent, lead: Lead) => {
     setDraggedLead(lead);
@@ -232,14 +242,34 @@ export default function CRM() {
             <div>
               <h1 className="text-2xl font-bold text-foreground">CRM Educacional</h1>
               <p className="text-sm text-muted-foreground">
-                Gerencie seus leads e acompanhe o funil de matrículas
+                {viewMode === 'personal' ? 'Meus leads e performance pessoal' : 'Gerencie seus leads e acompanhe o funil de matrículas'}
               </p>
             </div>
             
-            <Button onClick={() => setCreateModalOpen(true)}>
-              <Plus className="w-4 h-4 mr-2" />
-              Novo Lead
-            </Button>
+            <div className="flex items-center gap-3">
+              {/* View Mode Tabs */}
+              <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as 'funnel' | 'personal' | 'ranking')}>
+                <TabsList>
+                  <TabsTrigger value="funnel" className="gap-1">
+                    <Target className="w-4 h-4" />
+                    Funil
+                  </TabsTrigger>
+                  <TabsTrigger value="personal" className="gap-1">
+                    <User className="w-4 h-4" />
+                    Meus Leads
+                  </TabsTrigger>
+                  <TabsTrigger value="ranking" className="gap-1">
+                    <TrendingUp className="w-4 h-4" />
+                    Ranking
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
+
+              <Button onClick={() => setCreateModalOpen(true)}>
+                <Plus className="w-4 h-4 mr-2" />
+                Novo Lead
+              </Button>
+            </div>
           </div>
 
           {/* Filters */}
@@ -494,48 +524,63 @@ export default function CRM() {
           </div>
         </div>
 
-        {/* Kanban Funnel */}
+        {/* Content based on view mode */}
         <div className="flex-1 p-6 overflow-x-auto">
           {loadingLeads ? (
             <div className="flex items-center justify-center h-64">
               <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
             </div>
+          ) : viewMode === 'ranking' ? (
+            <div className="max-w-4xl mx-auto">
+              <SalesRanking 
+                leads={leads} 
+                profiles={profiles} 
+                currentUserId={user?.id} 
+              />
+            </div>
           ) : (
             <div className="flex gap-4 min-w-max pb-4">
-              {funnelStages.map((stage) => (
-                <div
-                  key={stage}
-                  className="w-80 flex flex-col bg-muted/30 rounded-lg"
-                  onDragOver={handleDragOver}
-                  onDrop={(e) => handleDrop(e, stage)}
-                >
-                  {/* Column Header */}
-                  <div className="p-3 border-b">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className={cn("w-3 h-3 rounded-full", stageColors[stage])} />
-                        <span className="font-semibold text-sm">{stageLabels[stage]}</span>
+              {funnelStages.map((stage) => {
+                // Filter leads by stage, and if personal mode, only show user's leads
+                const stageLeads = viewMode === 'personal' && user
+                  ? leadsByStage[stage].filter(l => l.assigned_to === user.id)
+                  : leadsByStage[stage];
+
+                return (
+                  <div
+                    key={stage}
+                    className="w-80 flex flex-col bg-muted/30 rounded-lg"
+                    onDragOver={handleDragOver}
+                    onDrop={(e) => handleDrop(e, stage)}
+                  >
+                    {/* Column Header */}
+                    <div className="p-3 border-b">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className={cn("w-3 h-3 rounded-full", stageColors[stage])} />
+                          <span className="font-semibold text-sm">{stageLabels[stage]}</span>
+                        </div>
+                        <Badge variant="secondary" className="text-xs">
+                          {stageLeads.length}
+                        </Badge>
                       </div>
-                      <Badge variant="secondary" className="text-xs">
-                        {leadsByStage[stage].length}
-                      </Badge>
+                    </div>
+
+                    {/* Column Content */}
+                    <div className="flex-1 p-2 space-y-2 min-h-[400px] overflow-y-auto">
+                      {stageLeads.map((lead) => (
+                        <LeadCard
+                          key={lead.id}
+                          lead={lead}
+                          onClick={() => handleLeadClick(lead)}
+                          onDragStart={(e) => handleDragStart(e, lead)}
+                          isDragging={draggedLead?.id === lead.id}
+                        />
+                      ))}
                     </div>
                   </div>
-
-                  {/* Column Content */}
-                  <div className="flex-1 p-2 space-y-2 min-h-[400px] overflow-y-auto">
-                    {leadsByStage[stage].map((lead) => (
-                      <LeadCard
-                        key={lead.id}
-                        lead={lead}
-                        onClick={() => handleLeadClick(lead)}
-                        onDragStart={(e) => handleDragStart(e, lead)}
-                        isDragging={draggedLead?.id === lead.id}
-                      />
-                    ))}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

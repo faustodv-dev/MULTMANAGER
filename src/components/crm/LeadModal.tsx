@@ -28,10 +28,12 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useCreateLead } from '@/hooks/useLeads';
+import { useSchoolUnits, SchoolUnit } from '@/hooks/useSchoolUnits';
 import { MediaSource, LeadStage } from '@/types/crm';
 import { Profile, Department } from '@/types/database';
 import { Loader2, UserPlus } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useAuth } from '@/contexts/AuthContext';
 
 const createLeadSchema = z.object({
   name: z.string().min(2, 'Nome deve ter no mínimo 2 caracteres'),
@@ -48,6 +50,7 @@ const createLeadSchema = z.object({
   discount_percent: z.string().optional(),
   assigned_to: z.string().optional(),
   department_id: z.string().optional(),
+  unit_id: z.string().optional(),
   next_contact_date: z.string().min(1, 'Data de retorno é obrigatória'),
   notes: z.string().optional(),
 });
@@ -76,6 +79,8 @@ const educationLevels = [
 
 export function LeadModal({ open, onClose, mediaSources, profiles, departments }: LeadModalProps) {
   const createLead = useCreateLead();
+  const { data: schoolUnits = [] } = useSchoolUnits();
+  const { profile: authProfile } = useAuth();
   
   const form = useForm<CreateLeadForm>({
     resolver: zodResolver(createLeadSchema),
@@ -94,6 +99,7 @@ export function LeadModal({ open, onClose, mediaSources, profiles, departments }
       discount_percent: '',
       assigned_to: '',
       department_id: '',
+      unit_id: authProfile?.unit_id || '',
       next_contact_date: '',
       notes: '',
     },
@@ -123,6 +129,7 @@ export function LeadModal({ open, onClose, mediaSources, profiles, departments }
         final_value: finalValue,
         assigned_to: data.assigned_to || null,
         department_id: data.department_id || null,
+        unit_id: data.unit_id || null,
         next_contact_date: data.next_contact_date || null,
         notes: data.notes || null,
       });
@@ -385,6 +392,31 @@ export function LeadModal({ open, onClose, mediaSources, profiles, departments }
                             {departments.map((dept) => (
                               <SelectItem key={dept.id} value={dept.id}>
                                 {dept.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="unit_id"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Unidade Escolar</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Selecione" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {schoolUnits.map((unit) => (
+                              <SelectItem key={unit.id} value={unit.id}>
+                                {unit.name} - {unit.city}
                               </SelectItem>
                             ))}
                           </SelectContent>
