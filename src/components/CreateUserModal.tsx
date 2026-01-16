@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -27,6 +26,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useDepartments } from '@/hooks/useDepartments';
+import { useSchoolUnits } from '@/hooks/useSchoolUnits';
 import { useAdminCreateUser } from '@/hooks/useAdminCreateUser';
 import { AppRole, roleLabels } from '@/types/database';
 import { Loader2, UserPlus } from 'lucide-react';
@@ -36,6 +36,7 @@ const createUserSchema = z.object({
   password: z.string().min(6, 'Senha deve ter no mínimo 6 caracteres'),
   full_name: z.string().min(2, 'Nome deve ter no mínimo 2 caracteres'),
   department_id: z.string().optional(),
+  unit_id: z.string().optional(),
   role: z.enum(['admin', 'manager', 'employee']).default('employee'),
 });
 
@@ -48,6 +49,7 @@ interface CreateUserModalProps {
 
 export function CreateUserModal({ open, onClose }: CreateUserModalProps) {
   const { data: departments = [] } = useDepartments();
+  const { data: schoolUnits = [] } = useSchoolUnits();
   const createUser = useAdminCreateUser();
   
   const form = useForm<CreateUserForm>({
@@ -57,6 +59,7 @@ export function CreateUserModal({ open, onClose }: CreateUserModalProps) {
       password: '',
       full_name: '',
       department_id: undefined,
+      unit_id: undefined,
       role: 'employee',
     },
   });
@@ -68,6 +71,7 @@ export function CreateUserModal({ open, onClose }: CreateUserModalProps) {
         password: data.password,
         full_name: data.full_name,
         department_id: data.department_id || null,
+        unit_id: data.unit_id || null,
         role: data.role as AppRole,
       });
       form.reset();
@@ -150,6 +154,31 @@ export function CreateUserModal({ open, onClose }: CreateUserModalProps) {
                       {departments.map((dept) => (
                         <SelectItem key={dept.id} value={dept.id}>
                           {dept.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="unit_id"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Unidade Escolar</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione uma unidade" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {schoolUnits.map((unit) => (
+                        <SelectItem key={unit.id} value={unit.id}>
+                          {unit.name} - {unit.city}
                         </SelectItem>
                       ))}
                     </SelectContent>

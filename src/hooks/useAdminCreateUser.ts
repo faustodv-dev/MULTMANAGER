@@ -8,6 +8,7 @@ interface CreateUserInput {
   password: string;
   full_name: string;
   department_id?: string | null;
+  unit_id?: string | null;
   role?: AppRole;
 }
 
