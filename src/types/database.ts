@@ -1,7 +1,7 @@
 export type TaskStatus = 'todo' | 'in_progress' | 'review' | 'done';
 export type TaskFrequency = 'daily' | 'weekly' | 'monthly';
 export type TaskPriority = 'low' | 'medium' | 'high';
-export type AppRole = 'admin' | 'manager' | 'employee';
+export type AppRole = 'admin' | 'unit_admin' | 'manager' | 'employee';
 
 export interface Department {
   id: string;
@@ -86,7 +86,8 @@ export const departmentColors: Record<string, string> = {
 };
 
 export const roleLabels: Record<AppRole, string> = {
-  admin: 'Administrador',
+  admin: 'Administrador Geral',
+  unit_admin: 'Admin. de Unidade',
   manager: 'Gerente',
   employee: 'Funcionário',
 };
