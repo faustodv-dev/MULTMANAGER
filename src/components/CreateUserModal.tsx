@@ -37,7 +37,7 @@ const createUserSchema = z.object({
   full_name: z.string().min(2, 'Nome deve ter no mínimo 2 caracteres'),
   department_id: z.string().optional(),
   unit_id: z.string().optional(),
-  role: z.enum(['admin', 'manager', 'employee']).default('employee'),
+  role: z.enum(['admin', 'unit_admin', 'manager', 'employee']).default('employee'),
 });
 
 type CreateUserForm = z.infer<typeof createUserSchema>;
@@ -203,6 +203,7 @@ export function CreateUserModal({ open, onClose }: CreateUserModalProps) {
                     <SelectContent>
                       <SelectItem value="employee">{roleLabels.employee}</SelectItem>
                       <SelectItem value="manager">{roleLabels.manager}</SelectItem>
+                      <SelectItem value="unit_admin">{roleLabels.unit_admin}</SelectItem>
                       <SelectItem value="admin">{roleLabels.admin}</SelectItem>
                     </SelectContent>
                   </Select>
