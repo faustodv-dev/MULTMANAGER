@@ -111,6 +111,13 @@ export default function Settings() {
     });
   };
 
+  const handleUnitChange = async (userId: string, unitId: string) => {
+    await updateProfile.mutateAsync({
+      id: userId,
+      updates: { unit_id: unitId === 'none' ? null : unitId },
+    });
+  };
+
   const getUserRole = (userId: string): AppRole => {
     const role = userRoles?.find(r => r.user_id === userId);
     return role?.role ?? 'employee';
@@ -376,22 +383,47 @@ export default function Settings() {
                             </Avatar>
                             <div>
                               <p className="font-medium">{profile.full_name || 'Sem nome'}</p>
-                              <Badge variant="outline" className="mt-1">
-                                {roleLabels[getUserRole(profile.id)]}
-                              </Badge>
+                              <div className="flex items-center gap-2 mt-1">
+                                <Badge variant="outline">
+                                  {roleLabels[getUserRole(profile.id)]}
+                                </Badge>
+                                {profile.unit && (
+                                  <Badge variant="secondary" className="text-xs">
+                                    <School className="w-3 h-3 mr-1" />
+                                    {profile.unit.name}
+                                  </Badge>
+                                )}
+                              </div>
                             </div>
                           </div>
                           
-                          <div className="flex items-center gap-3">
+                          <div className="flex items-center gap-2">
+                            <Select
+                              value={profile.unit_id || 'none'}
+                              onValueChange={(value) => handleUnitChange(profile.id, value)}
+                            >
+                              <SelectTrigger className="w-[140px]">
+                                <SelectValue placeholder="Unidade" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="none">Sem unidade</SelectItem>
+                                {schoolUnits?.map((unit) => (
+                                  <SelectItem key={unit.id} value={unit.id}>
+                                    {unit.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+
                             <Select
                               value={profile.department_id || 'none'}
                               onValueChange={(value) => handleDepartmentChange(profile.id, value)}
                             >
-                              <SelectTrigger className="w-[180px]">
+                              <SelectTrigger className="w-[140px]">
                                 <SelectValue placeholder="Departamento" />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="none">Sem departamento</SelectItem>
+                                <SelectItem value="none">Sem depart.</SelectItem>
                                 {departments?.map((dept) => (
                                   <SelectItem key={dept.id} value={dept.id}>
                                     {dept.name}
@@ -408,9 +440,10 @@ export default function Settings() {
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="employee">Funcionário</SelectItem>
-                                <SelectItem value="manager">Gerente</SelectItem>
-                                <SelectItem value="admin">Administrador</SelectItem>
+                                <SelectItem value="employee">{roleLabels.employee}</SelectItem>
+                                <SelectItem value="manager">{roleLabels.manager}</SelectItem>
+                                <SelectItem value="unit_admin">{roleLabels.unit_admin}</SelectItem>
+                                <SelectItem value="admin">{roleLabels.admin}</SelectItem>
                               </SelectContent>
                             </Select>
                           </div>
