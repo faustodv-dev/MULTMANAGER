@@ -8,9 +8,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Plus, X } from 'lucide-react';
 import { useCreateTask } from '@/hooks/useTasks';
 import { useDepartments } from '@/hooks/useDepartments';
+import { useSchoolUnits } from '@/hooks/useSchoolUnits';
 import { useProfiles } from '@/hooks/useProfiles';
 import { useProcesses } from '@/hooks/useProcesses';
 import { useCreateTaskNotification } from '@/hooks/useNotifications';
+import { useAuth } from '@/contexts/AuthContext';
 import { 
   TaskStatus, 
   TaskFrequency, 
@@ -41,9 +43,11 @@ const priorityColors: Record<TaskPriority, string> = {
 export function CreateTaskModal({ open, onClose, initialProcessId }: CreateTaskModalProps) {
   const { mutate: createTask, isPending } = useCreateTask();
   const { data: departments = [] } = useDepartments();
+  const { data: schoolUnits = [] } = useSchoolUnits();
   const { data: profiles = [] } = useProfiles();
   const { data: processes = [] } = useProcesses();
   const { mutate: createTaskNotification } = useCreateTaskNotification();
+  const { profile: authProfile, isUnitAdmin } = useAuth();
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -52,11 +56,19 @@ export function CreateTaskModal({ open, onClose, initialProcessId }: CreateTaskM
   const [frequency, setFrequency] = useState<TaskFrequency>('daily');
   const [priority, setPriority] = useState<TaskPriority>('medium');
   const [departmentId, setDepartmentId] = useState<string>('');
+  const [unitId, setUnitId] = useState<string>('');
   const [assigneeId, setAssigneeId] = useState<string>('');
   const [processId, setProcessId] = useState<string>('');
   const [dueDate, setDueDate] = useState<string>('');
   const [checklist, setChecklist] = useState<ChecklistItem[]>([]);
   const [newChecklistItem, setNewChecklistItem] = useState('');
+
+  // Set default unit for unit_admin
+  useEffect(() => {
+    if (open && isUnitAdmin && authProfile?.unit_id) {
+      setUnitId(authProfile.unit_id);
+    }
+  }, [open, isUnitAdmin, authProfile?.unit_id]);
 
   // Filter processes by selected department
   const filteredProcesses = departmentId 
@@ -102,6 +114,7 @@ export function CreateTaskModal({ open, onClose, initialProcessId }: CreateTaskM
       setFrequency('daily');
       setPriority('medium');
       setDepartmentId('');
+      setUnitId('');
       setAssigneeId('');
       setProcessId('');
       setDueDate('');
@@ -137,6 +150,7 @@ export function CreateTaskModal({ open, onClose, initialProcessId }: CreateTaskM
       frequency,
       priority,
       department_id: departmentId || null,
+      unit_id: unitId || null,
       assignee_id: assigneeId || null,
       process_id: processId || null,
       due_date: new Date(dueDate).toISOString(),
@@ -165,13 +179,13 @@ export function CreateTaskModal({ open, onClose, initialProcessId }: CreateTaskM
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Department & Process Row */}
-          <div className="grid grid-cols-2 gap-4">
+          {/* Department, Unit & Process Row */}
+          <div className="grid grid-cols-3 gap-4">
             <div>
               <Label htmlFor="department">Departamento</Label>
               <Select value={departmentId} onValueChange={setDepartmentId}>
                 <SelectTrigger id="department" className="mt-1.5">
-                  <SelectValue placeholder="Selecione um departamento" />
+                  <SelectValue placeholder="Selecione" />
                 </SelectTrigger>
                 <SelectContent>
                   {departments.map((dept) => (
@@ -183,17 +197,37 @@ export function CreateTaskModal({ open, onClose, initialProcessId }: CreateTaskM
               </Select>
             </div>
 
+            <div>
+              <Label htmlFor="unit">Unidade</Label>
+              <Select 
+                value={unitId} 
+                onValueChange={setUnitId}
+                disabled={isUnitAdmin}
+              >
+                <SelectTrigger id="unit" className="mt-1.5">
+                  <SelectValue placeholder="Selecione" />
+                </SelectTrigger>
+                <SelectContent>
+                  {schoolUnits.map((unit) => (
+                    <SelectItem key={unit.id} value={unit.id}>
+                      {unit.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
             {/* Process Selection */}
             <div>
-              <Label htmlFor="process">Processo *</Label>
+              <Label htmlFor="process">Processo</Label>
               <Select value={processId} onValueChange={handleProcessChange}>
                 <SelectTrigger id="process" className="mt-1.5">
-                  <SelectValue placeholder="Selecione um processo" />
+                  <SelectValue placeholder="Selecione" />
                 </SelectTrigger>
                 <SelectContent>
                   {filteredProcesses.length === 0 ? (
                     <SelectItem value="__empty__" disabled>
-                      {departmentId ? 'Nenhum processo neste departamento' : 'Selecione um departamento primeiro'}
+                      {departmentId ? 'Nenhum processo' : 'Selecione departamento'}
                     </SelectItem>
                   ) : (
                     filteredProcesses.map((proc) => (

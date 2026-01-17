@@ -1,6 +1,8 @@
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useLeads } from "@/hooks/useLeads";
+import { useSchoolUnits } from "@/hooks/useSchoolUnits";
+import { useAuth } from "@/contexts/AuthContext";
 import { AppSidebar } from "@/components/AppSidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -8,6 +10,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { 
   DollarSign, 
@@ -21,7 +24,8 @@ import {
   XCircle,
   CalendarIcon,
   X,
-  ArrowLeft
+  ArrowLeft,
+  School
 } from "lucide-react";
 import { format, isWithinInterval, startOfDay, endOfDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -29,13 +33,25 @@ import { ptBR } from "date-fns/locale";
 const FinancialReport = () => {
   const navigate = useNavigate();
   const { data: leads = [] } = useLeads();
+  const { data: schoolUnits = [] } = useSchoolUnits();
+  const { profile: authProfile, isUnitAdmin, isAdmin } = useAuth();
   const [startDate, setStartDate] = useState<Date | undefined>(undefined);
   const [endDate, setEndDate] = useState<Date | undefined>(undefined);
+  const [selectedUnitId, setSelectedUnitId] = useState<string>(
+    isUnitAdmin && authProfile?.unit_id ? authProfile.unit_id : 'all'
+  );
   
-  // Filter only leads in "matricula" stage and within date range
+  // Filter only leads in "matricula" stage and within date range and unit
   const enrolledLeads = useMemo(() => {
     return leads.filter(lead => {
       if (lead.stage !== "matricula") return false;
+      
+      // Unit filter (unit_admin can only see their unit)
+      if (isUnitAdmin && authProfile?.unit_id) {
+        if (lead.unit_id !== authProfile.unit_id) return false;
+      } else if (selectedUnitId !== 'all') {
+        if (lead.unit_id !== selectedUnitId) return false;
+      }
       
       // If no date filter, include all enrolled leads
       if (!startDate && !endDate) return true;
@@ -62,7 +78,7 @@ const FinancialReport = () => {
       
       return true;
     });
-  }, [leads, startDate, endDate]);
+  }, [leads, startDate, endDate, selectedUnitId, isUnitAdmin, authProfile?.unit_id]);
 
   // Calculate totals
   const totals = enrolledLeads.reduce((acc, lead) => {
@@ -140,66 +156,87 @@ const FinancialReport = () => {
         </header>
 
         <div className="flex-1 p-6 space-y-6">
-          {/* Date Range Filter */}
-          <div className="flex items-center gap-2 flex-wrap">
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  className={cn(
-                    "w-[160px] justify-start text-left font-normal",
-                    !startDate && "text-muted-foreground"
-                  )}
-                >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {startDate ? format(startDate, "dd/MM/yyyy", { locale: ptBR }) : "Data inicial"}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <Calendar
-                  mode="single"
-                  selected={startDate}
-                  onSelect={setStartDate}
-                  initialFocus
-                  locale={ptBR}
-                  className="pointer-events-auto"
-                />
-              </PopoverContent>
-            </Popover>
-
-            <span className="text-muted-foreground">até</span>
-
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  className={cn(
-                    "w-[160px] justify-start text-left font-normal",
-                    !endDate && "text-muted-foreground"
-                  )}
-                >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {endDate ? format(endDate, "dd/MM/yyyy", { locale: ptBR }) : "Data final"}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <Calendar
-                  mode="single"
-                  selected={endDate}
-                  onSelect={setEndDate}
-                  initialFocus
-                  locale={ptBR}
-                  className="pointer-events-auto"
-                  disabled={(date) => startDate ? date < startDate : false}
-                />
-              </PopoverContent>
-            </Popover>
-
-            {(startDate || endDate) && (
-              <Button variant="ghost" size="icon" onClick={clearDateFilters}>
-                <X className="h-4 w-4" />
-              </Button>
+          {/* Filters Row */}
+          <div className="flex items-center gap-4 flex-wrap">
+            {/* Unit Filter - only for admins */}
+            {isAdmin && (
+              <Select value={selectedUnitId} onValueChange={setSelectedUnitId}>
+                <SelectTrigger className="w-[180px]">
+                  <School className="mr-2 h-4 w-4" />
+                  <SelectValue placeholder="Todas as unidades" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas as unidades</SelectItem>
+                  {schoolUnits.map((unit) => (
+                    <SelectItem key={unit.id} value={unit.id}>
+                      {unit.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             )}
+
+            {/* Date Range Filter */}
+            <div className="flex items-center gap-2">
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "w-[160px] justify-start text-left font-normal",
+                      !startDate && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {startDate ? format(startDate, "dd/MM/yyyy", { locale: ptBR }) : "Data inicial"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={startDate}
+                    onSelect={setStartDate}
+                    initialFocus
+                    locale={ptBR}
+                    className="pointer-events-auto"
+                  />
+                </PopoverContent>
+              </Popover>
+
+              <span className="text-muted-foreground">até</span>
+
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "w-[160px] justify-start text-left font-normal",
+                      !endDate && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {endDate ? format(endDate, "dd/MM/yyyy", { locale: ptBR }) : "Data final"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={endDate}
+                    onSelect={setEndDate}
+                    initialFocus
+                    locale={ptBR}
+                    className="pointer-events-auto"
+                    disabled={(date) => startDate ? date < startDate : false}
+                  />
+                </PopoverContent>
+              </Popover>
+
+              {(startDate || endDate) && (
+                <Button variant="ghost" size="icon" onClick={clearDateFilters}>
+                  <X className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
           </div>
 
           {/* Summary Cards */}
