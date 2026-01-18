@@ -12,6 +12,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { ExportDropdown } from "@/components/ExportDropdown";
 import { 
   DollarSign, 
   CreditCard, 
@@ -152,6 +153,22 @@ const FinancialReport = () => {
                 Leads em fase de matrícula: {enrolledLeads.length}
               </p>
             </div>
+            
+            {/* Export Button */}
+            <ExportDropdown
+              data={enrolledLeads}
+              columns={[
+                { key: 'name', header: 'Nome' },
+                { key: 'course_interest', header: 'Curso' },
+                { key: 'payment_method', header: 'Forma Pagamento', formatter: (v) => v === 'cartao' ? 'Cartão' : v === 'pix' ? 'PIX' : v === 'dinheiro' ? 'Dinheiro' : 'N/I' },
+                { key: 'enrollment_fee_value', header: 'Matrícula (R$)', formatter: (v, r) => r.enrollment_fee_paid ? (v || 0).toFixed(2) : '0.00' },
+                { key: 'first_installment_value', header: '1ª Parcela (R$)', formatter: (v, r) => r.first_installment_paid ? (v || 0).toFixed(2) : '0.00' },
+                { key: 'uniform_value', header: 'Uniforme (R$)', formatter: (v, r) => r.uniform_paid ? (v || 0).toFixed(2) : '0.00' },
+                { key: 'converted_at', header: 'Data Matrícula', formatter: (v) => v ? format(new Date(v), 'dd/MM/yyyy') : '' },
+              ]}
+              filename="relatorio-financeiro"
+              title="Relatório Financeiro - Matrículas"
+            />
           </div>
         </header>
 

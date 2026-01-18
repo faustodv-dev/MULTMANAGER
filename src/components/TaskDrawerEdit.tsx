@@ -24,7 +24,7 @@ interface TaskDrawerEditProps {
 }
 
 export function TaskDrawerEdit({ task, open, onClose }: TaskDrawerEditProps) {
-  const { isManager } = useAuth();
+  const { isManager, isAdmin } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
   const [editedTask, setEditedTask] = useState<Partial<Task>>({});
   const [newChecklistItem, setNewChecklistItem] = useState('');
@@ -355,10 +355,10 @@ export function TaskDrawerEdit({ task, open, onClose }: TaskDrawerEditProps) {
             )}
           </div>
 
-          {/* Description */}
+          {/* Description - only admins can edit process-related fields */}
           <div className="space-y-2">
-            <Label>Procedimento</Label>
-            {isEditing ? (
+            <Label>Procedimento {!isAdmin && "(somente leitura)"}</Label>
+            {isEditing && isAdmin ? (
               <Textarea
                 value={editedTask.description || ''}
                 onChange={(e) => setEditedTask({ ...editedTask, description: e.target.value })}
@@ -371,10 +371,10 @@ export function TaskDrawerEdit({ task, open, onClose }: TaskDrawerEditProps) {
             )}
           </div>
 
-          {/* Procedure Path */}
+          {/* Procedure Path - only admins can edit */}
           <div className="space-y-2">
-            <Label>Caminho no Sistema</Label>
-            {isEditing ? (
+            <Label>Caminho no Sistema {!isAdmin && "(somente leitura)"}</Label>
+            {isEditing && isAdmin ? (
               <Input
                 value={editedTask.procedure_path || ''}
                 onChange={(e) => setEditedTask({ ...editedTask, procedure_path: e.target.value })}

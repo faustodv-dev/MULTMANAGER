@@ -21,6 +21,7 @@ import { LeadCard } from '@/components/crm/LeadCard';
 import { LeadModal } from '@/components/crm/LeadModal';
 import { LeadDrawer } from '@/components/crm/LeadDrawer';
 import { SalesRanking } from '@/components/crm/SalesRanking';
+import { ExportDropdown } from '@/components/ExportDropdown';
 import { 
   Search, Plus, Users, TrendingUp, Target, DollarSign, 
   Loader2, Filter, GripVertical, CalendarIcon, X, PhoneCall,
@@ -264,6 +265,26 @@ export default function CRM() {
                   </TabsTrigger>
                 </TabsList>
               </Tabs>
+
+              {/* Export for Personal Leads */}
+              {viewMode === 'personal' && user && (
+                <ExportDropdown
+                  data={leads.filter(l => l.assigned_to === user.id)}
+                  columns={[
+                    { key: 'name', header: 'Nome' },
+                    { key: 'phone', header: 'Telefone' },
+                    { key: 'email', header: 'Email' },
+                    { key: 'stage', header: 'Etapa', formatter: (v) => stageLabels[v] || v },
+                    { key: 'status', header: 'Status', formatter: (v) => statusLabels[v] || v },
+                    { key: 'course_interest', header: 'Curso' },
+                    { key: 'quote_value', header: 'Valor', formatter: (v) => v ? `R$ ${v.toFixed(2)}` : '' },
+                    { key: 'next_contact_date', header: 'Próximo Contato', formatter: (v) => v ? format(new Date(v), 'dd/MM/yyyy') : '' },
+                    { key: 'created_at', header: 'Criado em', formatter: (v) => format(new Date(v), 'dd/MM/yyyy') },
+                  ]}
+                  filename="meus-leads"
+                  title="Meus Leads"
+                />
+              )}
 
               <Button onClick={() => setCreateModalOpen(true)}>
                 <Plus className="w-4 h-4 mr-2" />
