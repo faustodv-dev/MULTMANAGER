@@ -68,19 +68,6 @@ export function TaskCardNew({ task, onClick }: TaskCardNewProps) {
 
       {/* Footer */}
       <div className="flex items-center justify-between pt-2 border-t border-border/50">
-        {/* Due Date */}
-        {task.due_date && (
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Calendar className="w-3.5 h-3.5" />
-            <span>
-              {new Date(task.due_date).toLocaleDateString('pt-BR', { 
-                day: '2-digit', 
-                month: 'short' 
-              })}
-            </span>
-          </div>
-        )}
-
         {/* Assignee */}
         {task.assignee && (
           <Avatar className="w-6 h-6">
@@ -91,6 +78,26 @@ export function TaskCardNew({ task, onClick }: TaskCardNewProps) {
               {task.assignee.full_name?.split(' ').map(n => n[0]).join('').slice(0, 2) || '??'}
             </AvatarFallback>
           </Avatar>
+        )}
+
+        {/* Due Date - always show on the right */}
+        {task.due_date ? (
+          <div className={cn(
+            "flex items-center gap-1.5 text-xs font-medium",
+            new Date(task.due_date) < new Date() ? "text-destructive" : "text-muted-foreground"
+          )}>
+            <Calendar className="w-3.5 h-3.5" />
+            <span>
+              {new Date(task.due_date).toLocaleDateString('pt-BR', { 
+                day: '2-digit', 
+                month: 'short',
+                hour: '2-digit',
+                minute: '2-digit'
+              })}
+            </span>
+          </div>
+        ) : (
+          <span className="text-xs text-muted-foreground italic">Sem prazo</span>
         )}
       </div>
     </Card>

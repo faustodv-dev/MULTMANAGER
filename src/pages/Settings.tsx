@@ -31,7 +31,7 @@ const colorOptions = [
 
 export default function Settings() {
   const navigate = useNavigate();
-  const { isAdmin } = useAuth();
+  const { isAdmin, isUnitAdmin, profile: authProfile } = useAuth();
   const { data: departments, isLoading: loadingDepts } = useDepartments();
   const { data: profiles, isLoading: loadingProfiles } = useProfiles();
   const { data: processes, isLoading: loadingProcesses } = useProcesses();
@@ -54,7 +54,13 @@ export default function Settings() {
   const [filterDepartmentId, setFilterDepartmentId] = useState<string>('all');
   const [createUserModalOpen, setCreateUserModalOpen] = useState(false);
 
-  if (!isAdmin) {
+  // Unit admins can only manage users in their unit
+  const canManageUsers = isAdmin || isUnitAdmin;
+  const canManageUnits = isAdmin;
+  const canManageDepartments = isAdmin;
+  const canManageProcesses = isAdmin;
+
+  if (!canManageUsers) {
     return (
       <div className="min-h-screen flex w-full bg-background">
         <AppSidebar />
@@ -66,7 +72,7 @@ export default function Settings() {
                 Acesso Restrito
               </CardTitle>
               <CardDescription>
-                Você não tem permissão para acessar esta página. Apenas administradores podem gerenciar configurações.
+                Você não tem permissão para acessar esta página.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -77,6 +83,11 @@ export default function Settings() {
       </div>
     );
   }
+
+  // Filter profiles for unit_admin - only show users from their unit
+  const visibleProfiles = isUnitAdmin && authProfile?.unit_id
+    ? profiles?.filter(p => p.unit_id === authProfile.unit_id || !p.unit_id)
+    : profiles;
 
   const handleCreateDepartment = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -156,27 +167,33 @@ export default function Settings() {
             <div>
               <h1 className="text-2xl font-bold text-foreground">Configurações</h1>
               <p className="text-sm text-muted-foreground">
-                Gerencie departamentos, processos e usuários do sistema
+                {isUnitAdmin ? 'Gerencie usuários da sua unidade' : 'Gerencie departamentos, processos e usuários do sistema'}
               </p>
             </div>
           </div>
         </header>
 
         <div className="flex-1 p-6">
-          <Tabs defaultValue="departments" className="space-y-6">
+          <Tabs defaultValue={isUnitAdmin ? "users" : "departments"} className="space-y-6">
             <TabsList>
-              <TabsTrigger value="units" className="gap-2">
-                <School className="w-4 h-4" />
-                Unidades
-              </TabsTrigger>
-              <TabsTrigger value="departments" className="gap-2">
-                <Building2 className="w-4 h-4" />
-                Departamentos
-              </TabsTrigger>
-              <TabsTrigger value="processes" className="gap-2">
-                <FileText className="w-4 h-4" />
-                Processos
-              </TabsTrigger>
+              {canManageUnits && (
+                <TabsTrigger value="units" className="gap-2">
+                  <School className="w-4 h-4" />
+                  Unidades
+                </TabsTrigger>
+              )}
+              {canManageDepartments && (
+                <TabsTrigger value="departments" className="gap-2">
+                  <Building2 className="w-4 h-4" />
+                  Departamentos
+                </TabsTrigger>
+              )}
+              {canManageProcesses && (
+                <TabsTrigger value="processes" className="gap-2">
+                  <FileText className="w-4 h-4" />
+                  Processos
+                </TabsTrigger>
+              )}
               <TabsTrigger value="users" className="gap-2">
                 <Users className="w-4 h-4" />
                 Usuários
@@ -351,8 +368,14 @@ export default function Settings() {
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between">
                   <div>
-                    <CardTitle>Usuários do Sistema</CardTitle>
-                    <CardDescription>Gerencie funções e departamentos dos usuários</CardDescription>
+                    <CardTitle>
+                      {isUnitAdmin ? 'Usuários da Sua Unidade' : 'Usuários do Sistema'}
+                    </CardTitle>
+                    <CardDescription>
+                      {isUnitAdmin 
+                        ? 'Gerencie os usuários vinculados à sua unidade' 
+                        : 'Gerencie funções e departamentos dos usuários'}
+                    </CardDescription>
                   </div>
                   <Button onClick={() => setCreateUserModalOpen(true)}>
                     <UserPlus className="w-4 h-4 mr-2" />
@@ -364,13 +387,13 @@ export default function Settings() {
                     <div className="flex justify-center py-8">
                       <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
                     </div>
-                  ) : profiles?.length === 0 ? (
+                  ) : visibleProfiles?.length === 0 ? (
                     <p className="text-center py-8 text-muted-foreground">
                       Nenhum usuário cadastrado
                     </p>
                   ) : (
                     <div className="space-y-4">
-                      {profiles?.map((profile) => (
+                      {visibleProfiles?.map((profile) => (
                         <div
                           key={profile.id}
                           className="flex items-center justify-between p-4 rounded-lg border bg-card"
@@ -398,54 +421,73 @@ export default function Settings() {
                           </div>
                           
                           <div className="flex items-center gap-2">
-                            <Select
-                              value={profile.unit_id || 'none'}
-                              onValueChange={(value) => handleUnitChange(profile.id, value)}
-                            >
-                              <SelectTrigger className="w-[140px]">
-                                <SelectValue placeholder="Unidade" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="none">Sem unidade</SelectItem>
-                                {schoolUnits?.map((unit) => (
-                                  <SelectItem key={unit.id} value={unit.id}>
-                                    {unit.name}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
+                            {/* Unit selector - only admin can change, unit_admin auto-assigns their unit */}
+                            {isAdmin ? (
+                              <Select
+                                value={profile.unit_id || 'none'}
+                                onValueChange={(value) => handleUnitChange(profile.id, value)}
+                              >
+                                <SelectTrigger className="w-[140px]">
+                                  <SelectValue placeholder="Unidade" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="none">Sem unidade</SelectItem>
+                                  {schoolUnits?.map((unit) => (
+                                    <SelectItem key={unit.id} value={unit.id}>
+                                      {unit.name}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            ) : isUnitAdmin && authProfile?.unit_id && !profile.unit_id ? (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleUnitChange(profile.id, authProfile.unit_id!)}
+                              >
+                                Vincular à minha unidade
+                              </Button>
+                            ) : null}
 
-                            <Select
-                              value={profile.department_id || 'none'}
-                              onValueChange={(value) => handleDepartmentChange(profile.id, value)}
-                            >
-                              <SelectTrigger className="w-[140px]">
-                                <SelectValue placeholder="Departamento" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="none">Sem depart.</SelectItem>
-                                {departments?.map((dept) => (
-                                  <SelectItem key={dept.id} value={dept.id}>
-                                    {dept.name}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
+                            {/* Department - only admin can change */}
+                            {isAdmin && (
+                              <Select
+                                value={profile.department_id || 'none'}
+                                onValueChange={(value) => handleDepartmentChange(profile.id, value)}
+                              >
+                                <SelectTrigger className="w-[140px]">
+                                  <SelectValue placeholder="Departamento" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="none">Sem depart.</SelectItem>
+                                  {departments?.map((dept) => (
+                                    <SelectItem key={dept.id} value={dept.id}>
+                                      {dept.name}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            )}
                             
-                            <Select
-                              value={getUserRole(profile.id)}
-                              onValueChange={(value) => handleRoleChange(profile.id, value as AppRole)}
-                            >
-                              <SelectTrigger className="w-[150px]">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="employee">{roleLabels.employee}</SelectItem>
-                                <SelectItem value="manager">{roleLabels.manager}</SelectItem>
-                                <SelectItem value="unit_admin">{roleLabels.unit_admin}</SelectItem>
-                                <SelectItem value="admin">{roleLabels.admin}</SelectItem>
-                              </SelectContent>
-                            </Select>
+                            {/* Role - only admin can change all roles, unit_admin can only set employee */}
+                            {isAdmin ? (
+                              <Select
+                                value={getUserRole(profile.id)}
+                                onValueChange={(value) => handleRoleChange(profile.id, value as AppRole)}
+                              >
+                                <SelectTrigger className="w-[150px]">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="employee">{roleLabels.employee}</SelectItem>
+                                  <SelectItem value="manager">{roleLabels.manager}</SelectItem>
+                                  <SelectItem value="unit_admin">{roleLabels.unit_admin}</SelectItem>
+                                  <SelectItem value="admin">{roleLabels.admin}</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            ) : (
+                              <Badge variant="secondary">{roleLabels[getUserRole(profile.id)]}</Badge>
+                            )}
                           </div>
                         </div>
                       ))}
