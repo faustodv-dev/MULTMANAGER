@@ -6,27 +6,37 @@ const getAllowedOrigins = (): string[] => {
   const origins = [
     'http://localhost:5173',
     'http://localhost:3000',
+    'https://multmanager.lovable.app',
+    'https://lovable.dev',
   ];
   
   if (frontendUrl) {
     origins.push(frontendUrl);
   }
   
-  // Add Lovable preview domains
-  origins.push('https://lovable.dev');
-  
   return origins;
 };
 
-const getCorsHeaders = (req: Request): Record<string, string> => {
+const getCorsOrigin = (req: Request): string => {
   const origin = req.headers.get('Origin') || '';
   const allowedOrigins = getAllowedOrigins();
   
-  // Check if the origin is allowed, otherwise use a safe default
-  const allowedOrigin = allowedOrigins.includes(origin) ? origin : allowedOrigins[0];
+  // Check exact match
+  if (allowedOrigins.includes(origin)) {
+    return origin;
+  }
   
+  // Check for Lovable preview domains pattern
+  if (origin.includes('.lovable.app') || origin.includes('.lovable.dev')) {
+    return origin;
+  }
+  
+  return allowedOrigins[0];
+};
+
+const getCorsHeaders = (req: Request): Record<string, string> => {
   return {
-    'Access-Control-Allow-Origin': allowedOrigin,
+    'Access-Control-Allow-Origin': getCorsOrigin(req),
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
     'Access-Control-Allow-Credentials': 'true',
   };
