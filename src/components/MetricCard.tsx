@@ -9,6 +9,7 @@ interface MetricCardProps {
   trend?: 'up' | 'down' | 'neutral';
   trendValue?: string;
   variant?: 'default' | 'accent' | 'success' | 'warning' | 'destructive';
+  onClick?: () => void;
 }
 
 const variantStyles = {
@@ -42,16 +43,20 @@ export function MetricCard({
   icon: Icon, 
   trend, 
   trendValue,
-  variant = 'default' 
+  variant = 'default',
+  onClick
 }: MetricCardProps) {
   const TrendIcon = trend === 'up' ? TrendingUp : trend === 'down' ? TrendingDown : Minus;
 
   return (
     <div 
+      onClick={onClick}
       className={cn(
         "relative overflow-hidden rounded-2xl border p-5 transition-all duration-300",
         "hover:shadow-xl hover:-translate-y-1 hover:border-primary/30",
-        "group cursor-default",
+        "group",
+        onClick && "cursor-pointer",
+        !onClick && "cursor-default",
         variantStyles[variant]
       )}
     >

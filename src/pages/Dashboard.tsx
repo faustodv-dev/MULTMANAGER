@@ -7,6 +7,7 @@ import { KanbanBoardNew } from '@/components/KanbanBoardNew';
 import { TaskDrawerEdit } from '@/components/TaskDrawerEdit';
 import { CreateTaskModal } from '@/components/CreateTaskModal';
 import { ProcessModal } from '@/components/ProcessModal';
+import { TaskListModal } from '@/components/TaskListModal';
 import { Task } from '@/types/database';
 import { Process } from '@/hooks/useProcesses';
 import { useTasks } from '@/hooks/useTasks';
@@ -17,6 +18,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { CalendarCheck, AlertTriangle, CheckCircle2, TrendingUp, Loader2, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+
+type MetricType = 'today' | 'overdue' | 'completed' | 'productivity' | null;
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -44,6 +47,8 @@ const Dashboard = () => {
   const [editingProcess, setEditingProcess] = useState<Process | null>(null);
   const [draggedProcessId, setDraggedProcessId] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [taskListModalOpen, setTaskListModalOpen] = useState(false);
+  const [selectedMetricType, setSelectedMetricType] = useState<MetricType>(null);
 
   // Redirect to auth if not logged in
   useEffect(() => {
@@ -95,23 +100,51 @@ const Dashboard = () => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const todayTasks = tasks.filter(t => 
+    const todayTasksList = tasks.filter(t => 
       t.due_date && new Date(t.due_date).toDateString() === today.toDateString()
-    ).length;
+    );
 
-    const overdueTasks = tasks.filter(t => 
+    const overdueTasksList = tasks.filter(t => 
       t.due_date && new Date(t.due_date) < today && t.status !== 'done'
-    ).length;
+    );
 
-    const completedThisWeek = tasks.filter(t => t.status === 'done').length;
+    const completedTasksList = tasks.filter(t => t.status === 'done');
 
     const totalTasks = tasks.length;
     const productivity = totalTasks > 0 
-      ? Math.round((completedThisWeek / totalTasks) * 100) 
+      ? Math.round((completedTasksList.length / totalTasks) * 100) 
       : 0;
 
-    return { todayTasks, overdueTasks, completedThisWeek, productivity };
+    return { 
+      todayTasks: todayTasksList.length, 
+      todayTasksList,
+      overdueTasks: overdueTasksList.length, 
+      overdueTasksList,
+      completedThisWeek: completedTasksList.length, 
+      completedTasksList,
+      productivity 
+    };
   }, [tasks]);
+
+  // Get tasks for selected metric
+  const metricTasks = useMemo(() => {
+    switch (selectedMetricType) {
+      case 'today':
+        return { title: 'Tarefas para Hoje', tasks: metrics.todayTasksList };
+      case 'overdue':
+        return { title: 'Tarefas Atrasadas', tasks: metrics.overdueTasksList };
+      case 'completed':
+        return { title: 'Tarefas Concluídas', tasks: metrics.completedTasksList };
+      default:
+        return { title: '', tasks: [] };
+    }
+  }, [selectedMetricType, metrics]);
+
+  const handleMetricClick = (type: MetricType) => {
+    if (type === 'productivity') return; // Productivity doesn't have a list
+    setSelectedMetricType(type);
+    setTaskListModalOpen(true);
+  };
 
   const handleTaskClick = (task: Task) => {
     setSelectedTask(task);
@@ -221,6 +254,7 @@ const Dashboard = () => {
               subtitle="Para entregar hoje"
               icon={CalendarCheck}
               variant="accent"
+              onClick={() => handleMetricClick('today')}
             />
             <MetricCard
               title="Atrasadas"
@@ -229,6 +263,7 @@ const Dashboard = () => {
               icon={AlertTriangle}
               variant="destructive"
               trend={metrics.overdueTasks > 0 ? 'down' : 'neutral'}
+              onClick={() => handleMetricClick('overdue')}
             />
             <MetricCard
               title="Concluídas"
@@ -237,6 +272,7 @@ const Dashboard = () => {
               icon={CheckCircle2}
               variant="success"
               trend="up"
+              onClick={() => handleMetricClick('completed')}
             />
             <MetricCard
               title="Produtividade"
@@ -290,6 +326,22 @@ const Dashboard = () => {
           open={processModalOpen}
           onClose={handleProcessModalClose}
           editProcess={editingProcess}
+        />
+
+        {/* Task List Modal */}
+        <TaskListModal
+          open={taskListModalOpen}
+          onClose={() => {
+            setTaskListModalOpen(false);
+            setSelectedMetricType(null);
+          }}
+          title={metricTasks.title}
+          tasks={metricTasks.tasks}
+          onTaskClick={(task) => {
+            setTaskListModalOpen(false);
+            setSelectedTask(task);
+            setDrawerOpen(true);
+          }}
         />
       </main>
     </div>

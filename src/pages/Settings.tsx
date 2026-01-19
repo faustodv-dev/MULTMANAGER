@@ -13,7 +13,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { useDepartments, useCreateDepartment, useDeleteDepartment } from '@/hooks/useDepartments';
 import { useProfiles, useUserRoles, useUpdateUserRole, useUpdateProfile } from '@/hooks/useProfiles';
 import { useProcesses, useDeleteProcess, Process } from '@/hooks/useProcesses';
-import { useSchoolUnits, useCreateSchoolUnit, useDeleteSchoolUnit } from '@/hooks/useSchoolUnits';
+import { useSchoolUnits, useCreateSchoolUnit, useUpdateSchoolUnit, useDeleteSchoolUnit, SchoolUnit } from '@/hooks/useSchoolUnits';
 import { ProcessModal } from '@/components/ProcessModal';
 import { AppRole, roleLabels, departmentColors } from '@/types/database';
 import { ArrowLeft, Plus, Trash2, Building2, Users, Loader2, Shield, FileText, Pencil, UserPlus, School, MapPin } from 'lucide-react';
@@ -41,6 +41,7 @@ export default function Settings() {
   const deleteDepartment = useDeleteDepartment();
   const deleteProcess = useDeleteProcess();
   const createSchoolUnit = useCreateSchoolUnit();
+  const updateSchoolUnit = useUpdateSchoolUnit();
   const deleteSchoolUnit = useDeleteSchoolUnit();
   const updateUserRole = useUpdateUserRole();
   const updateProfile = useUpdateProfile();
@@ -49,6 +50,9 @@ export default function Settings() {
   const [newDeptColor, setNewDeptColor] = useState('blue');
   const [newUnitName, setNewUnitName] = useState('');
   const [newUnitCity, setNewUnitCity] = useState('');
+  const [editingUnit, setEditingUnit] = useState<SchoolUnit | null>(null);
+  const [editUnitName, setEditUnitName] = useState('');
+  const [editUnitCity, setEditUnitCity] = useState('');
   const [processModalOpen, setProcessModalOpen] = useState(false);
   const [editingProcess, setEditingProcess] = useState<Process | null>(null);
   const [filterDepartmentId, setFilterDepartmentId] = useState<string>('all');
@@ -248,21 +252,96 @@ export default function Settings() {
                     <div className="space-y-3">
                       {schoolUnits?.map((unit) => (
                         <div key={unit.id} className="flex items-center justify-between p-4 rounded-lg border bg-card hover:bg-muted/50 transition-colors">
-                          <div className="flex items-center gap-3">
-                            <School className="w-5 h-5 text-primary" />
-                            <div>
-                              <span className="font-medium">{unit.name}</span>
-                              <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                                <MapPin className="w-3 h-3" />
-                                {unit.city}
+                          {editingUnit?.id === unit.id ? (
+                            // Edit mode
+                            <div className="flex-1 flex items-center gap-3">
+                              <School className="w-5 h-5 text-primary" />
+                              <div className="flex-1 flex gap-3">
+                                <Input
+                                  value={editUnitName}
+                                  onChange={(e) => setEditUnitName(e.target.value)}
+                                  placeholder="Nome da unidade"
+                                  className="flex-1"
+                                />
+                                <Input
+                                  value={editUnitCity}
+                                  onChange={(e) => setEditUnitCity(e.target.value)}
+                                  placeholder="Cidade"
+                                  className="flex-1"
+                                />
+                              </div>
+                              <div className="flex gap-2">
+                                <Button
+                                  size="sm"
+                                  onClick={async () => {
+                                    if (!editUnitName.trim() || !editUnitCity.trim()) {
+                                      toast.error('Nome e cidade são obrigatórios');
+                                      return;
+                                    }
+                                    await updateSchoolUnit.mutateAsync({
+                                      id: unit.id,
+                                      updates: { name: editUnitName, city: editUnitCity }
+                                    });
+                                    setEditingUnit(null);
+                                  }}
+                                  disabled={updateSchoolUnit.isPending}
+                                >
+                                  {updateSchoolUnit.isPending ? (
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                  ) : (
+                                    'Salvar'
+                                  )}
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => setEditingUnit(null)}
+                                >
+                                  Cancelar
+                                </Button>
                               </div>
                             </div>
-                          </div>
-                          <Button variant="ghost" size="icon" onClick={() => {
-                            if (confirm('Tem certeza que deseja excluir esta unidade?')) deleteSchoolUnit.mutateAsync(unit.id);
-                          }} className="text-muted-foreground hover:text-destructive">
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
+                          ) : (
+                            // View mode
+                            <>
+                              <div className="flex items-center gap-3">
+                                <School className="w-5 h-5 text-primary" />
+                                <div>
+                                  <span className="font-medium">{unit.name}</span>
+                                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                    <MapPin className="w-3 h-3" />
+                                    {unit.city}
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => {
+                                    setEditingUnit(unit);
+                                    setEditUnitName(unit.name);
+                                    setEditUnitCity(unit.city);
+                                  }}
+                                  className="text-muted-foreground hover:text-foreground"
+                                >
+                                  <Pencil className="w-4 h-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => {
+                                    if (confirm('Tem certeza que deseja excluir esta unidade?')) {
+                                      deleteSchoolUnit.mutateAsync(unit.id);
+                                    }
+                                  }}
+                                  className="text-muted-foreground hover:text-destructive"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              </div>
+                            </>
+                          )}
                         </div>
                       ))}
                     </div>
