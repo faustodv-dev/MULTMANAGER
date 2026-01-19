@@ -40,10 +40,16 @@ export interface Lead {
   // Payment tracking
   enrollment_fee_paid: boolean | null;
   enrollment_fee_value: number | null;
+  enrollment_installments: number | null;
   first_installment_paid: boolean | null;
   first_installment_value: number | null;
+  installment_value: number | null;
+  installment_count: number | null;
   uniform_paid: boolean | null;
   uniform_value: number | null;
+  uniform_installments: number | null;
+  material_value: number | null;
+  material_installments: number | null;
   payment_method: string | null;
   
   // Assignment
@@ -60,6 +66,7 @@ export interface Lead {
   
   // Follow-up
   next_contact_date: string | null;
+  first_contact_date: string | null;
   
   notes: string | null;
   

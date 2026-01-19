@@ -111,9 +111,9 @@ const educationLevels = [
 ];
 
 const paymentMethods = [
-  { value: 'cartao', label: 'Cartão' },
-  { value: 'pix', label: 'PIX' },
-  { value: 'dinheiro', label: 'Dinheiro' },
+  { value: 'a_vista', label: 'À Vista' },
+  { value: 'cartao_credito', label: 'Cartão de Crédito' },
+  { value: 'carne_boleto', label: 'Carnê / Boleto' },
 ];
 
 export function LeadDrawer({ lead, open, onClose, mediaSources, profiles }: LeadDrawerProps) {
@@ -784,9 +784,9 @@ export function LeadDrawer({ lead, open, onClose, mediaSources, profiles }: Lead
                         <div className="p-3 bg-muted/50 rounded-lg">
                           <p className="text-xs text-muted-foreground">Forma de Pagamento</p>
                           <div className="flex items-center gap-2 mt-1">
-                            {lead.payment_method === 'cartao' && <CreditCard className="w-4 h-4 text-blue-500" />}
-                            {lead.payment_method === 'pix' && <Banknote className="w-4 h-4 text-green-500" />}
-                            {lead.payment_method === 'dinheiro' && <DollarSign className="w-4 h-4 text-yellow-600" />}
+                            {lead.payment_method === 'a_vista' && <Banknote className="w-4 h-4 text-green-500" />}
+                            {lead.payment_method === 'cartao_credito' && <CreditCard className="w-4 h-4 text-blue-500" />}
+                            {lead.payment_method === 'carne_boleto' && <Receipt className="w-4 h-4 text-purple-500" />}
                             <span className="font-medium">
                               {paymentMethods.find(m => m.value === lead.payment_method)?.label || 'Não informado'}
                             </span>

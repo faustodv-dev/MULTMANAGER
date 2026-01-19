@@ -104,13 +104,19 @@ export type Database = {
           email: string | null
           enrollment_fee_paid: boolean | null
           enrollment_fee_value: number | null
+          enrollment_installments: number | null
           final_value: number | null
+          first_contact_date: string | null
           first_installment_paid: boolean | null
           first_installment_value: number | null
           has_diploma: boolean | null
           id: string
+          installment_count: number | null
+          installment_value: number | null
           lost_at: string | null
           lost_reason: string | null
+          material_installments: number | null
+          material_value: number | null
           media_source_id: string | null
           name: string
           next_contact_date: string | null
@@ -120,6 +126,7 @@ export type Database = {
           quote_value: number | null
           stage: Database["public"]["Enums"]["lead_stage"]
           status: Database["public"]["Enums"]["lead_status"]
+          uniform_installments: number | null
           uniform_paid: boolean | null
           uniform_value: number | null
           unit_id: string | null
@@ -140,13 +147,19 @@ export type Database = {
           email?: string | null
           enrollment_fee_paid?: boolean | null
           enrollment_fee_value?: number | null
+          enrollment_installments?: number | null
           final_value?: number | null
+          first_contact_date?: string | null
           first_installment_paid?: boolean | null
           first_installment_value?: number | null
           has_diploma?: boolean | null
           id?: string
+          installment_count?: number | null
+          installment_value?: number | null
           lost_at?: string | null
           lost_reason?: string | null
+          material_installments?: number | null
+          material_value?: number | null
           media_source_id?: string | null
           name: string
           next_contact_date?: string | null
@@ -156,6 +169,7 @@ export type Database = {
           quote_value?: number | null
           stage?: Database["public"]["Enums"]["lead_stage"]
           status?: Database["public"]["Enums"]["lead_status"]
+          uniform_installments?: number | null
           uniform_paid?: boolean | null
           uniform_value?: number | null
           unit_id?: string | null
@@ -176,13 +190,19 @@ export type Database = {
           email?: string | null
           enrollment_fee_paid?: boolean | null
           enrollment_fee_value?: number | null
+          enrollment_installments?: number | null
           final_value?: number | null
+          first_contact_date?: string | null
           first_installment_paid?: boolean | null
           first_installment_value?: number | null
           has_diploma?: boolean | null
           id?: string
+          installment_count?: number | null
+          installment_value?: number | null
           lost_at?: string | null
           lost_reason?: string | null
+          material_installments?: number | null
+          material_value?: number | null
           media_source_id?: string | null
           name?: string
           next_contact_date?: string | null
@@ -192,6 +212,7 @@ export type Database = {
           quote_value?: number | null
           stage?: Database["public"]["Enums"]["lead_stage"]
           status?: Database["public"]["Enums"]["lead_status"]
+          uniform_installments?: number | null
           uniform_paid?: boolean | null
           uniform_value?: number | null
           unit_id?: string | null

@@ -55,10 +55,10 @@ export function useUpdateSchoolUnit() {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: async ({ id, updates }: { id: string; updates: Partial<SchoolUnit> }) => {
+    mutationFn: async ({ id, updates }: { id: string; updates: Partial<Omit<SchoolUnit, 'id' | 'created_at' | 'updated_at'>> }) => {
       const { data, error } = await supabase
         .from('school_units')
-        .update(updates)
+        .update({ ...updates, updated_at: new Date().toISOString() })
         .eq('id', id)
         .select()
         .single();

@@ -77,6 +77,12 @@ export const frequencyLabels: Record<TaskFrequency, string> = {
   monthly: 'Mensal',
 };
 
+export const priorityLabels: Record<TaskPriority, string> = {
+  low: 'Baixa',
+  medium: 'Média',
+  high: 'Alta',
+};
+
 export const departmentColors: Record<string, string> = {
   green: 'bg-emerald-500',
   blue: 'bg-blue-500',
