@@ -15,9 +15,10 @@ import { useProfiles, useUserRoles, useUpdateUserRole, useUpdateProfile } from '
 import { useProcesses, useDeleteProcess, Process } from '@/hooks/useProcesses';
 import { useSchoolUnits, useCreateSchoolUnit, useUpdateSchoolUnit, useDeleteSchoolUnit, SchoolUnit } from '@/hooks/useSchoolUnits';
 import { ProcessModal } from '@/components/ProcessModal';
-import { AppRole, roleLabels, departmentColors } from '@/types/database';
-import { ArrowLeft, Plus, Trash2, Building2, Users, Loader2, Shield, FileText, Pencil, UserPlus, School, MapPin } from 'lucide-react';
+import { AppRole, roleLabels, departmentColors, Profile } from '@/types/database';
+import { ArrowLeft, Plus, Trash2, Building2, Users, Loader2, Shield, FileText, Pencil, UserPlus, School, MapPin, KeyRound } from 'lucide-react';
 import { CreateUserModal } from '@/components/CreateUserModal';
+import { ResetPasswordModal } from '@/components/ResetPasswordModal';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
@@ -57,6 +58,7 @@ export default function Settings() {
   const [editingProcess, setEditingProcess] = useState<Process | null>(null);
   const [filterDepartmentId, setFilterDepartmentId] = useState<string>('all');
   const [createUserModalOpen, setCreateUserModalOpen] = useState(false);
+  const [resetPasswordUser, setResetPasswordUser] = useState<{ id: string; name: string } | null>(null);
 
   // Unit admins can only manage users in their unit
   const canManageUsers = isAdmin || isUnitAdmin;
@@ -500,6 +502,18 @@ export default function Settings() {
                           </div>
                           
                           <div className="flex items-center gap-2">
+                            {/* Reset password button - only admin */}
+                            {isAdmin && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => setResetPasswordUser({ id: profile.id, name: profile.full_name || 'Usuário' })}
+                                className="text-muted-foreground hover:text-foreground"
+                                title="Redefinir senha"
+                              >
+                                <KeyRound className="w-4 h-4" />
+                              </Button>
+                            )}
                             {/* Unit selector - only admin can change, unit_admin auto-assigns their unit */}
                             {isAdmin ? (
                               <Select
@@ -679,6 +693,13 @@ export default function Settings() {
         <CreateUserModal
           open={createUserModalOpen}
           onClose={() => setCreateUserModalOpen(false)}
+        />
+
+        <ResetPasswordModal
+          open={!!resetPasswordUser}
+          onClose={() => setResetPasswordUser(null)}
+          userId={resetPasswordUser?.id || ''}
+          userName={resetPasswordUser?.name || ''}
         />
       </main>
     </div>
