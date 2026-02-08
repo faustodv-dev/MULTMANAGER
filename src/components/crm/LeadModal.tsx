@@ -80,7 +80,10 @@ const educationLevels = [
 export function LeadModal({ open, onClose, mediaSources, profiles, departments }: LeadModalProps) {
   const createLead = useCreateLead();
   const { data: schoolUnits = [] } = useSchoolUnits();
-  const { profile: authProfile } = useAuth();
+  const { profile: authProfile, isAdmin } = useAuth();
+  
+  // Automatically use user's unit_id - non-admins cannot change this
+  const userUnitId = authProfile?.unit_id || '';
   
   const form = useForm<CreateLeadForm>({
     resolver: zodResolver(createLeadSchema),
@@ -99,7 +102,7 @@ export function LeadModal({ open, onClose, mediaSources, profiles, departments }
       discount_percent: '',
       assigned_to: '',
       department_id: '',
-      unit_id: authProfile?.unit_id || '',
+      unit_id: userUnitId,
       next_contact_date: '',
       notes: '',
     },
@@ -112,6 +115,9 @@ export function LeadModal({ open, onClose, mediaSources, profiles, departments }
       const finalValue = quoteValue && discountPercent 
         ? quoteValue * (1 - discountPercent / 100) 
         : quoteValue;
+      
+      // Force unit_id from user profile for non-admins
+      const effectiveUnitId = isAdmin ? (data.unit_id || null) : (userUnitId || null);
       
       await createLead.mutateAsync({
         name: data.name,
@@ -129,7 +135,7 @@ export function LeadModal({ open, onClose, mediaSources, profiles, departments }
         final_value: finalValue,
         assigned_to: data.assigned_to || null,
         department_id: data.department_id || null,
-        unit_id: data.unit_id || null,
+        unit_id: effectiveUnitId,
         next_contact_date: data.next_contact_date || null,
         notes: data.notes || null,
       });
@@ -401,30 +407,43 @@ export function LeadModal({ open, onClose, mediaSources, profiles, departments }
                     )}
                   />
 
-                  <FormField
-                    control={form.control}
-                    name="unit_id"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Unidade Escolar</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Selecione" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {schoolUnits.map((unit) => (
-                              <SelectItem key={unit.id} value={unit.id}>
-                                {unit.name} - {unit.city}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                  {/* Unit field: only shown to admins, others auto-assign */}
+                  {isAdmin ? (
+                    <FormField
+                      control={form.control}
+                      name="unit_id"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Unidade Escolar</FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value}>
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Selecione" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {schoolUnits.map((unit) => (
+                                <SelectItem key={unit.id} value={unit.id}>
+                                  {unit.name} - {unit.city}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  ) : (
+                    <FormItem>
+                      <FormLabel>Unidade Escolar</FormLabel>
+                      <div className="flex h-10 w-full rounded-md border border-input bg-muted px-3 py-2 text-sm text-muted-foreground">
+                        {schoolUnits.find(u => u.id === userUnitId)?.name || 'Sua unidade'}
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Lead será vinculado automaticamente à sua unidade
+                      </p>
+                    </FormItem>
+                  )}
                 </div>
 
                 <FormField
