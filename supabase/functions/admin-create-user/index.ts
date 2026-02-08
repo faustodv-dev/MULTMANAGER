@@ -27,7 +27,11 @@ const getCorsOrigin = (req: Request): string => {
   }
   
   // Check for Lovable preview domains pattern
-  if (origin.includes('.lovable.app') || origin.includes('.lovable.dev')) {
+  if (
+    origin.includes('.lovable.app') ||
+    origin.includes('.lovable.dev') ||
+    origin.includes('.lovableproject.com')
+  ) {
     return origin;
   }
   
