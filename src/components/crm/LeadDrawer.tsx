@@ -128,17 +128,24 @@ const paymentMethods = [
 ];
 
 export function LeadDrawer({ lead, open, onClose, mediaSources, profiles }: LeadDrawerProps) {
-  const { user } = useAuth();
+  const { user, isAdmin, isUnitAdmin, profile: authProfile } = useAuth();
   const { data: activities = [], isLoading: loadingActivities } = useLeadActivities(lead?.id);
   const { data: departments = [] } = useDepartments();
   const updateLead = useUpdateLead();
   const updateLeadStage = useUpdateLeadStage();
   const createActivity = useCreateLeadActivity();
+  const deleteLead = useDeleteLead();
   
   const [activityType, setActivityType] = useState('');
   const [activityDescription, setActivityDescription] = useState('');
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState<LeadEditForm | null>(null);
+
+  // Permission checks
+  const isCreator = lead?.created_by === user?.id;
+  const isUnitAdminOfLead = isUnitAdmin && lead?.unit_id === authProfile?.unit_id;
+  const canDeleteLead = isAdmin || isCreator || isUnitAdminOfLead;
+  const canChangeOwnership = isAdmin || isCreator || isUnitAdminOfLead;
 
   // Initialize edit data when lead changes
   useEffect(() => {
