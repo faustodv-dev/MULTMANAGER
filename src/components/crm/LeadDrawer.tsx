@@ -27,7 +27,7 @@ import {
 } from '@/components/ui/select';
 import { 
   useLeadActivities, useUpdateLead, useUpdateLeadStage, 
-  useCreateLeadActivity 
+  useCreateLeadActivity, useDeleteLead 
 } from '@/hooks/useLeads';
 import { useDepartments } from '@/hooks/useDepartments';
 import { useAuth } from '@/contexts/AuthContext';
@@ -42,10 +42,21 @@ import {
   Phone, Mail, Calendar, MessageCircle, FileText, 
   ArrowRight, Users, Loader2, Send, User, Building,
   DollarSign, GraduationCap, Clock, Pencil, Save, X,
-  CreditCard, Banknote, Receipt, Shirt
+  CreditCard, Banknote, Receipt, Shirt, Trash2
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 
 interface LeadDrawerProps {
   lead: Lead | null;
