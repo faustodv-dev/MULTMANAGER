@@ -910,10 +910,14 @@ export function LeadDrawer({ lead, open, onClose, mediaSources, profiles }: Lead
                   {isEditing ? (
                     <div className="space-y-3">
                       <div>
-                        <Label htmlFor="edit-assignee">Responsável</Label>
+                        <Label htmlFor="edit-assignee">
+                          Responsável
+                          {!canChangeOwnership && <span className="text-xs text-muted-foreground ml-1">(sem permissão)</span>}
+                        </Label>
                         <Select 
                           value={editData.assigned_to || ''} 
                           onValueChange={(v) => updateEditField('assigned_to', v === 'none' ? '' : v)}
+                          disabled={!canChangeOwnership}
                         >
                           <SelectTrigger>
                             <SelectValue placeholder="Selecione" />
