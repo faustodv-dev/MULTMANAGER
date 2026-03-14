@@ -369,10 +369,41 @@ export function LeadDrawer({ lead, open, onClose, mediaSources, profiles }: Lead
               </SheetDescription>
             </div>
             {!isEditing ? (
-              <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
-                <Pencil className="w-4 h-4 mr-1" />
-                Editar
-              </Button>
+              <div className="flex gap-2">
+                {canDeleteLead && (
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="outline" size="sm" className="text-destructive hover:text-destructive">
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Excluir Lead</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Tem certeza que deseja excluir o lead <strong>{lead.name}</strong>? Esta ação não pode ser desfeita.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction
+                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                          onClick={async () => {
+                            await deleteLead.mutateAsync(lead.id);
+                            onClose();
+                          }}
+                        >
+                          {deleteLead.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Excluir'}
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                )}
+                <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
+                  <Pencil className="w-4 h-4 mr-1" />
+                  Editar
+                </Button>
+              </div>
             ) : (
               <div className="flex gap-2">
                 <Button 
