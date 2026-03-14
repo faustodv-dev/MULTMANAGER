@@ -28,6 +28,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useCreateLead } from '@/hooks/useLeads';
+import { supabase } from '@/integrations/supabase/client';
 import { useSchoolUnits, SchoolUnit } from '@/hooks/useSchoolUnits';
 import { MediaSource, LeadStage } from '@/types/crm';
 import { Profile, Department } from '@/types/database';
