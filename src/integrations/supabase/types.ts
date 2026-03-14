@@ -98,6 +98,7 @@ export type Database = {
           course_interest: string | null
           cpf: string | null
           created_at: string
+          created_by: string | null
           department_id: string | null
           discount_percent: number | null
           education_level: string | null
@@ -141,6 +142,7 @@ export type Database = {
           course_interest?: string | null
           cpf?: string | null
           created_at?: string
+          created_by?: string | null
           department_id?: string | null
           discount_percent?: number | null
           education_level?: string | null
@@ -184,6 +186,7 @@ export type Database = {
           course_interest?: string | null
           cpf?: string | null
           created_at?: string
+          created_by?: string | null
           department_id?: string | null
           discount_percent?: number | null
           education_level?: string | null
@@ -223,6 +226,13 @@ export type Database = {
           {
             foreignKeyName: "leads_assigned_to_fkey"
             columns: ["assigned_to"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leads_created_by_fkey"
+            columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
