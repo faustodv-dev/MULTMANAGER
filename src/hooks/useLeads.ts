@@ -108,6 +108,7 @@ export interface CreateLeadInput {
   unit_id?: string | null;
   next_contact_date?: string | null;
   notes?: string | null;
+  created_by?: string | null;
 }
 
 export function useCreateLead() {

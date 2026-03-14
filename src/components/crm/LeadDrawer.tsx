@@ -27,7 +27,7 @@ import {
 } from '@/components/ui/select';
 import { 
   useLeadActivities, useUpdateLead, useUpdateLeadStage, 
-  useCreateLeadActivity 
+  useCreateLeadActivity, useDeleteLead 
 } from '@/hooks/useLeads';
 import { useDepartments } from '@/hooks/useDepartments';
 import { useAuth } from '@/contexts/AuthContext';
@@ -42,10 +42,21 @@ import {
   Phone, Mail, Calendar, MessageCircle, FileText, 
   ArrowRight, Users, Loader2, Send, User, Building,
   DollarSign, GraduationCap, Clock, Pencil, Save, X,
-  CreditCard, Banknote, Receipt, Shirt
+  CreditCard, Banknote, Receipt, Shirt, Trash2
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 
 interface LeadDrawerProps {
   lead: Lead | null;
@@ -117,17 +128,24 @@ const paymentMethods = [
 ];
 
 export function LeadDrawer({ lead, open, onClose, mediaSources, profiles }: LeadDrawerProps) {
-  const { user } = useAuth();
+  const { user, isAdmin, isUnitAdmin, profile: authProfile } = useAuth();
   const { data: activities = [], isLoading: loadingActivities } = useLeadActivities(lead?.id);
   const { data: departments = [] } = useDepartments();
   const updateLead = useUpdateLead();
   const updateLeadStage = useUpdateLeadStage();
   const createActivity = useCreateLeadActivity();
+  const deleteLead = useDeleteLead();
   
   const [activityType, setActivityType] = useState('');
   const [activityDescription, setActivityDescription] = useState('');
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState<LeadEditForm | null>(null);
+
+  // Permission checks
+  const isCreator = lead?.created_by === user?.id;
+  const isUnitAdminOfLead = isUnitAdmin && lead?.unit_id === authProfile?.unit_id;
+  const canDeleteLead = isAdmin || isCreator || isUnitAdminOfLead;
+  const canChangeOwnership = isAdmin || isCreator || isUnitAdminOfLead;
 
   // Initialize edit data when lead changes
   useEffect(() => {
@@ -351,10 +369,41 @@ export function LeadDrawer({ lead, open, onClose, mediaSources, profiles }: Lead
               </SheetDescription>
             </div>
             {!isEditing ? (
-              <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
-                <Pencil className="w-4 h-4 mr-1" />
-                Editar
-              </Button>
+              <div className="flex gap-2">
+                {canDeleteLead && (
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="outline" size="sm" className="text-destructive hover:text-destructive">
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Excluir Lead</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Tem certeza que deseja excluir o lead <strong>{lead.name}</strong>? Esta ação não pode ser desfeita.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction
+                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                          onClick={async () => {
+                            await deleteLead.mutateAsync(lead.id);
+                            onClose();
+                          }}
+                        >
+                          {deleteLead.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Excluir'}
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                )}
+                <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
+                  <Pencil className="w-4 h-4 mr-1" />
+                  Editar
+                </Button>
+              </div>
             ) : (
               <div className="flex gap-2">
                 <Button 
@@ -861,10 +910,14 @@ export function LeadDrawer({ lead, open, onClose, mediaSources, profiles }: Lead
                   {isEditing ? (
                     <div className="space-y-3">
                       <div>
-                        <Label htmlFor="edit-assignee">Responsável</Label>
+                        <Label htmlFor="edit-assignee">
+                          Responsável
+                          {!canChangeOwnership && <span className="text-xs text-muted-foreground ml-1">(sem permissão)</span>}
+                        </Label>
                         <Select 
                           value={editData.assigned_to || ''} 
                           onValueChange={(v) => updateEditField('assigned_to', v === 'none' ? '' : v)}
+                          disabled={!canChangeOwnership}
                         >
                           <SelectTrigger>
                             <SelectValue placeholder="Selecione" />

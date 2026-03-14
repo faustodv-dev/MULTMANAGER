@@ -28,6 +28,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useCreateLead } from '@/hooks/useLeads';
+import { supabase } from '@/integrations/supabase/client';
 import { useSchoolUnits, SchoolUnit } from '@/hooks/useSchoolUnits';
 import { MediaSource, LeadStage } from '@/types/crm';
 import { Profile, Department } from '@/types/database';
@@ -119,6 +120,9 @@ export function LeadModal({ open, onClose, mediaSources, profiles, departments }
       // Force unit_id from user profile for non-admins
       const effectiveUnitId = isAdmin ? (data.unit_id || null) : (userUnitId || null);
       
+      // Get current user id for created_by
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      
       await createLead.mutateAsync({
         name: data.name,
         phone: data.phone,
@@ -138,6 +142,7 @@ export function LeadModal({ open, onClose, mediaSources, profiles, departments }
         unit_id: effectiveUnitId,
         next_contact_date: data.next_contact_date || null,
         notes: data.notes || null,
+        created_by: currentUser?.id || null,
       });
       form.reset();
       onClose();
