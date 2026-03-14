@@ -56,6 +56,7 @@ export interface Lead {
   assigned_to: string | null;
   department_id: string | null;
   unit_id: string | null;
+  created_by: string | null;
   
   // Timestamps
   created_at: string;
