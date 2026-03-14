@@ -1,55 +1,17 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
-// Define allowed origins for CORS security
-const getAllowedOrigins = (): string[] => {
-  const frontendUrl = Deno.env.get('FRONTEND_URL');
-  const origins = [
-    'http://localhost:5173',
-    'http://localhost:3000',
-    'https://multmanager.lovable.app',
-    'https://lovable.dev',
-  ];
-  
-  if (frontendUrl) {
-    origins.push(frontendUrl);
-  }
-  
-  return origins;
-};
-
-const getCorsOrigin = (req: Request): string => {
-  const origin = req.headers.get('Origin') || '';
-  const allowedOrigins = getAllowedOrigins();
-  
-  if (allowedOrigins.includes(origin)) {
-    return origin;
-  }
-  
-  if (origin.includes('.lovable.app') || origin.includes('.lovable.dev')) {
-    return origin;
-  }
-  
-  return allowedOrigins[0];
-};
-
-const getCorsHeaders = (req: Request): Record<string, string> => {
-  return {
-    'Access-Control-Allow-Origin': getCorsOrigin(req),
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-    'Access-Control-Allow-Credentials': 'true',
-  };
-};
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+}
 
 Deno.serve(async (req) => {
-  const corsHeaders = getCorsHeaders(req);
-  
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders })
+    return new Response('ok', { headers: corsHeaders })
   }
 
   try {
-    // Get the authorization header
     const authHeader = req.headers.get('Authorization')
     if (!authHeader) {
       return new Response(
@@ -58,14 +20,12 @@ Deno.serve(async (req) => {
       )
     }
 
-    // Create Supabase client with user's token
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
       { global: { headers: { Authorization: authHeader } } }
     )
 
-    // Verify caller is authenticated and is admin
     const { data: { user }, error: userError } = await supabaseClient.auth.getUser()
     if (userError || !user) {
       return new Response(
@@ -74,7 +34,6 @@ Deno.serve(async (req) => {
       )
     }
 
-    // Check if caller is admin using the has_role function
     const { data: isAdmin, error: roleError } = await supabaseClient
       .rpc('has_role', { _user_id: user.id, _role: 'admin' })
 
@@ -85,10 +44,8 @@ Deno.serve(async (req) => {
       )
     }
 
-    // Get request body
     const { user_id, new_password } = await req.json()
 
-    // Validate required fields
     if (!user_id || !new_password) {
       return new Response(
         JSON.stringify({ error: 'user_id and new_password are required' }),
@@ -96,8 +53,7 @@ Deno.serve(async (req) => {
       )
     }
 
-    // Validate user_id format
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
     if (!uuidRegex.test(user_id)) {
       return new Response(
         JSON.stringify({ error: 'Invalid user ID format' }),
@@ -105,36 +61,26 @@ Deno.serve(async (req) => {
       )
     }
 
-    // Validate password length
-    if (new_password.length < 6) {
+    if (new_password.length < 6 || new_password.length > 72) {
       return new Response(
-        JSON.stringify({ error: 'Password must be at least 6 characters' }),
+        JSON.stringify({ error: 'Password must be between 6 and 72 characters' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
-    if (new_password.length > 72) {
-      return new Response(
-        JSON.stringify({ error: 'Password must be at most 72 characters' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
-    }
-
-    // Create admin client with service role key to update user
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
       { auth: { autoRefreshToken: false, persistSession: false } }
     )
 
-    // Update the user's password using admin API
-    const { data: updatedUser, error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
+    const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
       user_id,
       { password: new_password }
     )
 
     if (updateError) {
-      console.error('Password update error:', updateError);
+      console.error('Password update error:', updateError)
       return new Response(
         JSON.stringify({ error: 'Failed to update password. User may not exist.' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -142,14 +88,11 @@ Deno.serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({ 
-        success: true, 
-        message: 'Password updated successfully'
-      }),
+      JSON.stringify({ success: true, message: 'Password updated successfully' }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   } catch (error) {
-    console.error('Edge function error:', error);
+    console.error('Edge function error:', error)
     return new Response(
       JSON.stringify({ error: 'An unexpected error occurred' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

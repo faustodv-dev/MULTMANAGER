@@ -20,22 +20,35 @@ export function useAdminCreateUser() {
       const { data: { session } } = await supabase.auth.getSession();
       
       if (!session) {
-        throw new Error('Não autenticado');
+        throw new Error('Não autenticado. Faça login novamente.');
+      }
+
+      // Use explicit fetch for more reliable auth context
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const response = await fetch(
+        `${supabaseUrl}/functions/v1/admin-create-user`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+            'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          },
+          body: JSON.stringify(input),
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Erro de conexão com o servidor' }));
+        throw new Error(errorData.error || `Erro ${response.status}: falha ao criar usuário`);
+      }
+
+      const data = await response.json();
+      if (data?.error) {
+        throw new Error(data.error);
       }
       
-      const response = await supabase.functions.invoke('admin-create-user', {
-        body: input,
-      });
-      
-      if (response.error) {
-        throw new Error(response.error.message || 'Erro ao criar usuário');
-      }
-      
-      if (response.data?.error) {
-        throw new Error(response.data.error);
-      }
-      
-      return response.data;
+      return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['profiles'] });
