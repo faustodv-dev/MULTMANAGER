@@ -122,13 +122,13 @@ export default function CRM() {
   // Group leads by stage
   const leadsByStage = useMemo(() => {
     const grouped: Record<LeadStage, Lead[]> = {
-      novo: [],
-      contato_inicial: [],
-      qualificacao: [],
-      apresentacao: [],
-      negociacao: [],
-      matricula: [],
-      perdido: [],
+      assuntos_pendentes: [],
+      pendencia_eja: [],
+      pendencia_online: [],
+      pendencia_tecnico: [],
+      desistentes: [],
+      rescisao_cancelamento: [],
+      finalizado: [],
     };
     
     filteredLeads.forEach(lead => {
