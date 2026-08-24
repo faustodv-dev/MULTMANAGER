@@ -164,10 +164,10 @@ const FinancialReport = () => {
                 { key: 'enrollment_fee_value', header: 'Matrícula (R$)', formatter: (v, r) => r.enrollment_fee_paid ? (v || 0).toFixed(2) : '0.00' },
                 { key: 'first_installment_value', header: '1ª Parcela (R$)', formatter: (v, r) => r.first_installment_paid ? (v || 0).toFixed(2) : '0.00' },
                 { key: 'uniform_value', header: 'Uniforme (R$)', formatter: (v, r) => r.uniform_paid ? (v || 0).toFixed(2) : '0.00' },
-                { key: 'converted_at', header: 'Data Matrícula', formatter: (v) => v ? format(new Date(v), 'dd/MM/yyyy') : '' },
+                { key: 'converted_at', header: 'Data Finalização', formatter: (v) => v ? format(new Date(v), 'dd/MM/yyyy') : '' },
               ]}
               filename="relatorio-financeiro"
-              title="Relatório Financeiro - Matrículas"
+              title="Relatório Financeiro - Atendimentos Finalizados"
             />
           </div>
         </header>
@@ -272,7 +272,7 @@ const FinancialReport = () => {
 
             <Card className="bg-gradient-to-br from-blue-500/10 to-blue-600/10 border-blue-500/20">
               <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium">Matrículas</CardTitle>
+                <CardTitle className="text-sm font-medium">Alunos Finalizados</CardTitle>
                 <GraduationCap className="h-4 w-4 text-blue-500" />
               </CardHeader>
               <CardContent>
@@ -373,7 +373,7 @@ const FinancialReport = () => {
                           </p>
                           {lead.converted_at && (
                             <p className="text-xs text-muted-foreground">
-                              Matriculado em: {format(new Date(lead.converted_at), "dd/MM/yyyy", { locale: ptBR })}
+                              Finalizado em: {format(new Date(lead.converted_at), "dd/MM/yyyy", { locale: ptBR })}
                             </p>
                           )}
                         </div>
