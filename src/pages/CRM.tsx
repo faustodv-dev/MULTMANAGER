@@ -25,7 +25,7 @@ import { ExportDropdown } from '@/components/ExportDropdown';
 import { 
   Search, Plus, Users, TrendingUp, Target, DollarSign, 
   Loader2, Filter, GripVertical, CalendarIcon, X, PhoneCall,
-  AlertTriangle, Clock, Building, User
+  AlertTriangle, Clock, Building, User, Ban
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -140,58 +140,54 @@ export default function CRM() {
     return grouped;
   }, [filteredLeads]);
 
-  // Calculate metrics with improved data for salespeople
+  // Métricas do atendimento pedagógico
   const metrics = useMemo(() => {
     const today = startOfDay(new Date());
     const leadsForMetrics = viewMode === 'personal' && user 
       ? leads.filter(l => l.assigned_to === user.id)
       : leads;
-    
-    // Only count active leads (not inactive, not converted, not lost)
-    const activeLeads = leadsForMetrics.filter(l => l.status === 'ativo');
-    
-    // Leads with return scheduled for today
+
+    const pendingStages: LeadStage[] = ['assuntos_pendentes', 'pendencia_eja', 'pendencia_online', 'pendencia_tecnico'];
+
+    // Atendimentos em aberto (pendências ativas)
+    const pendingLeads = leadsForMetrics.filter(l => pendingStages.includes(l.stage) && l.status === 'ativo');
+
+    // Retornos agendados para hoje
     const returnsToday = leadsForMetrics.filter(l => 
       l.status === 'ativo' && 
       l.next_contact_date && 
       isToday(new Date(l.next_contact_date))
     ).length;
-    
-    // Overdue returns - leads that have next_contact_date in the past and still active
+
+    // Retornos atrasados
     const overdueReturns = leadsForMetrics.filter(l => 
       l.status === 'ativo' && 
       l.next_contact_date && 
       isBefore(new Date(l.next_contact_date), today) &&
       !isToday(new Date(l.next_contact_date))
     ).length;
-    
-    // Converted leads (matricula)
-    const convertedLeads = leadsForMetrics.filter(l => l.status === 'convertido').length;
-    
-    // Conversion rate (only considering leads that exited the funnel - converted or lost)
-    const closedLeads = leadsForMetrics.filter(l => l.status === 'convertido' || l.status === 'perdido');
-    const conversionRate = closedLeads.length > 0 
-      ? Math.round((convertedLeads / closedLeads.length) * 100) 
+
+    // Atendimentos finalizados
+    const finishedLeads = leadsForMetrics.filter(l => l.stage === 'finalizado').length;
+
+    // Desistências e rescisões/cancelamentos
+    const dropoutLeads = leadsForMetrics.filter(l => l.stage === 'desistentes').length;
+    const cancellationLeads = leadsForMetrics.filter(l => l.stage === 'rescisao_cancelamento').length;
+
+    // Taxa de resolução (finalizados sobre tudo que saiu da pendência)
+    const closedLeads = finishedLeads + dropoutLeads + cancellationLeads;
+    const resolutionRate = closedLeads > 0 
+      ? Math.round((finishedLeads / closedLeads) * 100) 
       : 0;
-    
-    // Total quote value only from active leads
-    const totalQuoteValue = activeLeads
-      .filter(l => l.quote_value)
-      .reduce((sum, l) => sum + (l.quote_value || 0), 0);
-    
-    // Pipeline value (leads in negotiation stage)
-    const pipelineValue = leadsForMetrics
-      .filter(l => (l.stage === 'assuntos_pendentes' || l.stage === 'pendencia_eja' || l.stage === 'pendencia_online' || l.stage === 'pendencia_tecnico') && l.status === 'ativo' && l.quote_value)
-      .reduce((sum, l) => sum + (l.quote_value || 0), 0);
-    
+
     return { 
-      activeLeads: activeLeads.length, 
+      pendingLeads: pendingLeads.length,
       returnsToday,
       overdueReturns,
-      convertedLeads, 
-      conversionRate, 
-      totalQuoteValue,
-      pipelineValue
+      finishedLeads,
+      dropoutLeads,
+      cancellationLeads,
+      resolutionRate,
     };
   }, [leads, viewMode, user]);
 
@@ -489,59 +485,60 @@ export default function CRM() {
               </CardContent>
             </Card>
 
-            {/* Leads Ativos */}
+            {/* Pendências em aberto */}
             <Card className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950 dark:to-blue-900 border-blue-200 dark:border-blue-800">
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-xs text-blue-600 dark:text-blue-400">Leads Ativos</p>
-                    <p className="text-2xl font-bold text-blue-700 dark:text-blue-300">{metrics.activeLeads}</p>
+                    <p className="text-xs text-blue-600 dark:text-blue-400">Pendências Abertas</p>
+                    <p className="text-2xl font-bold text-blue-700 dark:text-blue-300">{metrics.pendingLeads}</p>
                   </div>
                   <Users className="w-6 h-6 text-blue-500" />
                 </div>
               </CardContent>
             </Card>
 
-            {/* Matrículas */}
+            {/* Finalizados */}
             <Card className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-950 dark:to-green-900 border-green-200 dark:border-green-800">
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-xs text-green-600 dark:text-green-400">Matrículas</p>
-                    <p className="text-2xl font-bold text-green-700 dark:text-green-300">{metrics.convertedLeads}</p>
+                    <p className="text-xs text-green-600 dark:text-green-400">Finalizados</p>
+                    <p className="text-2xl font-bold text-green-700 dark:text-green-300">{metrics.finishedLeads}</p>
                   </div>
                   <Target className="w-6 h-6 text-green-500" />
                 </div>
               </CardContent>
             </Card>
 
-            {/* Taxa de Conversão */}
+            {/* Desistências / Rescisões */}
+            <Card className="bg-gradient-to-br from-rose-50 to-rose-100 dark:from-rose-950 dark:to-rose-900 border-rose-200 dark:border-rose-800">
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-rose-600 dark:text-rose-400">Desist. / Rescisões</p>
+                    <p className="text-2xl font-bold text-rose-700 dark:text-rose-300">
+                      {metrics.dropoutLeads + metrics.cancellationLeads}
+                    </p>
+                  </div>
+                  <Ban className="w-6 h-6 text-rose-500" />
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Taxa de Resolução */}
             <Card className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-950 dark:to-purple-900 border-purple-200 dark:border-purple-800">
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-xs text-purple-600 dark:text-purple-400">Conversão</p>
-                    <p className="text-2xl font-bold text-purple-700 dark:text-purple-300">{metrics.conversionRate}%</p>
+                    <p className="text-xs text-purple-600 dark:text-purple-400">Resolução</p>
+                    <p className="text-2xl font-bold text-purple-700 dark:text-purple-300">{metrics.resolutionRate}%</p>
                   </div>
                   <TrendingUp className="w-6 h-6 text-purple-500" />
                 </div>
               </CardContent>
             </Card>
 
-            {/* Pipeline */}
-            <Card className="bg-gradient-to-br from-amber-50 to-amber-100 dark:from-amber-950 dark:to-amber-900 border-amber-200 dark:border-amber-800">
-              <CardContent className="pt-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs text-amber-600 dark:text-amber-400">Pipeline</p>
-                    <p className="text-lg font-bold text-amber-700 dark:text-amber-300">
-                      {metrics.pipelineValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', notation: 'compact' })}
-                    </p>
-                  </div>
-                  <DollarSign className="w-6 h-6 text-amber-500" />
-                </div>
-              </CardContent>
-            </Card>
           </div>
         </div>
 
