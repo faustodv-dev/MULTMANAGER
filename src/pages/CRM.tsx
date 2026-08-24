@@ -25,7 +25,7 @@ import { ExportDropdown } from '@/components/ExportDropdown';
 import { 
   Search, Plus, Users, TrendingUp, Target, DollarSign, 
   Loader2, Filter, GripVertical, CalendarIcon, X, PhoneCall,
-  AlertTriangle, Clock, Building, User
+  AlertTriangle, Clock, Building, User, Ban
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
