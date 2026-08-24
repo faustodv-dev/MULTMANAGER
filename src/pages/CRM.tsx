@@ -140,58 +140,54 @@ export default function CRM() {
     return grouped;
   }, [filteredLeads]);
 
-  // Calculate metrics with improved data for salespeople
+  // Métricas do atendimento pedagógico
   const metrics = useMemo(() => {
     const today = startOfDay(new Date());
     const leadsForMetrics = viewMode === 'personal' && user 
       ? leads.filter(l => l.assigned_to === user.id)
       : leads;
-    
-    // Only count active leads (not inactive, not converted, not lost)
-    const activeLeads = leadsForMetrics.filter(l => l.status === 'ativo');
-    
-    // Leads with return scheduled for today
+
+    const pendingStages: LeadStage[] = ['assuntos_pendentes', 'pendencia_eja', 'pendencia_online', 'pendencia_tecnico'];
+
+    // Atendimentos em aberto (pendências ativas)
+    const pendingLeads = leadsForMetrics.filter(l => pendingStages.includes(l.stage) && l.status === 'ativo');
+
+    // Retornos agendados para hoje
     const returnsToday = leadsForMetrics.filter(l => 
       l.status === 'ativo' && 
       l.next_contact_date && 
       isToday(new Date(l.next_contact_date))
     ).length;
-    
-    // Overdue returns - leads that have next_contact_date in the past and still active
+
+    // Retornos atrasados
     const overdueReturns = leadsForMetrics.filter(l => 
       l.status === 'ativo' && 
       l.next_contact_date && 
       isBefore(new Date(l.next_contact_date), today) &&
       !isToday(new Date(l.next_contact_date))
     ).length;
-    
-    // Converted leads (matricula)
-    const convertedLeads = leadsForMetrics.filter(l => l.status === 'convertido').length;
-    
-    // Conversion rate (only considering leads that exited the funnel - converted or lost)
-    const closedLeads = leadsForMetrics.filter(l => l.status === 'convertido' || l.status === 'perdido');
-    const conversionRate = closedLeads.length > 0 
-      ? Math.round((convertedLeads / closedLeads.length) * 100) 
+
+    // Atendimentos finalizados
+    const finishedLeads = leadsForMetrics.filter(l => l.stage === 'finalizado').length;
+
+    // Desistências e rescisões/cancelamentos
+    const dropoutLeads = leadsForMetrics.filter(l => l.stage === 'desistentes').length;
+    const cancellationLeads = leadsForMetrics.filter(l => l.stage === 'rescisao_cancelamento').length;
+
+    // Taxa de resolução (finalizados sobre tudo que saiu da pendência)
+    const closedLeads = finishedLeads + dropoutLeads + cancellationLeads;
+    const resolutionRate = closedLeads > 0 
+      ? Math.round((finishedLeads / closedLeads) * 100) 
       : 0;
-    
-    // Total quote value only from active leads
-    const totalQuoteValue = activeLeads
-      .filter(l => l.quote_value)
-      .reduce((sum, l) => sum + (l.quote_value || 0), 0);
-    
-    // Pipeline value (leads in negotiation stage)
-    const pipelineValue = leadsForMetrics
-      .filter(l => (l.stage === 'assuntos_pendentes' || l.stage === 'pendencia_eja' || l.stage === 'pendencia_online' || l.stage === 'pendencia_tecnico') && l.status === 'ativo' && l.quote_value)
-      .reduce((sum, l) => sum + (l.quote_value || 0), 0);
-    
+
     return { 
-      activeLeads: activeLeads.length, 
+      pendingLeads: pendingLeads.length,
       returnsToday,
       overdueReturns,
-      convertedLeads, 
-      conversionRate, 
-      totalQuoteValue,
-      pipelineValue
+      finishedLeads,
+      dropoutLeads,
+      cancellationLeads,
+      resolutionRate,
     };
   }, [leads, viewMode, user]);
 
