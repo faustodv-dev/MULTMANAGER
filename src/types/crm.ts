@@ -1,6 +1,6 @@
 import { Profile, Department, SchoolUnit } from './database';
 
-export type LeadStage = 'novo' | 'contato_inicial' | 'qualificacao' | 'apresentacao' | 'negociacao' | 'matricula' | 'perdido';
+export type LeadStage = 'assuntos_pendentes' | 'pendencia_eja' | 'pendencia_online' | 'pendencia_tecnico' | 'desistentes' | 'rescisao_cancelamento' | 'finalizado';
 export type LeadStatus = 'ativo' | 'inativo' | 'convertido' | 'perdido';
 
 export interface MediaSource {
@@ -92,23 +92,23 @@ export interface LeadActivity {
 }
 
 export const stageLabels: Record<LeadStage, string> = {
-  novo: 'Novo Lead',
-  contato_inicial: 'Contato Inicial',
-  qualificacao: 'Qualificação',
-  apresentacao: 'Apresentação',
-  negociacao: 'Negociação',
-  matricula: 'Matrícula',
-  perdido: 'Perdido',
+  assuntos_pendentes: 'Assuntos Pendentes (Presenciais)',
+  pendencia_eja: 'Pendência (EJA)',
+  pendencia_online: 'Pendência (Online)',
+  pendencia_tecnico: 'Pendência (Técnico)',
+  desistentes: 'Desistentes',
+  rescisao_cancelamento: 'Rescisão / Cancelamento',
+  finalizado: 'Finalizado',
 };
 
 export const stageColors: Record<LeadStage, string> = {
-  novo: 'bg-blue-500',
-  contato_inicial: 'bg-cyan-500',
-  qualificacao: 'bg-yellow-500',
-  apresentacao: 'bg-orange-500',
-  negociacao: 'bg-purple-500',
-  matricula: 'bg-green-500',
-  perdido: 'bg-red-500',
+  assuntos_pendentes: 'bg-blue-500',
+  pendencia_eja: 'bg-cyan-500',
+  pendencia_online: 'bg-purple-500',
+  pendencia_tecnico: 'bg-orange-500',
+  desistentes: 'bg-red-500',
+  rescisao_cancelamento: 'bg-rose-700',
+  finalizado: 'bg-green-500',
 };
 
 export const statusLabels: Record<LeadStatus, string> = {

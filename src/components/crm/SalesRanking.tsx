@@ -38,7 +38,7 @@ export function SalesRanking({ leads, profiles, currentUserId }: SalesRankingPro
         const closedLeads = userLeads.filter(l => l.status === 'convertido' || l.status === 'perdido').length;
         const conversionRate = closedLeads > 0 ? Math.round((conversions / closedLeads) * 100) : 0;
         const pipelineValue = userLeads
-          .filter(l => l.stage === 'negociacao' && l.status === 'ativo')
+          .filter(l => (l.stage === 'assuntos_pendentes' || l.stage === 'pendencia_eja' || l.stage === 'pendencia_online' || l.stage === 'pendencia_tecnico') && l.status === 'ativo')
           .reduce((sum, l) => sum + (l.quote_value || 0), 0);
         
         const score = conversions * 100 + conversionRate * 2;
@@ -72,7 +72,7 @@ export function SalesRanking({ leads, profiles, currentUserId }: SalesRankingPro
         const closedLeads = userLeads.filter(l => l.status === 'convertido' || l.status === 'perdido').length;
         const conversionRate = closedLeads > 0 ? Math.round((conversions / closedLeads) * 100) : 0;
         const pipelineValue = userLeads
-          .filter(l => l.stage === 'negociacao' && l.status === 'ativo')
+          .filter(l => (l.stage === 'assuntos_pendentes' || l.stage === 'pendencia_eja' || l.stage === 'pendencia_online' || l.stage === 'pendencia_tecnico') && l.status === 'ativo')
           .reduce((sum, l) => sum + (l.quote_value || 0), 0);
         
         const score = totalLeadsCreated * 10 + activeLeads * 5;

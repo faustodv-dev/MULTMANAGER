@@ -571,13 +571,13 @@ export type Database = {
     Enums: {
       app_role: "admin" | "manager" | "employee" | "unit_admin"
       lead_stage:
-        | "novo"
-        | "contato_inicial"
-        | "qualificacao"
-        | "apresentacao"
-        | "negociacao"
-        | "matricula"
-        | "perdido"
+        | "assuntos_pendentes"
+        | "pendencia_eja"
+        | "pendencia_online"
+        | "pendencia_tecnico"
+        | "desistentes"
+        | "rescisao_cancelamento"
+        | "finalizado"
       lead_status: "ativo" | "inativo" | "convertido" | "perdido"
       task_frequency: "daily" | "weekly" | "monthly"
       task_priority: "low" | "medium" | "high"
@@ -711,13 +711,13 @@ export const Constants = {
     Enums: {
       app_role: ["admin", "manager", "employee", "unit_admin"],
       lead_stage: [
-        "novo",
-        "contato_inicial",
-        "qualificacao",
-        "apresentacao",
-        "negociacao",
-        "matricula",
-        "perdido",
+        "assuntos_pendentes",
+        "pendencia_eja",
+        "pendencia_online",
+        "pendencia_tecnico",
+        "desistentes",
+        "rescisao_cancelamento",
+        "finalizado",
       ],
       lead_status: ["ativo", "inativo", "convertido", "perdido"],
       task_frequency: ["daily", "weekly", "monthly"],

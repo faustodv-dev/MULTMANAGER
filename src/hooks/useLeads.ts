@@ -179,10 +179,10 @@ export function useUpdateLeadStage() {
       const updates: Partial<Lead> = { stage };
       
       // Handle special stages
-      if (stage === 'matricula') {
+      if (stage === 'finalizado') {
         updates.status = 'convertido';
         updates.converted_at = new Date().toISOString();
-      } else if (stage === 'perdido') {
+      } else if (stage === 'desistentes' || stage === 'rescisao_cancelamento') {
         updates.status = 'perdido';
         updates.lost_at = new Date().toISOString();
       }
