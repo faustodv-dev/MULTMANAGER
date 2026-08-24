@@ -232,7 +232,7 @@ export function LeadDrawer({ lead, open, onClose, mediaSources, profiles }: Lead
     if (!lead || !editData) return;
 
     // Validate next_contact_date is required if stage is not 'matricula'
-    if (lead.stage !== 'matricula' && !editData.next_contact_date) {
+    if (lead.stage !== 'finalizado' && !editData.next_contact_date) {
       toast.error('Data de retorno é obrigatória para leads que não estão matriculados');
       return;
     }
@@ -728,7 +728,7 @@ export function LeadDrawer({ lead, open, onClose, mediaSources, profiles }: Lead
                 </div>
 
                 {/* Payment Tracking (only show if stage is matricula) */}
-                {(lead.stage === 'matricula' || isEditing) && (
+                {(lead.stage === 'finalizado' || isEditing) && (
                   <div className="space-y-3">
                     <h4 className="text-sm font-medium text-muted-foreground">Pagamentos</h4>
                     

@@ -45,7 +45,7 @@ const FinancialReport = () => {
   // Filter only leads in "matricula" stage and within date range and unit
   const enrolledLeads = useMemo(() => {
     return leads.filter(lead => {
-      if (lead.stage !== "matricula") return false;
+      if (lead.stage !== "finalizado") return false;
       
       // Unit filter (unit_admin can only see their unit)
       if (isUnitAdmin && authProfile?.unit_id) {

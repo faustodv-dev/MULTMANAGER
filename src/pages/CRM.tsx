@@ -30,7 +30,7 @@ import {
 import { cn } from '@/lib/utils';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
-const funnelStages: LeadStage[] = ['novo', 'contato_inicial', 'qualificacao', 'apresentacao', 'negociacao', 'matricula'];
+const funnelStages: LeadStage[] = ['assuntos_pendentes', 'pendencia_eja', 'pendencia_online', 'pendencia_tecnico', 'desistentes', 'rescisao_cancelamento', 'finalizado'];
 
 export default function CRM() {
   const navigate = useNavigate();
@@ -181,7 +181,7 @@ export default function CRM() {
     
     // Pipeline value (leads in negotiation stage)
     const pipelineValue = leadsForMetrics
-      .filter(l => l.stage === 'negociacao' && l.status === 'ativo' && l.quote_value)
+      .filter(l => (l.stage === 'assuntos_pendentes' || l.stage === 'pendencia_eja' || l.stage === 'pendencia_online' || l.stage === 'pendencia_tecnico') && l.status === 'ativo' && l.quote_value)
       .reduce((sum, l) => sum + (l.quote_value || 0), 0);
     
     return { 
