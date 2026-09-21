@@ -48,6 +48,7 @@ export type Database = {
           new_stage: Database["public"]["Enums"]["lead_stage"] | null
           old_stage: Database["public"]["Enums"]["lead_stage"] | null
           scheduled_at: string | null
+          student_id: string | null
           user_id: string
         }
         Insert: {
@@ -59,6 +60,7 @@ export type Database = {
           new_stage?: Database["public"]["Enums"]["lead_stage"] | null
           old_stage?: Database["public"]["Enums"]["lead_stage"] | null
           scheduled_at?: string | null
+          student_id?: string | null
           user_id: string
         }
         Update: {
@@ -70,6 +72,7 @@ export type Database = {
           new_stage?: Database["public"]["Enums"]["lead_stage"] | null
           old_stage?: Database["public"]["Enums"]["lead_stage"] | null
           scheduled_at?: string | null
+          student_id?: string | null
           user_id?: string
         }
         Relationships: [
@@ -78,6 +81,13 @@ export type Database = {
             columns: ["lead_id"]
             isOneToOne: false
             referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_activities_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
             referencedColumns: ["id"]
           },
           {
@@ -123,10 +133,11 @@ export type Database = {
           next_contact_date: string | null
           notes: string | null
           payment_method: string | null
-          phone: string
+          phone: string | null
           quote_value: number | null
           stage: Database["public"]["Enums"]["lead_stage"]
           status: Database["public"]["Enums"]["lead_status"]
+          student_id: string | null
           uniform_installments: number | null
           uniform_paid: boolean | null
           uniform_value: number | null
@@ -167,10 +178,11 @@ export type Database = {
           next_contact_date?: string | null
           notes?: string | null
           payment_method?: string | null
-          phone: string
+          phone?: string | null
           quote_value?: number | null
           stage?: Database["public"]["Enums"]["lead_stage"]
           status?: Database["public"]["Enums"]["lead_status"]
+          student_id?: string | null
           uniform_installments?: number | null
           uniform_paid?: boolean | null
           uniform_value?: number | null
@@ -211,10 +223,11 @@ export type Database = {
           next_contact_date?: string | null
           notes?: string | null
           payment_method?: string | null
-          phone?: string
+          phone?: string | null
           quote_value?: number | null
           stage?: Database["public"]["Enums"]["lead_stage"]
           status?: Database["public"]["Enums"]["lead_status"]
+          student_id?: string | null
           uniform_installments?: number | null
           uniform_paid?: boolean | null
           uniform_value?: number | null
@@ -249,6 +262,13 @@ export type Database = {
             columns: ["media_source_id"]
             isOneToOne: false
             referencedRelation: "media_sources"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leads_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
             referencedColumns: ["id"]
           },
           {
@@ -432,16 +452,141 @@ export type Database = {
         }
         Relationships: []
       }
+      students: {
+        Row: {
+          code: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          name: string
+          unit_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          code?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name: string
+          unit_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          code?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name?: string
+          unit_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "students_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "students_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "school_units"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      task_completions: {
+        Row: {
+          completed_at: string
+          completed_by: string | null
+          created_at: string
+          cycle_key: string | null
+          department_id: string | null
+          id: string
+          notes: string | null
+          process_id: string | null
+          task_id: string | null
+          task_title: string
+          unit_id: string | null
+        }
+        Insert: {
+          completed_at?: string
+          completed_by?: string | null
+          created_at?: string
+          cycle_key?: string | null
+          department_id?: string | null
+          id?: string
+          notes?: string | null
+          process_id?: string | null
+          task_id?: string | null
+          task_title: string
+          unit_id?: string | null
+        }
+        Update: {
+          completed_at?: string
+          completed_by?: string | null
+          created_at?: string
+          cycle_key?: string | null
+          department_id?: string | null
+          id?: string
+          notes?: string | null
+          process_id?: string | null
+          task_id?: string | null
+          task_title?: string
+          unit_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_completions_completed_by_fkey"
+            columns: ["completed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_completions_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_completions_process_id_fkey"
+            columns: ["process_id"]
+            isOneToOne: false
+            referencedRelation: "processes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_completions_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_completions_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "school_units"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tasks: {
         Row: {
           assignee_id: string | null
           checklist: Json | null
           created_at: string
+          cycle_key: string | null
           department_id: string | null
           description: string | null
           due_date: string | null
           frequency: Database["public"]["Enums"]["task_frequency"]
           id: string
+          last_completed_at: string | null
           priority: Database["public"]["Enums"]["task_priority"]
           procedure_path: string | null
           process_id: string | null
@@ -454,11 +599,13 @@ export type Database = {
           assignee_id?: string | null
           checklist?: Json | null
           created_at?: string
+          cycle_key?: string | null
           department_id?: string | null
           description?: string | null
           due_date?: string | null
           frequency?: Database["public"]["Enums"]["task_frequency"]
           id?: string
+          last_completed_at?: string | null
           priority?: Database["public"]["Enums"]["task_priority"]
           procedure_path?: string | null
           process_id?: string | null
@@ -471,11 +618,13 @@ export type Database = {
           assignee_id?: string | null
           checklist?: Json | null
           created_at?: string
+          cycle_key?: string | null
           department_id?: string | null
           description?: string | null
           due_date?: string | null
           frequency?: Database["public"]["Enums"]["task_frequency"]
           id?: string
+          last_completed_at?: string | null
           priority?: Database["public"]["Enums"]["task_priority"]
           procedure_path?: string | null
           process_id?: string | null
