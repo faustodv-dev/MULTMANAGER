@@ -88,7 +88,8 @@ export function useLeadActivities(leadId: string | undefined) {
 
 export interface CreateLeadInput {
   name: string;
-  phone: string;
+  student_id?: string | null;
+  phone?: string | null;
   email?: string | null;
   whatsapp?: string | null;
   cpf?: string | null;
