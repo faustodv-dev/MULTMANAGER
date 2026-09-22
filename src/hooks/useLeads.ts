@@ -28,6 +28,7 @@ export function useLeads() {
         .from('leads')
         .select(`
           *,
+          student:students(*),
           media_source:media_sources(*),
           assignee:profiles!leads_assigned_to_fkey(*),
           department:departments(*)
