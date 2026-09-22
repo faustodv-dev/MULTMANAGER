@@ -79,10 +79,12 @@ export default function CRM() {
         ? (isAdmin || lead.unit_id === userUnitId)
         : lead.unit_id === selectedUnit;
       
-      const matchesSearch = 
-        lead.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        lead.phone.includes(searchQuery) ||
-        (lead.email && lead.email.toLowerCase().includes(searchQuery.toLowerCase()));
+      const q = searchQuery.toLowerCase();
+      const matchesSearch =
+        !q ||
+        lead.name.toLowerCase().includes(q) ||
+        (lead.student?.name || '').toLowerCase().includes(q) ||
+        (lead.student?.code || '').toLowerCase().includes(q);
       const matchesMedia = selectedMedia === 'all' || lead.media_source_id === selectedMedia;
       const matchesAssignee = selectedAssignee === 'all' || lead.assigned_to === selectedAssignee;
       const matchesStatus = selectedStatus === 'all' || lead.status === selectedStatus;

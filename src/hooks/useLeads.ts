@@ -28,6 +28,7 @@ export function useLeads() {
         .from('leads')
         .select(`
           *,
+          student:students(*),
           media_source:media_sources(*),
           assignee:profiles!leads_assigned_to_fkey(*),
           department:departments(*)
@@ -50,6 +51,7 @@ export function useLead(id: string | undefined) {
         .from('leads')
         .select(`
           *,
+          student:students(*),
           media_source:media_sources(*),
           assignee:profiles!leads_assigned_to_fkey(*),
           department:departments(*)
@@ -88,7 +90,8 @@ export function useLeadActivities(leadId: string | undefined) {
 
 export interface CreateLeadInput {
   name: string;
-  phone: string;
+  student_id?: string | null;
+  phone?: string | null;
   email?: string | null;
   whatsapp?: string | null;
   cpf?: string | null;
@@ -252,6 +255,7 @@ export function useCreateLeadActivity() {
       activity_type: string;
       description: string;
       scheduled_at?: string | null;
+      student_id?: string | null;
     }) => {
       const { data, error } = await supabase
         .from('lead_activities')

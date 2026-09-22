@@ -10,11 +10,19 @@ export interface MediaSource {
   created_at: string;
 }
 
+export interface Student {
+  id: string;
+  name: string;
+  code: string | null;
+  unit_id: string | null;
+}
+
 export interface Lead {
   id: string;
   name: string;
+  student_id: string | null;
   email: string | null;
-  phone: string;
+  phone: string | null;
   whatsapp: string | null;
   cpf: string | null;
   birth_date: string | null;
@@ -72,6 +80,7 @@ export interface Lead {
   notes: string | null;
   
   // Relations
+  student?: Student | null;
   media_source?: MediaSource | null;
   assignee?: Profile | null;
   department?: Department | null;
