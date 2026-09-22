@@ -2,7 +2,7 @@ import { Lead, statusLabels } from '@/types/crm';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Phone, Mail, Calendar, GripVertical, AlertTriangle, Clock, Ban } from 'lucide-react';
+import { GraduationCap, Calendar, GripVertical, AlertTriangle, Clock, Ban } from 'lucide-react';
 import { format, isToday, isBefore, startOfDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
