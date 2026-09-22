@@ -104,11 +104,6 @@ export function LeadCard({ lead, onClick, onDragStart, isDragging }: LeadCardPro
               </div>
             )}
 
-            {lead.quote_value && (
-              <div className="mt-2 text-xs font-medium text-green-600 dark:text-green-400">
-                Orçamento: {lead.quote_value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-              </div>
-            )}
           </div>
         </div>
       </CardContent>
