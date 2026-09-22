@@ -74,33 +74,19 @@ export function LeadCard({ lead, onClick, onDragStart, isDragging }: LeadCardPro
               </Badge>
             )}
 
-            <div className="space-y-1 text-xs text-muted-foreground">
-              <div className="flex items-center gap-1">
-                <Phone className="w-3 h-3" />
-                <span className="truncate">{lead.phone}</span>
-              </div>
-              
-              {lead.email && (
-                <div className="flex items-center gap-1">
-                  <Mail className="w-3 h-3" />
-                  <span className="truncate">{lead.email}</span>
+            {lead.student && (
+              <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                <div className="flex items-center gap-1 min-w-0">
+                  <GraduationCap className="w-3 h-3 shrink-0" />
+                  <span className="truncate">{lead.student.name}</span>
                 </div>
-              )}
-            </div>
-
-            <div className="flex items-center justify-between mt-2 pt-2 border-t">
-              {lead.media_source && (
-                <Badge variant="outline" className="text-[10px] px-1.5 py-0">
-                  {lead.media_source.name}
-                </Badge>
-              )}
-              
-              {lead.course_interest && (
-                <span className="text-[10px] text-muted-foreground truncate">
-                  {lead.course_interest}
-                </span>
-              )}
-            </div>
+                {lead.student.code && (
+                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0">
+                    {lead.student.code}
+                  </Badge>
+                )}
+              </div>
+            )}
 
             {lead.next_contact_date && (
               <div className={cn(
