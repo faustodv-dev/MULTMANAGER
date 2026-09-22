@@ -51,6 +51,7 @@ export function useLead(id: string | undefined) {
         .from('leads')
         .select(`
           *,
+          student:students(*),
           media_source:media_sources(*),
           assignee:profiles!leads_assigned_to_fkey(*),
           department:departments(*)
@@ -254,6 +255,7 @@ export function useCreateLeadActivity() {
       activity_type: string;
       description: string;
       scheduled_at?: string | null;
+      student_id?: string | null;
     }) => {
       const { data, error } = await supabase
         .from('lead_activities')
