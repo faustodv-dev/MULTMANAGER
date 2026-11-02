@@ -1,4 +1,4 @@
-import { supabase, usuarioDaRequisicao, podeModulo, lerCorpo, hojeSP, digitos, reais, dataBr } from './_lib/base.js';
+import { supabase, CFG, usuarioDaRequisicao, podeModulo, lerCorpo, hojeSP, digitos, reais, dataBr } from './_lib/base.js';
 import { ponte } from './_lib/ponte.js';
 
 export const config = { maxDuration: 30 };
@@ -297,6 +297,37 @@ export default async function handler(req, res) {
       const { error } = await supabase.from('unit_secrets').upsert(patch, { onConflict: 'unit_id' });
       if (error) return res.status(400).json({ erro: 'falha', mensagem: error.message });
       return res.status(200).json({ ok: true });
+    }
+
+    /* ───────── WhatsApp (gateway) — status público e QR via proxy (não expõe chave) ───────── */
+    if (acao === 'whatsapp_status') {
+      if (!adminUnidade) return res.status(403).json({ erro: 'sem_permissao' });
+      if (!CFG.gatewayUrl) return res.status(200).json({ ok: true, status: 'sem_gateway' });
+      try {
+        const r = await fetch(`${CFG.gatewayUrl}/connect/${encodeURIComponent(unitId)}/status`, { signal: AbortSignal.timeout(8000) });
+        const j = await r.json().catch(() => ({}));
+        return res.status(200).json({ ok: true, status: j.status || 'desconhecido', phone: j.phone || null });
+      } catch (e) {
+        return res.status(200).json({ ok: true, status: 'indisponivel' });
+      }
+    }
+    if (acao === 'whatsapp_qr') {
+      if (!adminUnidade) return res.status(403).json({ erro: 'sem_permissao' });
+      if (!CFG.gatewayUrl) return res.status(400).json({ erro: 'sem_gateway', mensagem: 'Gateway não configurado.' });
+      try {
+        const r = await fetch(`${CFG.gatewayUrl}/connect/${encodeURIComponent(unitId)}`, {
+          headers: { apikey: CFG.gatewayKey || '' }, signal: AbortSignal.timeout(15000)
+        });
+        const html = await r.text();
+        if (/Conectad/i.test(html)) {
+          const tel = (html.match(/Aparelho ativo:\s*<strong>([^<]+)</) || [])[1] || null;
+          return res.status(200).json({ ok: true, status: 'connected', phone: tel });
+        }
+        const m = html.match(/src="(data:image[^"]+)"/);
+        return res.status(200).json({ ok: true, status: m ? 'qr_ready' : 'preparando', qr: m ? m[1] : null });
+      } catch (e) {
+        return res.status(502).json({ erro: 'gateway_indisponivel', mensagem: e.message });
+      }
     }
 
     /* ───────── Unidades (master) ───────── */
