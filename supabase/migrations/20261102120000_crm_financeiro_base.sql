@@ -316,7 +316,7 @@ revoke execute on function public.proteger_unidade() from public, anon, authenti
 create trigger proteger_unidade before update on public.units for each row execute function public.proteger_unidade();
 
 -- Simulador: conversas de teste separadas das reais
-alter table public.conversas add column canal text not null default 'whatsapp' check (canal in ('whatsapp', 'simulador'));
+alter table public.conversas add column canal text not null default 'whatsapp' check (canal in ('whatsapp', 'simulador', 'teste'));
 alter table public.conversas drop constraint conversas_unit_id_telefone_key;
 alter table public.conversas add constraint conversas_unit_telefone_canal_key unique (unit_id, telefone, canal);
 alter table public.comprovantes add column simulacao boolean not null default false;

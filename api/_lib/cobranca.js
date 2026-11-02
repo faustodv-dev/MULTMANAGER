@@ -109,7 +109,7 @@ export async function prepararCobranca({ conversa, codAlu, vencimentoBr }) {
  * Passo 2 (cria a cobrança no Asaas e devolve o boleto). Recalcula o valor e confere
  * contra o que foi preparado/confirmado; recusa se mudou. Nunca duplica.
  */
-export async function emitirCobranca({ conversa, segredos }) {
+export async function emitirCobranca({ conversa, segredos, via = 'whatsapp' }) {
   const p = conversa.contexto?.cobranca_preparada;
   if (!p) return { erro: 'prepare_primeiro' };
   if (Date.now() - new Date(p.criado_em).getTime() > 15 * 60 * 1000) return { erro: 'prepare_primeiro', mensagem: 'A prévia expirou. Consulte de novo.' };
@@ -153,13 +153,14 @@ export async function emitirCobranca({ conversa, segredos }) {
     cpf_responsavel: p.cpf_responsavel, nome_responsavel: p.nome_responsavel,
     asaas_customer_id: customer, asaas_payment_id: pay.id, external_reference: externalReference,
     status: 'pendente', boleto_url: pay.invoiceUrl || pay.bankSlipUrl || null,
-    pix_copia_cola: det.pix_copia_cola, linha_digitavel: det.linha_digitavel, criado_por: 'ia'
+    pix_copia_cola: det.pix_copia_cola, linha_digitavel: det.linha_digitavel, criado_por: via === 'painel' ? 'master' : 'ia'
   }).select('*').single();
 
   // Registra a ocorrência no sistema escolar (boleto emitido)
+  const origemTxt = via === 'painel' ? 'PAINEL ADMIN (TESTE)' : 'WHATSAPP';
   await ponte(conversa.unit_id, 'registrar_ocorrencia', {
     cod_alu: p.cod_alu,
-    texto: `BOLETO ASAAS EMITIDO VIA WHATSAPP: ${reais(p.valor_centavos)}, venc. ${dataBr(p.due_date)}, parcela(s) ${p.cod_pars.join('/')}. Pagamento por boleto ou Pix.`,
+    texto: `BOLETO ASAAS EMITIDO VIA ${origemTxt}: ${reais(p.valor_centavos)}, venc. ${dataBr(p.due_date)}, parcela(s) ${p.cod_pars.join('/')}. Pagamento por boleto ou Pix.`,
     chave: `oco-boleto-${linha?.id || externalReference}`
   }, { conversaId: conversa.id }).catch(() => null);
 
