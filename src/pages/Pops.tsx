@@ -110,7 +110,7 @@ export default function Pops() {
 
 function EditPop({ pop, unidade, dep, aoFechar, aoSalvar }: any) {
   const [f, setF] = useState<any>({
-    id: pop.id, titulo: pop.titulo || "", procedimento: pop.procedimento || "",
+    id: pop.id, departamento: pop.departamento || dep, titulo: pop.titulo || "", procedimento: pop.procedimento || "",
     frequencia: pop.frequencia || "mensal", dia_do_mes: pop.dia_do_mes || "",
     responsavel_sugerido: pop.responsavel_sugerido || "", ordem: pop.ordem || 0, ativo: pop.ativo !== false,
   });
@@ -121,7 +121,7 @@ function EditPop({ pop, unidade, dep, aoFechar, aoSalvar }: any) {
     setBusy(true);
     try {
       await api("crm", {
-        acao: "pop_salvar", departamento: dep, unidade,
+        acao: "pop_salvar", departamento: f.departamento, unidade,
         id: f.id || undefined, titulo: f.titulo, procedimento: f.procedimento, frequencia: f.frequencia,
         dia_do_mes: f.frequencia === "dia_fixo" ? Number(f.dia_do_mes) || 1 : null,
         responsavel_sugerido: f.responsavel_sugerido, ordem: Number(f.ordem) || 0, ativo: f.ativo,
@@ -135,6 +135,10 @@ function EditPop({ pop, unidade, dep, aoFechar, aoSalvar }: any) {
     <Dialog open onOpenChange={aoFechar}>
       <DialogContent className="max-h-[90vh] overflow-y-auto">
         <DialogHeader><DialogTitle>{f.id ? "Editar POP" : "Novo POP"}</DialogTitle></DialogHeader>
+        <div><Label className="text-xs">Departamento</Label>
+          <select className="h-10 w-full rounded-md border bg-background px-2 text-sm" value={f.departamento} onChange={(e) => setF({ ...f, departamento: e.target.value })}>
+            <option value="financeiro">Financeiro</option><option value="pedagogico">Pedagógico</option><option value="encaminhamento">Encaminhamento</option>
+          </select></div>
         <div><Label className="text-xs">Título da atividade</Label><Input value={f.titulo} onChange={(e) => setF({ ...f, titulo: e.target.value })} /></div>
         <div><Label className="text-xs">Procedimento (passo a passo)</Label><Textarea rows={3} value={f.procedimento} onChange={(e) => setF({ ...f, procedimento: e.target.value })} /></div>
         <div className="grid grid-cols-2 gap-2">

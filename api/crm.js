@@ -184,7 +184,13 @@ export default async function handler(req, res) {
           .eq('unit_id', unitId).eq('cod_alu', card.cod_alu).neq('id', card.id).order('created_at', { ascending: false }).limit(50);
         historico = hist || [];
       }
-      return res.status(200).json({ ok: true, card, eventos: eventos || [], boletos: boletos || [], historico });
+      let mensagens = [];
+      if (card.conversa_id) {
+        const { data: msgs } = await supabase.from('mensagens').select('id, direcao, autor, texto, midia_nome, criado_em')
+          .eq('conversa_id', card.conversa_id).order('criado_em', { ascending: true }).limit(100);
+        mensagens = msgs || [];
+      }
+      return res.status(200).json({ ok: true, card, eventos: eventos || [], boletos: boletos || [], historico, mensagens });
     }
 
     /* ───────── Situação no sistema escolar (sob demanda — botão) ───────── */
@@ -243,6 +249,7 @@ export default async function handler(req, res) {
     if (acao === 'pop_salvar') {
       if (!adminPop) return res.status(403).json({ erro: 'sem_permissao' });
       const campos = {
+        departamento: dep,
         titulo: String(b.titulo || '').slice(0, 200), procedimento: b.procedimento || null,
         frequencia: b.frequencia || 'mensal', dia_do_mes: b.dia_do_mes || null,
         responsavel_sugerido: b.responsavel_sugerido || null, ordem: Number(b.ordem) || 0,
@@ -264,6 +271,36 @@ export default async function handler(req, res) {
 
     if (acao === 'colaboradores') {
       return res.status(200).json({ ok: true, colaboradores: await listarColaboradores(unitId) });
+    }
+
+    /* ───────── Unidades (master) ───────── */
+    if (acao === 'unidades_comercial') {
+      if (eu.papel !== 'master') return res.status(403).json({ erro: 'sem_permissao' });
+      return res.status(200).json({ ok: true, unidades: [
+        { name: 'Água Boa', slug: 'agua_boa' },
+        { name: 'Anápolis', slug: 'anapolis' },
+        { name: 'Aparecida de Goiânia', slug: 'aparecida' },
+        { name: 'Bom Jesus', slug: 'bom_jesus' },
+        { name: 'Rio Verde', slug: 'rio_verde' }
+      ] });
+    }
+    if (acao === 'unidade_criar') {
+      if (eu.papel !== 'master') return res.status(403).json({ erro: 'sem_permissao' });
+      const novoId = String(b.id || '').trim().toLowerCase().replace(/[^a-z0-9_]/g, '_');
+      const nome = String(b.name || '').trim();
+      if (!novoId || !nome) return res.status(400).json({ erro: 'parametros', mensagem: 'Informe código e nome.' });
+      const { data: existe } = await supabase.from('units').select('id').eq('id', novoId).maybeSingle();
+      if (existe) return res.status(200).json({ ok: false, erro: 'ja_existe', mensagem: 'Já existe uma unidade com esse código.' });
+      const { error } = await supabase.from('units').insert({ id: novoId, name: nome });
+      if (error) return res.status(400).json({ erro: 'falha_criar', mensagem: error.message });
+      await supabase.from('unit_secrets').insert({ unit_id: novoId }).then(() => {}, () => {});
+      // Clona o catálogo de POPs de uma unidade modelo (padrão: rio_verde) → "um novo CRM igual".
+      const tpl = String(b.template || 'rio_verde');
+      const { data: pops } = await supabase.from('pops')
+        .select('departamento, titulo, procedimento, frequencia, dia_do_mes, responsavel_sugerido, ordem')
+        .eq('unit_id', tpl).eq('ativo', true);
+      if (pops?.length) await supabase.from('pops').insert(pops.map((p) => ({ ...p, unit_id: novoId })));
+      return res.status(200).json({ ok: true, id: novoId, pops_clonados: pops?.length || 0 });
     }
 
     if (acao === 'produtividade') {

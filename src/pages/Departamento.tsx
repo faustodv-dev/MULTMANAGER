@@ -101,12 +101,12 @@ export default function Departamento({ departamento, titulo, Icone }: { departam
         <div className="flex-1 space-y-6 overflow-y-auto p-5">
           {resumo && (
             <section className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-              <Kpi icone={<FileText className="h-4 w-4" />} valor={resumo.atendimentos_abertos} rotulo="Atendimentos abertos" cor="text-blue-600" />
-              <Kpi icone={<Flame className="h-4 w-4" />} valor={resumo.atendimentos_alta} rotulo="Prioridade alta" cor="text-red-600" alerta={resumo.atendimentos_alta > 0} />
-              <Kpi icone={<CheckCheck className="h-4 w-4" />} valor={resumo.atendimentos_resolvidos_mes} rotulo="Resolvidos no mês" cor="text-emerald-600" />
-              <Kpi icone={<TrendingUp className="h-4 w-4" />} valor={`${resumo.pops_pct}%`} rotulo="Rotina do mês" sub={`${resumo.pops_feitos}/${resumo.pops_total}`} cor="text-violet-600" />
-              <Kpi icone={<AlertTriangle className="h-4 w-4" />} valor={resumo.pops_atrasados} rotulo="POPs atrasados" cor="text-amber-600" alerta={resumo.pops_atrasados > 0} />
-              <Kpi icone={<CalendarDays className="h-4 w-4" />} valor={`${resumo.pops_hoje_feitos}/${resumo.pops_hoje_total}`} rotulo="Rotina de hoje" cor="text-sky-600" />
+              <Kpi icone={<FileText className="h-4 w-4" />} valor={resumo.atendimentos_abertos} rotulo="Atendimentos abertos" cor="text-orange-600" chip="bg-orange-500/10" barra="bg-orange-500" />
+              <Kpi icone={<Flame className="h-4 w-4" />} valor={resumo.atendimentos_alta} rotulo="Prioridade alta" cor="text-red-600" chip="bg-red-500/10" barra="bg-red-500" alerta={resumo.atendimentos_alta > 0} />
+              <Kpi icone={<CheckCheck className="h-4 w-4" />} valor={resumo.atendimentos_resolvidos_mes} rotulo="Resolvidos no mês" cor="text-green-600" chip="bg-green-500/10" barra="bg-green-500" />
+              <Kpi icone={<TrendingUp className="h-4 w-4" />} valor={`${resumo.pops_pct}%`} rotulo="Rotina do mês" sub={`${resumo.pops_feitos}/${resumo.pops_total}`} cor="text-green-700" chip="bg-green-600/10" barra="bg-green-600" />
+              <Kpi icone={<AlertTriangle className="h-4 w-4" />} valor={resumo.pops_atrasados} rotulo="POPs atrasados" cor="text-amber-600" chip="bg-amber-500/10" barra="bg-amber-500" alerta={resumo.pops_atrasados > 0} />
+              <Kpi icone={<CalendarDays className="h-4 w-4" />} valor={`${resumo.pops_hoje_feitos}/${resumo.pops_hoje_total}`} rotulo="Rotina de hoje" cor="text-orange-600" chip="bg-orange-500/10" barra="bg-orange-400" />
             </section>
           )}
 
@@ -204,10 +204,11 @@ export default function Departamento({ departamento, titulo, Icone }: { departam
   );
 }
 
-function Kpi({ icone, valor, rotulo, sub, cor, alerta }: any) {
+function Kpi({ icone, valor, rotulo, sub, cor, chip, barra, alerta }: any) {
   return (
-    <div className={cn("rounded-xl border bg-background p-3", alerta && "border-current/30")}>
-      <div className={cn("mb-1.5 flex h-7 w-7 items-center justify-center rounded-lg bg-muted", cor)}>{icone}</div>
+    <div className={cn("overflow-hidden rounded-xl border bg-background p-3 pt-0", alerta && "ring-1 ring-current/20")}>
+      <div className={cn("-mx-3 mb-2.5 h-1", barra)} />
+      <div className={cn("mb-1.5 flex h-7 w-7 items-center justify-center rounded-lg", chip, cor)}>{icone}</div>
       <div className="flex items-baseline gap-1.5">
         <span className="text-2xl font-bold tracking-tight">{valor}</span>
         {sub && <span className="text-xs text-muted-foreground">{sub}</span>}
@@ -219,7 +220,8 @@ function Kpi({ icone, valor, rotulo, sub, cor, alerta }: any) {
 function SecHeader({ icone, titulo, sub }: any) {
   return (
     <div className="mb-2.5 flex items-center gap-2">
-      <span className="text-muted-foreground">{icone}</span>
+      <span className="h-4 w-1 rounded-full bg-primary" />
+      <span className="text-primary">{icone}</span>
       <h2 className="text-sm font-semibold">{titulo}</h2>
       <span className="text-xs text-muted-foreground">· {sub}</span>
     </div>
@@ -416,6 +418,22 @@ function DossieDialog({ dep, card, unidade, colabs, aoFechar, aoMudar, mover, ab
                 <Badge variant={h.status === "resolvido" ? "secondary" : "default"} className="ml-2 shrink-0 text-[10px]">{h.status === "resolvido" ? "finalizado" : "aberto"}</Badge>
               </button>
             ))}
+          </Bloco>
+        )}
+
+        {dados?.mensagens?.length > 0 && (
+          <Bloco titulo="Conversa no WhatsApp">
+            <ul className="max-h-56 space-y-1 overflow-y-auto">
+              {dados.mensagens.map((m: any) => (
+                <li key={m.id} className={cn("flex", m.direcao === "in" ? "justify-start" : "justify-end")}>
+                  <span className={cn("max-w-[85%] whitespace-pre-wrap rounded-lg px-2.5 py-1.5 text-xs", m.direcao === "in" ? "bg-muted" : "bg-green-100 dark:bg-green-950")}>
+                    {m.midia_nome && <span className="mb-0.5 block font-medium">{m.midia_nome}</span>}
+                    {m.texto}
+                    <span className="mt-0.5 block text-right text-[9px] text-muted-foreground">{m.direcao === "in" ? "Aluno" : m.autor === "humano" ? "Secretaria" : "IA"} · {dataHora(m.criado_em)}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
           </Bloco>
         )}
 
