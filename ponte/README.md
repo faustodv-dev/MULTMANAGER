@@ -3,7 +3,8 @@
 Arquivos PHP que ficam no servidor cPanel, ao lado dos bancos `neto_*`. O CRM (Vercel)
 chama a ponte por HTTPS; a ponte é a única peça que toca o banco do sistema escolar.
 
-- PHP 8.1+ com PDO MySQL (o sistema antigo continua no 5.4; a ponte roda em pasta própria).
+- PHP 8.0+ com PDO MySQL. O servidor usa PHP-FPM, então a versão vale por domínio/subdomínio, não por pasta:
+  instale numa pasta de um subdomínio que já rode PHP 8.0+ (ex.: `cobranca.multprofissoes.com.br/ponte`).
 - Um único código para todas as unidades: cada unidade é uma entrada em `config.php`.
 - Só faz o que as telas fazem, com os mesmos campos e formatos.
 
@@ -45,7 +46,7 @@ chama a ponte por HTTPS; a ponte é a única peça que toca o banco do sistema e
    (ex.: login `AGENTE IA`, status Inativo para não logar no sistema). Anote o `ID`.
 2. **Pasta**: crie um subdomínio, por exemplo `ponte.multprofissoes.com.br`, apontando
    para uma pasta fora do sistema antigo (ex.: `/home/neto/ponte`).
-3. **PHP**: em *Gerenciador de MultiPHP*, defina PHP 8.1 para esse subdomínio.
+3. **PHP**: o subdomínio precisa estar em PHP 8.0 ou mais novo (Gerenciador de MultiPHP).
 4. **Código**: em *Git Version Control*, clone `https://github.com/faustodv-dev/multmanager`
    e copie o conteúdo da pasta `ponte/` para a pasta do subdomínio (ou use SSH:
    `cp -r ~/repositories/multmanager/ponte/* ~/ponte/`).
