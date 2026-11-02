@@ -8,7 +8,7 @@ export const supabase = createClient(URL, KEY, {
   auth: { persistSession: true, autoRefreshToken: true },
 });
 
-export type Papel = "master" | "admin" | "colaborador";
+export type Papel = "master" | "admin" | "coordenador" | "colaborador";
 export type Modulo = "atendimento" | "comprovantes" | "financeiro" | "pedagogico" | "encaminhamento" | "configuracoes";
 
 export interface Perfil {
