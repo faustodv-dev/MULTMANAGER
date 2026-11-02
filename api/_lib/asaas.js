@@ -3,7 +3,8 @@ import { CFG, registrar } from './base.js';
 const base = () => (CFG.asaasSandbox ? 'https://api-sandbox.asaas.com/v3' : 'https://api.asaas.com/v3');
 
 function headers(chave) {
-  return { access_token: chave, 'Content-Type': 'application/json', 'User-Agent': 'mult-crm-financeiro' };
+  // Remove espaços/quebras que podem vir coladas na chave (senão o fetch recusa o header).
+  return { access_token: String(chave || '').replace(/\s+/g, ''), 'Content-Type': 'application/json', 'User-Agent': 'mult-crm-financeiro' };
 }
 
 async function get(chave, caminho, params, unitId) {
