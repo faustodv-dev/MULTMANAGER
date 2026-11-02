@@ -36,6 +36,7 @@ export async function ponte(unidade, acao, params = {}, { conversaId = null, tim
   const inicio = Date.now();
   let resp;
   let json = null;
+  let texto = '';
   try {
     resp = await fetch(CFG.ponteUrl, {
       method: 'POST',
@@ -43,7 +44,8 @@ export async function ponte(unidade, acao, params = {}, { conversaId = null, tim
       body: corpo,
       signal: AbortSignal.timeout(timeoutMs)
     });
-    json = await resp.json().catch(() => null);
+    texto = await resp.text();
+    json = parseJsonTolerante(texto); // extrai o JSON mesmo se o PHP imprimir um warning antes
   } catch (e) {
     await registrar('ponte', acao, false, { unitId: unidade, conversaId, duracaoMs: Date.now() - inicio, detalhe: { erro: e.message } });
     throw new ErroPonte('ponte_indisponivel', 'Não foi possível falar com o sistema escolar.');
@@ -53,7 +55,18 @@ export async function ponte(unidade, acao, params = {}, { conversaId = null, tim
   const resumo = ok && acao === 'carne' ? { arquivo: json.dados?.arquivo } : ok ? undefined : json;
   await registrar('ponte', acao, ok, { unitId: unidade, conversaId, duracaoMs: Date.now() - inicio, detalhe: resumo ? { resposta: resumo, http: resp.status } : { http: resp.status } });
   if (!ok) {
-    throw new ErroPonte(json?.erro || `http_${resp.status}`, json?.mensagem || 'Erro na ponte', json?.detalhes || {}, resp.status);
+    const det = json?.detalhes || (!json && texto ? { resposta_bruta: texto.slice(0, 400) } : {});
+    throw new ErroPonte(json?.erro || `http_${resp.status}`, json?.mensagem || 'Erro na ponte', det, resp.status);
   }
   return json.dados;
+}
+
+/** Converte a resposta em JSON mesmo que o PHP tenha impresso algo (warning) antes/depois. */
+function parseJsonTolerante(texto) {
+  if (!texto) return null;
+  try { return JSON.parse(texto); } catch {}
+  const i = texto.indexOf('{');
+  const j = texto.lastIndexOf('}');
+  if (i >= 0 && j > i) { try { return JSON.parse(texto.slice(i, j + 1)); } catch {} }
+  return null;
 }
