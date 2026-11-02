@@ -17,11 +17,13 @@ const STATUS: Record<Conversa["status"], { rotulo: string; cor: string }> = {
 };
 
 type Filtro = "todas" | "aguardando_humano" | "humano" | "ia";
+const ehGrupo = (c: any) => String(c?.remote_jid || "").includes("@g.us");
 
 export default function Atendimento() {
   const { perfil } = useAuth();
   const [conversas, setConversas] = useState<Conversa[]>([]);
   const [filtro, setFiltro] = useState<Filtro>("todas");
+  const [tipo, setTipo] = useState<"avulsas" | "grupos">("avulsas");
   const [busca, setBusca] = useState("");
   const [atual, setAtual] = useState<string | null>(null);
 
@@ -43,10 +45,12 @@ export default function Atendimento() {
     const t = busca.trim().toLowerCase();
     return conversas.filter(
       (c) =>
+        (tipo === "grupos" ? ehGrupo(c) : !ehGrupo(c)) &&
         (filtro === "todas" || c.status === filtro) &&
         (!t || [c.nome_contato, c.nome_responsavel, c.telefone].some((v) => String(v || "").toLowerCase().includes(t)))
     );
-  }, [conversas, filtro, busca]);
+  }, [conversas, filtro, tipo, busca]);
+  const totalGrupos = conversas.filter(ehGrupo).length;
 
   const conversa = conversas.find((c) => c.id === atual) ?? null;
   const aguardando = conversas.filter((c) => c.status === "aguardando_humano").length;
@@ -55,6 +59,10 @@ export default function Atendimento() {
     <div className="flex h-full">
       <section className={cn("flex w-full flex-col border-r md:w-96", atual && "hidden md:flex")}>
         <div className="space-y-2 border-b p-3">
+          <div className="flex gap-1 rounded-lg border bg-muted/40 p-1">
+            <button onClick={() => setTipo("avulsas")} className={cn("flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors", tipo === "avulsas" ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground")}>Conversas</button>
+            <button onClick={() => setTipo("grupos")} className={cn("flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors", tipo === "grupos" ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground")}>Grupos{totalGrupos ? ` (${totalGrupos})` : ""}</button>
+          </div>
           <Input placeholder="Buscar nome ou telefone" value={busca} onChange={(e) => setBusca(e.target.value)} />
           <div className="flex flex-wrap gap-1">
             {([
