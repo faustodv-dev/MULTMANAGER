@@ -123,6 +123,13 @@ const { execSync } = await import('child_process');
 const q = (sql) => execSync(`php -r '$p=new PDO("sqlite:${S}/rv.db"); foreach($p->query("${sql}") as $r) echo json_encode($r),"\\n";'`).toString();
 ok('parcela baixada no sistema', /"VLR_COB":"90,00"/.test(q('SELECT VLR_COB FROM s_cad_parcela WHERE COD_PAR=326669')), q('SELECT * FROM s_cad_parcela WHERE COD_PAR=326669'));
 
+console.log('== Cenário B2b: Pix no extrato, mas comprovante sem código E2E');
+visao = { ...visao, end_to_end_id: null, valor: 180 };
+asaasPix.push({ id: 'pix_3', value: 180, endToEndIdentifier: 'E5555555555555555555555555555555', effectiveDate: '2026-11-02 12:00:00' });
+await arq(ED, 'print_sem_e2e.jpg', 'arquivo-5');
+let c5 = DB.comprovantes.at(-1);
+ok('sem E2E não baixa sozinho (fica para a secretaria)', c5.status === 'sombra_ok' && c5.extrato_conferido === true, c5.status + ' ' + c5.observacao);
+
 console.log('== Cenário B3: Pix que não está no extrato');
 visao = { ...visao, valor: 180, end_to_end_id: 'E0000000000000000000000000000000' };
 await arq(ED, 'pix_falso.jpg', 'arquivo-3');

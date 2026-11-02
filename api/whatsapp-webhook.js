@@ -82,19 +82,21 @@ export default async function handler(req, res) {
       conversa = await atualizarConversa(conversa.id, { status: 'ia' });
     }
 
-    // Uma execução por conversa; mensagens seguidas são lidas juntas
+    // Arquivos (comprovantes) são processados sempre, mesmo com o agente ocupado na conversa
+    if (p.mediaKind && (p.mediaPath || p.mediaTooLarge || p.mediaError)) {
+      await receberArquivo({ conversa, unidade, segredos, payload: p, mensagem });
+      // Se veio legenda junto, o agente também responde a ela
+      if (!texto) return res.status(200).json({ status: 'arquivo_processado' });
+      conversa = (await supabase.from('conversas').select('*').eq('id', conversa.id).single()).data;
+      if (conversa.status !== 'ia') return res.status(200).json({ status: 'arquivo_processado' });
+    }
+
+    // Uma execução do agente por conversa; mensagens seguidas são lidas juntas
     const { data: travou } = await supabase.rpc('travar_conversa', { p_id: conversa.id, p_segundos: 55 });
     if (!travou) return res.status(200).json({ status: 'em_andamento' });
 
     const inicio = new Date().toISOString();
     try {
-      if (p.mediaKind && (p.mediaPath || p.mediaTooLarge || p.mediaError)) {
-        await receberArquivo({ conversa, unidade, segredos, payload: p, mensagem });
-        // Se veio legenda junto, o agente também responde a ela
-        if (!texto) return res.status(200).json({ status: 'arquivo_processado' });
-        conversa = (await supabase.from('conversas').select('*').eq('id', conversa.id).single()).data;
-        if (conversa.status !== 'ia') return res.status(200).json({ status: 'arquivo_processado' });
-      }
 
       // Espera curta para juntar mensagens enviadas em sequência
       await new Promise((r) => setTimeout(r, 2500));

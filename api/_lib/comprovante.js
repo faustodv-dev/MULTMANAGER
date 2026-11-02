@@ -221,8 +221,10 @@ export async function processarComprovante(comprovanteId, { unidade, segredos, c
 
   const detalhe = `Comprovante WhatsApp ${comp.arquivo_nome || ''}${comp.end_to_end_id ? ' E2E ' + comp.end_to_end_id : ''}${conferido ? ' - Pix conferido no extrato Asaas' : ''}.`;
 
-  // Baixa automática: só com Pix confirmado no extrato e unidade liberada
-  if (conferido && unidade.baixa_automatica) {
+  // Baixa automática: só com o Pix localizado pelo código E2E (valor e data podem coincidir
+  // com o Pix de outra pessoa) e unidade liberada
+  const conferidoPorE2e = conferido && !!comp.end_to_end_id && extrato.transacao?.e2e === comp.end_to_end_id;
+  if (conferidoPorE2e && unidade.baixa_automatica) {
     try {
       const r = await ponte(conversa.unit_id, 'baixar', {
         cod_pars: codPars, valor_pago: valor, data_pagamento: dataPag, chave: `comp-${comp.id}`, origem: 'whatsapp', detalhe
@@ -256,7 +258,7 @@ export async function processarComprovante(comprovanteId, { unidade, segredos, c
   }
   const statusFinal = conferido ? 'sombra_ok' : 'aguardando_humano';
   const motivo = conferido
-    ? `Pronto para baixa: ${descricao}, ${reais(valor)} em ${dataBr(dataPag)} (Pix conferido no Asaas). Modo sombra: baixe no sistema.`
+    ? `Pronto para baixa: ${descricao}, ${reais(valor)} em ${dataBr(dataPag)} (Pix conferido no Asaas${conferidoPorE2e ? ' pelo código E2E' : ' por valor e data — confira o pagador'}).${unidade.baixa_automatica && !conferidoPorE2e ? ' Sem E2E: baixa automática não feita.' : ' Modo sombra: baixe no sistema.'}`
     : `${descricao}, ${reais(valor)} em ${dataBr(dataPag)}. ${extrato.status === 'sem_asaas' ? 'Sem Asaas configurado' : extrato.status === 'ambiguo' ? 'Mais de um Pix com esse valor no extrato' : extrato.status === 'erro' ? 'Erro ao consultar o Asaas' : 'Pix não encontrado no extrato'}: conferir antes de baixar.`;
   await supabase.from('comprovantes').update({ status: statusFinal, ponte_resultado: sim, observacao: motivo }).eq('id', comp.id);
   await supabase.from('pendencias').insert({ unit_id: conversa.unit_id, conversa_id: conversa.id, comprovante_id: comp.id, tipo: 'comprovante', motivo });
