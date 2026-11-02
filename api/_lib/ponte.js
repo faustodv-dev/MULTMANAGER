@@ -1,5 +1,9 @@
 import crypto from 'crypto';
 import { CFG, registrar } from './base.js';
+import { simulando } from './contexto.js';
+
+// No simulador, estas ações não gravam nada no sistema escolar
+const ESCRITAS = ['baixar', 'registrar_ocorrencia', 'agendar_pagamento', 'registrar_carta'];
 
 export class ErroPonte extends Error {
   constructor(codigo, mensagem, detalhes = {}, http = 0) {
@@ -16,6 +20,16 @@ export class ErroPonte extends Error {
  */
 export async function ponte(unidade, acao, params = {}, { conversaId = null, timeoutMs = 20000 } = {}) {
   if (!CFG.ponteUrl || !CFG.ponteSegredo) throw new ErroPonte('ponte_nao_configurada', 'PONTE_URL/PONTE_SEGREDO ausentes');
+  if (simulando() && ESCRITAS.includes(acao)) {
+    await registrar('ponte', `${acao} (simulado)`, true, { unitId: unidade, conversaId, detalhe: { params } });
+    if (acao === 'baixar') {
+      const sim = await ponte(unidade, 'simular_baixa', params, { conversaId, timeoutMs });
+      return { ...sim, baixado: true, simulado: true };
+    }
+    if (acao === 'agendar_pagamento') return { agendamento_id: 0, simulado: true };
+    if (acao === 'registrar_carta') return { cod_hist: 0, simulado: true };
+    return { cod_oco: 0, simulado: true };
+  }
   const corpo = JSON.stringify({ ...params, acao, unidade });
   const ts = String(Math.floor(Date.now() / 1000));
   const assinatura = crypto.createHmac('sha256', CFG.ponteSegredo).update(`${ts}.${corpo}`).digest('hex');

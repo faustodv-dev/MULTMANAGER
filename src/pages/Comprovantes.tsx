@@ -38,6 +38,7 @@ export default function Comprovantes() {
     const { data, error } = await supabase
       .from("comprovantes")
       .select("*")
+      .eq("simulacao", false)
       .gte("recebido_em", `${de}T00:00:00-03:00`)
       .lte("recebido_em", `${ate}T23:59:59-03:00`)
       .order("recebido_em", { ascending: false })

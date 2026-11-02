@@ -26,7 +26,7 @@ export default function Atendimento() {
   const [atual, setAtual] = useState<string | null>(null);
 
   const carregar = async () => {
-    const { data } = await supabase.from("conversas").select("*").order("ultimo_contato", { ascending: false }).limit(300);
+    const { data } = await supabase.from("conversas").select("*").eq("canal", "whatsapp").order("ultimo_contato", { ascending: false }).limit(300);
     setConversas((data as Conversa[]) ?? []);
   };
 

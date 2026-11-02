@@ -8,6 +8,7 @@ import Atendimento from "@/pages/Atendimento";
 import Comprovantes from "@/pages/Comprovantes";
 import Usuarios from "@/pages/Usuarios";
 import Unidades from "@/pages/Unidades";
+import Simulador from "@/pages/Simulador";
 import type { Modulo } from "@/lib/supabase";
 
 function Protegida({ modulo, children }: { modulo?: Modulo; children: JSX.Element }) {
@@ -45,6 +46,7 @@ export default function App() {
             <Route path="/atendimento" element={<Protegida modulo="atendimento"><Atendimento /></Protegida>} />
             <Route path="/comprovantes" element={<Protegida modulo="comprovantes"><Comprovantes /></Protegida>} />
             <Route path="/usuarios" element={<Protegida modulo="configuracoes"><Usuarios /></Protegida>} />
+            <Route path="/simulador" element={<Protegida modulo="configuracoes"><Simulador /></Protegida>} />
             <Route path="/unidades" element={<Protegida modulo="configuracoes"><Unidades /></Protegida>} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

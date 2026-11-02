@@ -146,6 +146,24 @@ await msg(NOVO, 'meu cpf é 111.222.333-44');
 c4 = DB.comprovantes.find((c) => c.id === c4.id);
 ok('após CPF, comprovante reprocessado', c4.status !== 'aguardando_aluno', c4.status + ' ' + c4.observacao);
 console.log('   ->', c4.status, '|', c4.observacao);
+console.log('== Simulador: mesmo fluxo, sem WhatsApp e sem gravar no sistema');
+{
+  const { processarEntrada } = await import('./api/_lib/entrada.js');
+  const { contexto } = await import('./api/_lib/contexto.js');
+  const enviadosAntes = enviados.length;
+  const ocoAntes = q('SELECT COUNT(*) AS n FROM s_cad_agend_pag');
+  const sim = (message) => contexto.run({ simulacao: true }, () => processarEntrada({ unitId: 'rio_verde', phone: PAI, message, messageId: 'sim' + ++id }, { canal: 'simulador' }));
+  await sim('oi, quanto devo?');
+  await sim('sim sou eu');
+  await sim('vou pagar dia 10');
+  const cs = DB.conversas.find((c) => c.telefone === PAI && c.canal === 'simulador');
+  ok('conversa do simulador separada da real', !!cs && cs.id !== DB.conversas.find((c) => c.telefone === PAI && c.canal === 'whatsapp').id);
+  ok('respostas gravadas na conversa simulada', DB.mensagens.filter((m) => m.conversa_id === cs.id && m.autor === 'ia').length >= 3);
+  ok('nenhuma mensagem saiu pelo WhatsApp', enviados.length === enviadosAntes);
+  ok('agendamento não gravado no sistema escolar', q('SELECT COUNT(*) AS n FROM s_cad_agend_pag') === ocoAntes);
+  ok('ação registrada como simulada', DB.registro_acoes.some((r) => r.acao === 'agendar_pagamento (simulado)'));
+}
+
 console.log('\nMensagens enviadas:', enviados.length, '| registro de erros:', DB.registro_acoes.filter((x) => !x.ok && x.tipo !== 'ia').map((x) => x.acao + ':' + JSON.stringify(x.detalhe)).slice(0, 5));
 console.log(falhas ? `${falhas} FALHA(S)` : 'Tudo certo.');
 process.exit(falhas ? 1 : 0);

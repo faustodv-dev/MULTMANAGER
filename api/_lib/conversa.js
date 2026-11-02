@@ -1,5 +1,6 @@
 import { supabase, CFG } from './base.js';
 import { enviarWhatsapp } from './gateway.js';
+import { simulando } from './contexto.js';
 
 export async function obterUnidade(unitId) {
   const { data } = await supabase.from('units').select('*').eq('id', unitId).maybeSingle();
@@ -15,8 +16,8 @@ export async function segredosUnidade(unitId) {
   };
 }
 
-export async function obterOuCriarConversa(unitId, telefone, { remoteJid, nome }) {
-  const { data: existente } = await supabase.from('conversas').select('*').eq('unit_id', unitId).eq('telefone', telefone).maybeSingle();
+export async function obterOuCriarConversa(unitId, telefone, { remoteJid, nome, canal = 'whatsapp' }) {
+  const { data: existente } = await supabase.from('conversas').select('*').eq('unit_id', unitId).eq('telefone', telefone).eq('canal', canal).maybeSingle();
   if (existente) {
     const patch = {};
     if (remoteJid && remoteJid !== existente.remote_jid) patch.remote_jid = remoteJid;
@@ -26,7 +27,7 @@ export async function obterOuCriarConversa(unitId, telefone, { remoteJid, nome }
   }
   const { data, error } = await supabase
     .from('conversas')
-    .upsert({ unit_id: unitId, telefone, remote_jid: remoteJid || null, nome_contato: nome || null }, { onConflict: 'unit_id,telefone' })
+    .upsert({ unit_id: unitId, telefone, canal, remote_jid: remoteJid || null, nome_contato: nome || null }, { onConflict: 'unit_id,telefone,canal' })
     .select('*')
     .single();
   if (error) throw error;
@@ -73,7 +74,8 @@ export async function responder(conversa, texto, { documento = null, midia = nul
 export async function chamarHumano(conversa, motivo, { comprovanteId = null, tipo = 'atendimento' } = {}) {
   await supabase.from('conversas').update({ status: 'aguardando_humano', motivo_humano: motivo.slice(0, 300) }).eq('id', conversa.id);
   await supabase.from('pendencias').insert({
-    unit_id: conversa.unit_id, conversa_id: conversa.id, comprovante_id: comprovanteId, tipo, motivo: motivo.slice(0, 500)
+    unit_id: conversa.unit_id, conversa_id: conversa.id, comprovante_id: comprovanteId, tipo, motivo: motivo.slice(0, 500),
+    simulacao: simulando()
   });
 }
 

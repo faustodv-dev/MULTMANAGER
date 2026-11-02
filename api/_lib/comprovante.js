@@ -4,6 +4,7 @@ import { ponte, ErroPonte } from './ponte.js';
 import { lerArquivoJson } from './ia.js';
 import { procurarPixRecebido } from './asaas.js';
 import { responder, chamarHumano, atualizarConversa } from './conversa.js';
+import { simulando } from './contexto.js';
 
 const INSTRUCAO = `Você recebe um arquivo enviado por WhatsApp a uma escola. Diga se é um COMPROVANTE DE PAGAMENTO
 (Pix, transferência, boleto pago, recibo bancário) e extraia os dados. Responda APENAS com JSON:
@@ -67,7 +68,7 @@ export async function receberArquivo({ conversa, unidade, segredos, payload, men
 
   const { data: repetido } = await supabase
     .from('comprovantes').select('id, recebido_em, status')
-    .eq('unit_id', conversa.unit_id).eq('hash_arquivo', hash)
+    .eq('unit_id', conversa.unit_id).eq('hash_arquivo', hash).eq('simulacao', simulando())
     .not('status', 'in', '(rejeitado,nao_e_comprovante)')
     .limit(1).maybeSingle();
 
@@ -82,6 +83,7 @@ export async function receberArquivo({ conversa, unidade, segredos, payload, men
     mime,
     hash_arquivo: hash,
     status: repetido ? 'duplicado' : 'analisando',
+    simulacao: simulando(),
     observacao: repetido ? `Mesmo arquivo já recebido em ${new Date(repetido.recebido_em).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })}` : null
   }).select('*').single();
 
@@ -115,7 +117,7 @@ export async function receberArquivo({ conversa, unidade, segredos, payload, men
 
   if (e2e) {
     const { data: mesmoE2e } = await supabase.from('comprovantes').select('id, recebido_em')
-      .eq('unit_id', conversa.unit_id).eq('end_to_end_id', e2e).neq('id', comp.id)
+      .eq('unit_id', conversa.unit_id).eq('end_to_end_id', e2e).eq('simulacao', simulando()).neq('id', comp.id)
       .not('status', 'in', '(rejeitado,nao_e_comprovante,duplicado)').limit(1).maybeSingle();
     if (mesmoE2e) {
       await supabase.from('comprovantes').update({ status: 'duplicado', end_to_end_id: null, observacao: `Mesmo Pix (E2E ${e2e}) já recebido.` }).eq('id', comp.id);
@@ -205,7 +207,7 @@ export async function processarComprovante(comprovanteId, { unidade, segredos, c
   if (segredos.asaas) {
     try {
       const { data: usados } = await supabase.from('comprovantes').select('extrato_ref')
-        .eq('unit_id', conversa.unit_id).not('extrato_ref', 'is', null);
+        .eq('unit_id', conversa.unit_id).eq('simulacao', false).not('extrato_ref', 'is', null);
       extrato = await procurarPixRecebido(segredos.asaas, {
         valorCentavos: valor, data: dataPag, endToEndId: comp.end_to_end_id,
         ignorarIds: (usados || []).map((u) => u.extrato_ref), unitId: conversa.unit_id
@@ -261,7 +263,7 @@ export async function processarComprovante(comprovanteId, { unidade, segredos, c
     ? `Pronto para baixa: ${descricao}, ${reais(valor)} em ${dataBr(dataPag)} (Pix conferido no Asaas${conferidoPorE2e ? ' pelo código E2E' : ' por valor e data — confira o pagador'}).${unidade.baixa_automatica && !conferidoPorE2e ? ' Sem E2E: baixa automática não feita.' : ' Modo sombra: baixe no sistema.'}`
     : `${descricao}, ${reais(valor)} em ${dataBr(dataPag)}. ${extrato.status === 'sem_asaas' ? 'Sem Asaas configurado' : extrato.status === 'ambiguo' ? 'Mais de um Pix com esse valor no extrato' : extrato.status === 'erro' ? 'Erro ao consultar o Asaas' : 'Pix não encontrado no extrato'}: conferir antes de baixar.`;
   await supabase.from('comprovantes').update({ status: statusFinal, ponte_resultado: sim, observacao: motivo }).eq('id', comp.id);
-  await supabase.from('pendencias').insert({ unit_id: conversa.unit_id, conversa_id: conversa.id, comprovante_id: comp.id, tipo: 'comprovante', motivo });
+  await supabase.from('pendencias').insert({ unit_id: conversa.unit_id, conversa_id: conversa.id, comprovante_id: comp.id, tipo: 'comprovante', motivo, simulacao: simulando() });
   await responder(conversa, `Recebi seu comprovante de ${reais(valor)} 👍\nReferente a: ${descricao}.\nA secretaria vai confirmar o registro e, se precisar de algo, te aviso por aqui.`);
 }
 

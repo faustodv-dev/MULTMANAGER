@@ -1,7 +1,9 @@
 import { CFG, registrar } from './base.js';
+import { simulando } from './contexto.js';
 
 /** Envia texto (e opcionalmente um documento) pelo gateway WhatsApp da unidade. */
 export async function enviarWhatsapp(unitId, telefone, texto, { remoteJid = null, documento = null, conversaId = null } = {}) {
+  if (simulando()) return { ok: true, status: 'simulado', erro: null, msgId: null };
   const inicio = Date.now();
   try {
     const resp = await fetch(`${CFG.gatewayUrl}/send`, {

@@ -1,6 +1,6 @@
 import { NavLink } from "react-router-dom";
 import { useEffect, useState, type ReactNode } from "react";
-import { MessageCircle, Receipt, Users, Building2, LogOut } from "lucide-react";
+import { MessageCircle, Receipt, Users, Building2, LogOut, FlaskConical } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
@@ -13,7 +13,7 @@ export default function Layout({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const contar = async () => {
-      const { count } = await supabase.from("pendencias").select("id", { count: "exact", head: true }).is("resolvido_em", null);
+      const { count } = await supabase.from("pendencias").select("id", { count: "exact", head: true }).is("resolvido_em", null).eq("simulacao", false);
       setPendencias(count ?? 0);
     };
     contar();
@@ -27,6 +27,7 @@ export default function Layout({ children }: { children: ReactNode }) {
   const itens = [
     { to: "/atendimento", rotulo: "Atendimento", icone: MessageCircle, ok: pode("atendimento"), badge: pendencias },
     { to: "/comprovantes", rotulo: "Comprovantes", icone: Receipt, ok: pode("comprovantes") },
+    { to: "/simulador", rotulo: "Simulador", icone: FlaskConical, ok: perfil?.papel === "master" || perfil?.papel === "admin" },
     { to: "/usuarios", rotulo: "Usuários", icone: Users, ok: pode("configuracoes") },
     { to: "/unidades", rotulo: "Unidades", icone: Building2, ok: pode("configuracoes") },
   ].filter((i) => i.ok);

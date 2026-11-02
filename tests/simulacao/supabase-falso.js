@@ -2,9 +2,9 @@
 import crypto from 'crypto';
 export const DB = { units: [], unit_secrets: [], conversas: [], mensagens: [], comprovantes: [], pendencias: [], registro_acoes: [], profiles: [] };
 export const STORAGE = new Map();
-const uniq = { conversas: [['unit_id','telefone']], mensagens: [['unit_id','wa_message_id']] };
+const uniq = { conversas: [['unit_id','telefone','canal']], mensagens: [['unit_id','wa_message_id']] };
 const defaults = {
-  conversas: () => ({ status: 'ia', cod_alus: [], identidade_confirmada: false, contexto: {}, nao_lidas: 0, ultimo_contato: new Date().toISOString(), processando_ate: null }),
+  conversas: () => ({ canal: 'whatsapp', status: 'ia', cod_alus: [], identidade_confirmada: false, contexto: {}, nao_lidas: 0, ultimo_contato: new Date().toISOString(), processando_ate: null }),
   comprovantes: () => ({ status: 'recebido', cod_alus: [], cod_pars: [], recebido_em: new Date().toISOString() }),
   mensagens: () => ({ criado_em: new Date(Date.now() + DB.mensagens.length).toISOString() }),
   pendencias: () => ({ criado_em: new Date().toISOString(), resolvido_em: null }),

@@ -1633,6 +1633,16 @@ server.on('error', (e) => {
 // v10: BLINDAGEM DE CICLO DE VIDA (deploy no Render, quedas e processos pendurados)
 // ───────────────────────────────────────────────────────────────────────────────────────────────
 
+// Plano Free do Render: o serviço dorme após 15 min sem requisições externas e o WhatsApp para de
+// receber. O auto-ping pela URL pública (que passa pelo proxy do Render) mantém o serviço acordado.
+// O Render define RENDER_EXTERNAL_URL sozinho; desligue com KEEPALIVE=false.
+const KEEPALIVE_URL = cleanUrl(process.env.RENDER_EXTERNAL_URL || '');
+if (KEEPALIVE_URL && String(process.env.KEEPALIVE || 'true').toLowerCase() !== 'false') {
+  setInterval(() => {
+    fetch(`${KEEPALIVE_URL}/health`, { signal: AbortSignal.timeout(15000) }).catch(() => {});
+  }, 10 * 60 * 1000);
+}
+
 // Evita keep-alive curto demais do Node derrubar requisições vindas do proxy do Render (502 intermitente)
 server.keepAliveTimeout = 65000;
 server.headersTimeout = 66000;
