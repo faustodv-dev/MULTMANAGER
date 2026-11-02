@@ -78,7 +78,9 @@ $hoje = date('Y-m-d');
 
 try {
     $db = Db::conectar($U['banco']);
-    $db->pdo->exec("SET SESSION sql_mode = 'NO_ENGINE_SUBSTITUTION'");
+    if ($db->driver() === 'mysql') {
+        $db->pdo->exec("SET SESSION sql_mode = 'NO_ENGINE_SUBSTITUTION'");
+    }
     $escola = new Escola($db);
     $somenteLeitura = !empty($U['somente_leitura']);
     $fin = fn() => $somenteLeitura

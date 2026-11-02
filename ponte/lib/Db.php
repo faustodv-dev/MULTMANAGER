@@ -18,6 +18,10 @@ final class Db
     /** @param array<string,mixed> $cfg host, port, database, user, password, charset */
     public static function conectar(array $cfg): self
     {
+        if (!empty($cfg['dsn'])) {
+            // usado só nos testes (SQLite)
+            return new self(new PDO($cfg['dsn']));
+        }
         $dsn = sprintf(
             'mysql:host=%s;port=%d;dbname=%s;charset=%s',
             $cfg['host'] ?? 'localhost',
