@@ -1,6 +1,6 @@
 import { NavLink } from "react-router-dom";
 import { useEffect, useState, type ReactNode } from "react";
-import { MessageCircle, Receipt, Users, Building2, LogOut, FlaskConical } from "lucide-react";
+import { MessageCircle, Receipt, Users, Building2, LogOut, FlaskConical, Banknote } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
@@ -28,6 +28,7 @@ export default function Layout({ children }: { children: ReactNode }) {
     { to: "/atendimento", rotulo: "Atendimento", icone: MessageCircle, ok: pode("atendimento"), badge: pendencias },
     { to: "/comprovantes", rotulo: "Comprovantes", icone: Receipt, ok: pode("comprovantes") },
     { to: "/simulador", rotulo: "Simulador", icone: FlaskConical, ok: perfil?.papel === "master" || perfil?.papel === "admin" },
+    { to: "/boleto-teste", rotulo: "Boleto (teste)", icone: Banknote, ok: perfil?.papel === "master" },
     { to: "/usuarios", rotulo: "Usuários", icone: Users, ok: pode("configuracoes") },
     { to: "/unidades", rotulo: "Unidades", icone: Building2, ok: pode("configuracoes") },
   ].filter((i) => i.ok);
