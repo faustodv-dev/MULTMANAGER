@@ -22,6 +22,19 @@ export async function processarEntrada(p, { canal = 'whatsapp' } = {}) {
 
     let conversa = await obterOuCriarConversa(unitId, telefone, { remoteJid: p.remoteJid, nome: p.senderName, canal });
 
+    // Grupos do WhatsApp: a assistente NUNCA responde em grupo. Só guarda a mensagem para a aba "Grupos".
+    const ehGrupo = String(p.remoteJid || '').includes('@g.us') || String(conversa.remote_jid || '').includes('@g.us');
+    if (ehGrupo) {
+      if (!p.fromMe) {
+        await salvarMensagem(conversa, {
+          direcao: 'in', autor: 'contato', texto: String(p.message || '') || null,
+          midia_path: p.mediaPath || null, midia_tipo: p.mediaMimeType || null, midia_nome: p.mediaFileName || null,
+          wa_message_id: p.messageId || null
+        });
+      }
+      return 'grupo_ignorado';
+    }
+
     // Mensagem digitada no celular da escola: a secretaria assumiu a conversa
     if (p.fromMe) {
       if (p.message) {
