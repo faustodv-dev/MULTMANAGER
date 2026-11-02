@@ -138,7 +138,11 @@ final class Carne
         $linha($ly + 30, 6, 'Curso / Tipo', $curso . '  —  ' . $tipos);
 
         $direita($ly, 12, 'Valor do Documento', Texto::reais($doc['valor_documento']), true);
-        $direita($ly + 12, 12, 'Até o vencimento', $doc['valor_em_dia'] !== $doc['valor_documento'] ? Texto::reais($doc['valor_em_dia']) : '—');
+        if (!empty($doc['vencido'])) {
+            $direita($ly + 12, 12, 'Para pagar hoje (' . date('d/m') . ')', Texto::reais($doc['valor_devido']), true);
+        } else {
+            $direita($ly + 12, 12, 'Até o vencimento', $doc['valor_em_dia'] !== $doc['valor_documento'] ? Texto::reais($doc['valor_em_dia']) : '—');
+        }
         $direita($ly + 24, 12, 'Valor Cobrado', '');
 
         // Instruções
@@ -146,7 +150,9 @@ final class Carne
         $pdf->retangulo($x, $iy, $w, 26);
         $pdf->texto($x + 2, $iy + 4.5, 'Instruções', 8, true);
         $instr = [];
-        if ($doc['valor_em_dia'] !== $doc['valor_documento']) {
+        if (!empty($doc['vencido'])) {
+            $instr[] = '• Parcela vencida há ' . $doc['dias_atraso'] . ' dia(s): valor atualizado para hoje ' . Texto::reais($doc['valor_devido']) . ' (o valor muda a cada dia).';
+        } elseif ($doc['valor_em_dia'] !== $doc['valor_documento']) {
             $instr[] = '• Desconto de pontualidade de R$ 30,00 por parcela pago até a data do vencimento: total ' . Texto::reais($doc['valor_em_dia']) . '.';
         }
         $instr[] = '• Após o vencimento: valor do documento + juros de 0,33% ao dia.';

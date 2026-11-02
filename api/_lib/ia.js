@@ -3,6 +3,10 @@ import { CFG, registrar } from './base.js';
 const GEMINI = 'https://generativelanguage.googleapis.com/v1beta/models';
 const GROQ = 'https://api.groq.com/openai/v1/chat/completions';
 
+// Modelo sobrecarregado (503/429) ou lento fica de lado por 2 min nesta instância
+const esfriando = new Map();
+const disponivel = (m) => (esfriando.get(m) || 0) < Date.now();
+
 async function geminiChamar(modelo, corpo, chave, timeoutMs) {
   const r = await fetch(`${GEMINI}/${encodeURIComponent(modelo)}:generateContent`, {
     method: 'POST',
@@ -20,9 +24,10 @@ async function geminiChamar(modelo, corpo, chave, timeoutMs) {
 }
 
 /** Tenta os modelos Gemini em ordem; devolve a primeira resposta válida. */
-async function gemini(corpo, { chave, timeoutMs = 25000, modelos = CFG.geminiModelos, unitId, conversaId, rotulo }) {
+async function gemini(corpo, { chave, timeoutMs = 15000, modelos = CFG.geminiModelos, unitId, conversaId, rotulo }) {
   let ultimoErro;
-  for (const m of modelos) {
+  const ordem = [...modelos.filter(disponivel), ...modelos.filter((m) => !disponivel(m))];
+  for (const m of ordem) {
     const inicio = Date.now();
     try {
       const j = await geminiChamar(m, corpo, chave, timeoutMs);
@@ -32,6 +37,7 @@ async function gemini(corpo, { chave, timeoutMs = 25000, modelos = CFG.geminiMod
       return cand.content;
     } catch (e) {
       ultimoErro = e;
+      if (e.http === 503 || e.http === 429 || /timeout|aborted|demand/i.test(e.message)) esfriando.set(m, Date.now() + 120000);
       await registrar('ia', rotulo, false, { unitId, conversaId, duracaoMs: Date.now() - inicio, detalhe: { modelo: m, erro: e.message } });
     }
   }
@@ -96,7 +102,7 @@ export async function agente({ sistema, historico, ferramentas, chaves = {}, uni
         if (restante < 4000) break;
         const conteudo = await gemini(
           { systemInstruction: { parts: [{ text: sistema }] }, contents, tools, generationConfig: { temperature: 0.4 } },
-          { chave: chaveGemini, timeoutMs: Math.min(25000, restante - 1000), unitId, conversaId, rotulo: 'agente' }
+          { chave: chaveGemini, timeoutMs: Math.min(15000, restante - 1000), unitId, conversaId, rotulo: 'agente' }
         );
         contents.push(conteudo);
         const fcs = conteudo.parts.filter((p) => p.functionCall);
