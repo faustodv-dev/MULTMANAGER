@@ -16,7 +16,7 @@ export default async function handler(req, res) {
   try {
     r.ponte = await ponte(unidade, 'ping', {});
   } catch (e) {
-    r.ponte = { erro: e.codigo, mensagem: e.message };
+    r.ponte = { erro: e.codigo, mensagem: e.message, detalhes: e.detalhes };
   }
   try {
     const g = await fetch(`${CFG.gatewayUrl}/health`, { signal: AbortSignal.timeout(8000) });

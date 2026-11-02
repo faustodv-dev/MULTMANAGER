@@ -144,8 +144,11 @@ try {
     responder($e->http, ['ok' => false, 'erro' => $e->codigo, 'mensagem' => $e->getMessage(), 'detalhes' => $e->detalhes]);
 } catch (\PDOException $e) {
     error_log('[ponte] PDO: ' . $e->getMessage());
-    responder(503, ['ok' => false, 'erro' => 'banco_indisponivel', 'mensagem' => 'Falha ao acessar o banco da unidade.']);
+    responder(503, ['ok' => false, 'erro' => 'banco_indisponivel', 'mensagem' => 'Falha ao acessar o banco da unidade.',
+        'detalhes' => ['erro' => preg_replace('/\(using password: \w+\)/', '', $e->getMessage())]]);
 } catch (\Throwable $e) {
     error_log('[ponte] ' . $e->getMessage() . ' @ ' . $e->getFile() . ':' . $e->getLine());
-    responder(500, ['ok' => false, 'erro' => 'interno', 'mensagem' => 'Erro interno na ponte.']);
+    // Só chega aqui quem passou na assinatura HMAC (o CRM): pode ver o detalhe técnico
+    responder(500, ['ok' => false, 'erro' => 'interno', 'mensagem' => 'Erro interno na ponte.',
+        'detalhes' => ['tipo' => get_class($e), 'erro' => $e->getMessage(), 'onde' => basename($e->getFile()) . ':' . $e->getLine()]]);
 }
