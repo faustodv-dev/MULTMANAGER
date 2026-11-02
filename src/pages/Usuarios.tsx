@@ -13,6 +13,8 @@ const MODULOS: { id: Modulo; rotulo: string }[] = [
   { id: "atendimento", rotulo: "Atendimento" },
   { id: "comprovantes", rotulo: "Comprovantes" },
   { id: "financeiro", rotulo: "Financeiro" },
+  { id: "pedagogico", rotulo: "Pedagógico" },
+  { id: "encaminhamento", rotulo: "Encaminhamento" },
   { id: "configuracoes", rotulo: "Configurações" },
 ];
 

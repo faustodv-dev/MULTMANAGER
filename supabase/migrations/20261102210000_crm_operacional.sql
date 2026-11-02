@@ -125,3 +125,21 @@ insert into public.pops (unit_id, departamento, titulo, procedimento, frequencia
 ('rio_verde','financeiro','Separar contratos para enviar ao SPC','Entre os contratos desistentes, separar os que tinham maior frequência de aulas e pararam de frequentar.','mensal',null,10),
 ('rio_verde','financeiro','Criar pasta no Drive com lista de chamada e contratos a negativar','Tirar cópia da lista de chamada com assinatura do aluno a ser enviado carta e cópia dos contratos a serem negativados.','mensal',null,11),
 ('rio_verde','financeiro','Enviar WhatsApp e e-mail informando sobre a negativação','Enviar individualmente mensagem informativa sobre a negativação.','mensal',null,12);
+
+-- Seed: POPs do Pedagógico e Encaminhamento (dos arquivos, como estão)
+insert into public.pops (unit_id, departamento, titulo, procedimento, frequencia, dia_do_mes, responsavel_sugerido, ordem) values
+('rio_verde','pedagogico','Impressão de certificados','Relatório / Secretaria / Alunos / Status Formado / Filtrar por período. Imprimir os certificados de curso gratuito e também dos alunos que solicitaram.','mensal',null,'João Vitor',1),
+('rio_verde','pedagogico','Manutenção das máquinas do laboratório de Hardware','Garantir a qualidade das aulas.','mensal',null,'José Vitor',2),
+('rio_verde','pedagogico','Padronização das máquinas do laboratório de Informática','Garantir a qualidade das aulas.','mensal',null,'José Vitor',3),
+('rio_verde','pedagogico','Lançar vale-apostila no sistema','Garantir que o aluno não receba material em dobro.','semanal',null,'João Vitor',4),
+('rio_verde','pedagogico','Enviar mensagem no grupo informando os alunos de suas aulas','Relatório / Secretaria / Relatório para torpedo.','diaria',null,'João Vitor / José Vitor',5),
+('rio_verde','pedagogico','Mensagem no WhatsApp para alunos faltantes','Relatório / Secretaria / Relatório de faltantes.','diaria',null,'João Vitor / José Vitor',6),
+('rio_verde','pedagogico','Mensagem nos grupos das turmas','Compartilhar materiais sobre a aula da semana nos grupos das turmas.','semanal',null,'João Vitor / José Vitor',7),
+('rio_verde','encaminhamento','Atualizar mural de alunos aniversariantes','Relatório / Secretaria / Relatório de aniversariantes.','dia_fixo',1,null,1),
+('rio_verde','encaminhamento','Atualizar mural de alunos encaminhados','Agência de Empregos / Relatório de encaminhamento / Período do mês anterior.','dia_fixo',1,null,2),
+('rio_verde','encaminhamento','Atualizar vagas de emprego','Ligar para empresas parceiras e verificar novas vagas; diariamente atender as empresas no Instagram Emprega.','semanal',null,null,3),
+('rio_verde','encaminhamento','Conferência dos documentos da agência','Arquivar em pastas separadas (virtuais p/ assinados online e física p/ físicos): normas de encaminhamento assinado, carta de confirmação de encaminhamento, termo de parceria das empresas e testemunho de encaminhamento.','mensal',null,null,4),
+('rio_verde','encaminhamento','Criação de conteúdo com testemunhos de alunos encaminhados','Coletar o testemunho de todos os alunos encaminhados, editar e postar nas redes sociais, pedindo ao aluno que fale como a MULT Profissões o auxiliou na conquista da entrevista.','mensal',null,null,5),
+('rio_verde','encaminhamento','Ligar para alunos cadastrados assim que surgir vaga no perfil','Agência de Empregos / Exibir vagas / Encaminhamento de candidato / Busca candidato.','semanal',null,null,6),
+('rio_verde','encaminhamento','Fechar novas parcerias para a agência','Consulta em jornais ou sites de anúncio de vagas; contatar as empresas anunciantes e oferecer a parceria gratuitamente.','semanal',null,null,7),
+('rio_verde','encaminhamento','Ligar para empresas parceiras e captar novas vagas','Agência de Encaminhamento / Exibir empresas / Ligar para todas e verificar a disponibilidade de vagas em aberto.','semanal',null,null,8);

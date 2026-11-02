@@ -9,7 +9,7 @@ export const supabase = createClient(URL, KEY, {
 });
 
 export type Papel = "master" | "admin" | "colaborador";
-export type Modulo = "atendimento" | "comprovantes" | "financeiro" | "configuracoes";
+export type Modulo = "atendimento" | "comprovantes" | "financeiro" | "pedagogico" | "encaminhamento" | "configuracoes";
 
 export interface Perfil {
   id: string;
