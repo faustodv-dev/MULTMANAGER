@@ -299,3 +299,18 @@ alter table public.units
   add column atendimento_humano text;
 update public.units set pix_chave = '26.436.081/0001-60', recebedor_documento = '26436081000160',
   recebedor_nome = 'MULT PROFISSOES FRANCHISING' where id = 'rio_verde';
+
+-- Só o master liga a baixa automática ou troca o CNPJ recebedor
+create or replace function public.proteger_unidade() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if auth.uid() is not null and not public.eh_master() then
+    if new.baixa_automatica is distinct from old.baixa_automatica or new.id is distinct from old.id
+       or new.recebedor_documento is distinct from old.recebedor_documento then
+      raise exception 'Somente o master altera baixa automática e recebedor';
+    end if;
+  end if;
+  return new;
+end $$;
+revoke execute on function public.proteger_unidade() from public, anon, authenticated;
+create trigger proteger_unidade before update on public.units for each row execute function public.proteger_unidade();
