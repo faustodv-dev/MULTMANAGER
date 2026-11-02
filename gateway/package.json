@@ -1,0 +1,20 @@
+{
+  "name": "mult-financeiro-gateway",
+  "version": "7.2.0",
+  "description": "Gateway WhatsApp (Baileys) do CRM pedagógico/financeiro MULT",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@whiskeysockets/baileys": "latest",
+    "express": "^4.19.2",
+    "cors": "^2.8.5",
+    "qrcode": "^1.5.4",
+    "pino": "^9.4.0"
+  },
+  "engines": {
+    "node": "20.x"
+  }
+}
