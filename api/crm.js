@@ -319,12 +319,14 @@ export default async function handler(req, res) {
           headers: { apikey: CFG.gatewayKey || '' }, signal: AbortSignal.timeout(15000)
         });
         const html = await r.text();
-        if (/Conectad/i.test(html)) {
+        // QR tem prioridade: se há imagem data:, ainda NÃO está conectado (a página do QR também diz "Aparelhos Conectados").
+        const m = html.match(/src="(data:image[^"]+)"/);
+        if (m) return res.status(200).json({ ok: true, status: 'qr_ready', qr: m[1] });
+        if (/Aparelho ativo/i.test(html)) {
           const tel = (html.match(/Aparelho ativo:\s*<strong>([^<]+)</) || [])[1] || null;
           return res.status(200).json({ ok: true, status: 'connected', phone: tel });
         }
-        const m = html.match(/src="(data:image[^"]+)"/);
-        return res.status(200).json({ ok: true, status: m ? 'qr_ready' : 'preparando', qr: m ? m[1] : null });
+        return res.status(200).json({ ok: true, status: 'preparando', qr: null });
       } catch (e) {
         return res.status(502).json({ erro: 'gateway_indisponivel', mensagem: e.message });
       }

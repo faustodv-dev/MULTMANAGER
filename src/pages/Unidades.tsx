@@ -47,17 +47,26 @@ export default function Unidades() {
     recarregar();
   };
 
-  const diagnostico = async () => {
+  const [diagUnidade, setDiagUnidade] = useState("");
+  const diagnostico = async (uid?: string) => {
+    const alvo = uid || diagUnidade || unidades[0]?.id || "rio_verde";
     const { data } = await supabase.auth.getSession();
-    const r = await fetch(`/api/status?unidade=${unidades[0]?.id || "rio_verde"}`, { headers: { Authorization: `Bearer ${data.session?.access_token}` } });
-    setStatus(await r.json());
+    const r = await fetch(`/api/status?unidade=${alvo}`, { headers: { Authorization: `Bearer ${data.session?.access_token}` } });
+    setStatus({ unidade_testada: alvo, ...(await r.json()) });
   };
 
   return (
     <div className="h-full space-y-4 overflow-auto p-4">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold">Unidades</h1>
-        {perfil?.papel === "master" && <Button variant="outline" onClick={diagnostico}>Diagnóstico das integrações</Button>}
+        {perfil?.papel === "master" && (
+          <div className="flex items-end gap-2">
+            <select className="h-9 rounded-md border bg-background px-2 text-sm" value={diagUnidade} onChange={(e) => setDiagUnidade(e.target.value)}>
+              {unidades.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+            </select>
+            <Button variant="outline" onClick={() => diagnostico()}>Diagnóstico das integrações</Button>
+          </div>
+        )}
       </div>
       {status && <pre className="overflow-auto rounded-lg bg-muted p-3 text-xs">{JSON.stringify(status, null, 2)}</pre>}
 
