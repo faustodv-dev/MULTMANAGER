@@ -50,6 +50,7 @@ export default function Pops() {
     return <div className="p-8 text-muted-foreground">Tela exclusiva de administradores.</div>;
 
   return (
+    <div className="h-full overflow-y-auto">
     <div className="mx-auto max-w-4xl space-y-4 p-5">
       <div className="flex flex-wrap items-center gap-3">
         <div className="mr-auto flex items-center gap-2.5">
@@ -102,6 +103,7 @@ export default function Pops() {
       )}
 
       {edit && <EditPop pop={edit} unidade={unidade} dep={dep} aoFechar={() => setEdit(null)} aoSalvar={() => { setEdit(null); carregar(); }} />}
+    </div>
     </div>
   );
 }

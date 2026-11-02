@@ -11,6 +11,8 @@ import Unidades from "@/pages/Unidades";
 import Simulador from "@/pages/Simulador";
 import BoletoTeste from "@/pages/BoletoTeste";
 import Financeiro from "@/pages/Financeiro";
+import Pedagogico from "@/pages/Pedagogico";
+import Encaminhamento from "@/pages/Encaminhamento";
 import Pops from "@/pages/Pops";
 import type { Modulo } from "@/lib/supabase";
 
@@ -51,6 +53,8 @@ export default function App() {
             <Route path="/usuarios" element={<Protegida modulo="configuracoes"><Usuarios /></Protegida>} />
             <Route path="/simulador" element={<Protegida modulo="configuracoes"><Simulador /></Protegida>} />
             <Route path="/financeiro" element={<Protegida modulo="financeiro"><Financeiro /></Protegida>} />
+            <Route path="/pedagogico" element={<Protegida modulo="pedagogico"><Pedagogico /></Protegida>} />
+            <Route path="/encaminhamento" element={<Protegida modulo="encaminhamento"><Encaminhamento /></Protegida>} />
             <Route path="/pops" element={<Protegida><Pops /></Protegida>} />
             <Route path="/boleto-teste" element={<Protegida><BoletoTeste /></Protegida>} />
             <Route path="/unidades" element={<Protegida modulo="configuracoes"><Unidades /></Protegida>} />
