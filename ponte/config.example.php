@@ -13,12 +13,12 @@ return [
                 'host' => 'localhost',
                 'port' => 3306,
                 'database' => 'neto_rioverde',
-                'user' => 'USUARIO_MYSQL',
-                'password' => 'SENHA_MYSQL',
+                'user' => 'neto_ponte',
+                'password' => 'SENHA_DO_USUARIO_neto_ponte',
                 'charset' => 'latin1',
             ],
             // Usuário criado em dados_usuarios para identificar as ações do agente
-            'agente' => ['usuario_id' => 0, 'login' => 'AGENTE IA'],
+            'agente' => ['usuario_id' => 0, 'login' => 'AGENTE IA'], // troque o 0 pelo ID do passo 1,
             // Dados impressos no carnê
             'pix_chave' => '26.436.081/0001-60',
             'pix_titular' => 'MULT PROFISSOES FRANCHISING',

@@ -32,15 +32,27 @@ function responder(int $http, array $corpo): never
 }
 
 $cfgArquivo = __DIR__ . '/config.php';
+
+// Aberto no navegador (GET): só um teste de instalação, sem dados
+if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+    $ext = ['pdo_mysql', 'mbstring', 'json', 'openssl'];
+    responder(405, [
+        'ok' => false,
+        'erro' => 'metodo',
+        'instalacao' => [
+            'php' => PHP_VERSION,
+            'php_ok' => version_compare(PHP_VERSION, '8.1.0', '>='),
+            'extensoes' => array_combine($ext, array_map('extension_loaded', $ext)),
+            'config' => is_file($cfgArquivo),
+            'https' => (($_SERVER['HTTPS'] ?? '') !== '' && $_SERVER['HTTPS'] !== 'off'),
+        ],
+    ]);
+}
 if (!is_file($cfgArquivo)) {
     responder(500, ['ok' => false, 'erro' => 'config_ausente']);
 }
 /** @var array<string,mixed> $CONFIG */
 $CONFIG = require $cfgArquivo;
-
-if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
-    responder(405, ['ok' => false, 'erro' => 'metodo']);
-}
 $corpo = file_get_contents('php://input') ?: '';
 if (strlen($corpo) > 1_000_000) {
     responder(413, ['ok' => false, 'erro' => 'corpo_grande']);
