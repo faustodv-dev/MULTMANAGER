@@ -8,7 +8,7 @@ use PDO;
 /** Conexão PDO com o banco de uma unidade. Consultas sempre parametrizadas. */
 final class Db
 {
-    public function __construct(public readonly PDO $pdo)
+    public function __construct(public PDO $pdo)
     {
         $this->pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
         $this->pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);

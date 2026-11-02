@@ -24,7 +24,7 @@ header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
 header('X-Content-Type-Options: nosniff');
 
-function responder(int $http, array $corpo): never
+function responder(int $http, array $corpo): void
 {
     http_response_code($http);
     echo json_encode($corpo, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
@@ -41,7 +41,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
         'erro' => 'metodo',
         'instalacao' => [
             'php' => PHP_VERSION,
-            'php_ok' => version_compare(PHP_VERSION, '8.1.0', '>='),
+            'php_ok' => version_compare(PHP_VERSION, '8.0.0', '>='),
             'extensoes' => array_combine($ext, array_map('extension_loaded', $ext)),
             'config' => is_file($cfgArquivo),
             'https' => (($_SERVER['HTTPS'] ?? '') !== '' && $_SERVER['HTTPS'] !== 'off'),

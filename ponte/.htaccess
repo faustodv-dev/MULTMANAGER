@@ -1,12 +1,6 @@
 # Só o index.php responde; o restante da pasta fica inacessível pela web.
 Options -Indexes
 
-# PHP 8.1 só nesta pasta (o sistema antigo continua na versão dele).
-# Necessário quando a ponte fica numa pasta do domínio principal; num subdomínio
-# com PHP 8.1 no MultiPHP esta linha é inofensiva.
-<IfModule mime_module>
-    AddHandler application/x-httpd-ea-php81 .php
-</IfModule>
 <IfModule mod_rewrite.c>
     RewriteEngine On
     RewriteCond %{HTTPS} !=on
