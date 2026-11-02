@@ -1,11 +1,11 @@
 <?php
 /**
  * Copie para config.php (NUNCA versionar config.php) e preencha.
- * Gere o segredo com:  php -r "echo bin2hex(random_bytes(32));"
- * O mesmo segredo vai na Vercel como PONTE_SEGREDO.
+ * Segredo: texto aleatório com 40+ caracteres (ex.: no navegador, F12 > Console:
+ *   crypto.randomUUID() + crypto.randomUUID() ). O mesmo valor vai na Vercel como PONTE_SEGREDO.
  */
 return [
-    'segredo' => 'COLE_AQUI_64_CARACTERES_HEX',
+    'segredo' => 'COLE_AQUI_O_SEGREDO',
 
     'unidades' => [
         'rio_verde' => [
@@ -18,7 +18,7 @@ return [
                 'charset' => 'latin1',
             ],
             // Usuário criado em dados_usuarios para identificar as ações do agente
-            'agente' => ['usuario_id' => 0, 'login' => 'AGENTE IA'], // troque o 0 pelo ID do passo 1,
+            'agente' => ['usuario_id' => 0, 'login' => 'AGENTE IA'], // troque o 0 pelo ID do usuário AGENTE IA
             // Dados impressos no carnê
             'pix_chave' => '26.436.081/0001-60',
             'pix_titular' => 'MULT PROFISSOES FRANCHISING',
