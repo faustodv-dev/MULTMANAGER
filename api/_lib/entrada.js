@@ -4,6 +4,7 @@ import { receberArquivo } from './comprovante.js';
 import { atender } from './atendente.js';
 import { transcrever } from './ia.js';
 import { simulando } from './contexto.js';
+import { moverCardConversa } from './crmcards.js';
 
 /**
  * Processa uma mensagem recebida (do gateway ou do simulador) e responde pelo agente.
@@ -28,6 +29,8 @@ export async function processarEntrada(p, { canal = 'whatsapp' } = {}) {
         if (conversa.status === 'ia' || conversa.status === 'aguardando_humano') {
           await atualizarConversa(conversa.id, { status: 'humano', motivo_humano: 'Secretaria respondeu pelo celular' });
         }
+        // A secretaria respondeu → a bola fica com o aluno
+        await moverCardConversa(conversa, 'aguardando').catch(() => null);
       }
       return 'registrado_humano';
     }
@@ -56,6 +59,8 @@ export async function processarEntrada(p, { canal = 'whatsapp' } = {}) {
       wa_message_id: p.messageId || null
     });
     if (!mensagem) return 'duplicada';
+    // Se já existe card desta conversa, o contato escreveu → volta para "Em andamento"
+    await moverCardConversa(conversa, 'andamento').catch(() => null);
 
     // Com a secretaria no comando (ou agente desligado), só registra
     if (conversa.status === 'humano' || conversa.status === 'aguardando_humano' || !unidade.agente_ativo) {

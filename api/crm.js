@@ -184,7 +184,13 @@ export default async function handler(req, res) {
           .eq('unit_id', unitId).eq('cod_alu', card.cod_alu).neq('id', card.id).order('created_at', { ascending: false }).limit(50);
         historico = hist || [];
       }
-      return res.status(200).json({ ok: true, card, eventos: eventos || [], boletos: boletos || [], historico });
+      let mensagens = [];
+      if (card.conversa_id) {
+        const { data: msgs } = await supabase.from('mensagens').select('id, direcao, autor, texto, midia_nome, criado_em')
+          .eq('conversa_id', card.conversa_id).order('criado_em', { ascending: true }).limit(100);
+        mensagens = msgs || [];
+      }
+      return res.status(200).json({ ok: true, card, eventos: eventos || [], boletos: boletos || [], historico, mensagens });
     }
 
     /* ───────── Situação no sistema escolar (sob demanda — botão) ───────── */

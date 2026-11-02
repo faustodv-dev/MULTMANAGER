@@ -1,6 +1,7 @@
 import { supabase, CFG } from './base.js';
 import { enviarWhatsapp } from './gateway.js';
 import { simulando } from './contexto.js';
+import { garantirCardWhatsapp } from './crmcards.js';
 
 export async function obterUnidade(unitId) {
   const { data } = await supabase.from('units').select('*').eq('id', unitId).maybeSingle();
@@ -77,6 +78,8 @@ export async function chamarHumano(conversa, motivo, { comprovanteId = null, tip
     unit_id: conversa.unit_id, conversa_id: conversa.id, comprovante_id: comprovanteId, tipo, motivo: motivo.slice(0, 500),
     simulacao: simulando()
   });
+  // Abre (ou atualiza) o card no Kanban do CRM — a conversa precisa de gente.
+  await garantirCardWhatsapp(conversa, { titulo: motivo, status: 'andamento', prioridade: tipo === 'comprovante' ? 'alta' : 'normal' }).catch(() => null);
 }
 
 export async function historico(conversaId, limite = 20) {

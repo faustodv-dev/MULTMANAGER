@@ -421,6 +421,22 @@ function DossieDialog({ dep, card, unidade, colabs, aoFechar, aoMudar, mover, ab
           </Bloco>
         )}
 
+        {dados?.mensagens?.length > 0 && (
+          <Bloco titulo="Conversa no WhatsApp">
+            <ul className="max-h-56 space-y-1 overflow-y-auto">
+              {dados.mensagens.map((m: any) => (
+                <li key={m.id} className={cn("flex", m.direcao === "in" ? "justify-start" : "justify-end")}>
+                  <span className={cn("max-w-[85%] whitespace-pre-wrap rounded-lg px-2.5 py-1.5 text-xs", m.direcao === "in" ? "bg-muted" : "bg-green-100 dark:bg-green-950")}>
+                    {m.midia_nome && <span className="mb-0.5 block font-medium">{m.midia_nome}</span>}
+                    {m.texto}
+                    <span className="mt-0.5 block text-right text-[9px] text-muted-foreground">{m.direcao === "in" ? "Aluno" : m.autor === "humano" ? "Secretaria" : "IA"} · {dataHora(m.criado_em)}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </Bloco>
+        )}
+
         <Bloco titulo="Linha do tempo do atendimento">
           <Textarea rows={2} placeholder="Anotar interação…" value={nota} onChange={(e) => setNota(e.target.value)} />
           <div className="mt-2 flex flex-wrap gap-2">
