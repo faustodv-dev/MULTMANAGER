@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Plus, Download, KeyRound } from "lucide-react";
+import { Plus, Download, KeyRound, Smartphone, Loader2, CheckCircle2 } from "lucide-react";
 import { api, supabase, type Unidade } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 export default function Unidades() {
   const { unidades, recarregar, perfil } = useAuth();
@@ -118,18 +119,23 @@ export default function Unidades() {
   );
 }
 
-/** Chaves/integrações da unidade: mostra apenas o status (configurada ou não) e permite atualizar. */
+/** Chaves/integrações da unidade: status das chaves e do WhatsApp, atualização e conexão (QR). */
 function ChavesUnidade({ unitId }: { unitId: string }) {
   const [aberto, setAberto] = useState(false);
   const [status, setStatus] = useState<any>(null);
+  const [wa, setWa] = useState<any>(null);
+  const [qrAberto, setQrAberto] = useState(false);
   const [vals, setVals] = useState<any>({ asaas: "", gemini: "", groq: "" });
   const [busy, setBusy] = useState(false);
 
   const carregar = async () => {
     try { const r = await api<any>("crm", { acao: "segredos_status", unidade: unitId }); setStatus(r.status); }
     catch (e: any) { toast.error(e.message); }
+    try { const w = await api<any>("crm", { acao: "whatsapp_status", unidade: unitId }); setWa(w); }
+    catch { setWa({ status: "indisponivel" }); }
   };
   const abrir = () => { setAberto(!aberto); if (!status) carregar(); };
+  const waConectado = wa?.status === "connected";
   const salvar = async (extra: any = {}) => {
     setBusy(true);
     try {
@@ -145,13 +151,14 @@ function ChavesUnidade({ unitId }: { unitId: string }) {
     <div className="rounded-lg border bg-muted/30 p-3">
       <button onClick={abrir} className="flex w-full items-center gap-2 text-sm font-medium">
         <KeyRound className="h-4 w-4" />Chaves &amp; integrações
-        {status && <span className="ml-2 flex items-center gap-2 text-xs text-muted-foreground">
+        {status && <span className="ml-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
           <Bolinha ok={status.asaas} />Asaas <Bolinha ok={status.gemini} />Gemini <Bolinha ok={status.groq} />Groq
+          {wa && <><Bolinha ok={waConectado} />WhatsApp</>}
         </span>}
         <span className="ml-auto text-xs text-muted-foreground">{aberto ? "ocultar" : "editar"}</span>
       </button>
       {aberto && (
-        <div className="mt-3 space-y-2">
+        <div className="mt-3 space-y-3">
           <p className="text-xs text-muted-foreground">As chaves ficam guardadas em segurança e nunca são exibidas. Preencha só o que quiser trocar.</p>
           <div className="grid gap-2 md:grid-cols-3">
             <div><Label className="text-xs">Chave Asaas {status?.asaas ? "✓" : ""}</Label><Input type="password" placeholder="$aact_..." value={vals.asaas} onChange={(e) => setVals({ ...vals, asaas: e.target.value })} /></div>
@@ -164,8 +171,57 @@ function ChavesUnidade({ unitId }: { unitId: string }) {
               <Button size="sm" variant="outline" onClick={() => salvar({ copiar_asaas_de: "rio_verde" })} disabled={busy}>Usar Asaas da Rio Verde</Button>
             )}
           </div>
+          <div className="flex flex-wrap items-center gap-3 border-t pt-3">
+            <span className={`flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium ${waConectado ? "bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-200" : "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-200"}`}>
+              <span className={`h-2 w-2 rounded-full ${waConectado ? "bg-green-500" : "bg-red-500"}`} />
+              WhatsApp {waConectado ? `conectado${wa?.phone ? ` · ${wa.phone}` : ""}` : "desconectado"}
+            </span>
+            <Button size="sm" variant="outline" onClick={() => setQrAberto(true)}><Smartphone className="mr-1 h-4 w-4" />Conectar WhatsApp</Button>
+          </div>
         </div>
       )}
+      {qrAberto && <QrDialog unitId={unitId} aoFechar={() => { setQrAberto(false); carregar(); }} />}
     </div>
+  );
+}
+
+/** Diálogo de conexão do WhatsApp: gera o QR só ao abrir e atualiza até conectar. */
+function QrDialog({ unitId, aoFechar }: { unitId: string; aoFechar: () => void }) {
+  const [estado, setEstado] = useState<any>({ status: "preparando" });
+  const [erro, setErro] = useState("");
+
+  const puxar = async () => {
+    try { const r = await api<any>("crm", { acao: "whatsapp_qr", unidade: unitId }); setEstado(r); setErro(""); }
+    catch (e: any) { setErro(e.message); }
+  };
+  useEffect(() => {
+    puxar();
+    const t = setInterval(() => { setEstado((s: any) => { if (s.status !== "connected") puxar(); return s; }); }, 8000);
+    return () => clearInterval(t);
+    // eslint-disable-next-line
+  }, [unitId]);
+
+  return (
+    <Dialog open onOpenChange={aoFechar}>
+      <DialogContent className="max-w-sm text-center">
+        <DialogHeader><DialogTitle>Conectar WhatsApp</DialogTitle></DialogHeader>
+        {erro && <p className="text-sm text-destructive">{erro}</p>}
+        {estado.status === "connected" ? (
+          <div className="py-6">
+            <CheckCircle2 className="mx-auto h-12 w-12 text-green-500" />
+            <p className="mt-2 font-semibold">WhatsApp conectado!</p>
+            {estado.phone && <p className="text-sm text-muted-foreground">{estado.phone}</p>}
+          </div>
+        ) : estado.status === "qr_ready" && estado.qr ? (
+          <div className="py-2">
+            <p className="mb-2 text-sm text-muted-foreground">No WhatsApp da unidade: <b>Aparelhos conectados → Conectar um aparelho</b> e aponte para o QR.</p>
+            <img src={estado.qr} alt="QR" className="mx-auto h-60 w-60 rounded-lg border bg-white p-2" />
+            <p className="mt-2 text-xs text-muted-foreground">Atualiza sozinho a cada 8s.</p>
+          </div>
+        ) : (
+          <div className="py-10"><Loader2 className="mx-auto h-8 w-8 animate-spin text-muted-foreground" /><p className="mt-2 text-sm text-muted-foreground">Preparando conexão…</p></div>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }
