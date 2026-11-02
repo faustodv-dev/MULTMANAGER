@@ -120,6 +120,7 @@ export default function Unidades() {
             <div><Label>Nome do recebedor</Label><Input value={campo(u, "recebedor_nome") || ""} onChange={(e) => mudar(u, "recebedor_nome", e.target.value)} /></div>
             <div><Label>CNPJ do recebedor (só números)</Label><Input value={campo(u, "recebedor_documento") || ""} onChange={(e) => mudar(u, "recebedor_documento", e.target.value.replace(/\D/g, ""))} /></div>
             <div><Label>Horário/contato da secretaria (a assistente informa)</Label><Textarea rows={2} value={campo(u, "atendimento_humano") || ""} onChange={(e) => mudar(u, "atendimento_humano", e.target.value)} /></div>
+            <div className="md:col-span-2"><Label>Regras do agente de IA desta unidade</Label><Textarea rows={3} placeholder="Ex.: tom de voz, o que pode/não pode oferecer, informações próprias desta unidade…" value={campo(u, "instrucoes_agente") || ""} onChange={(e) => mudar(u, "instrucoes_agente", e.target.value)} /><p className="mt-1 text-xs text-muted-foreground">Cada unidade define suas próprias regras — a assistente as segue nesta unidade.</p></div>
           </div>
           <ChavesUnidade unitId={u.id} />
         </div>

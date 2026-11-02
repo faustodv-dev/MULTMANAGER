@@ -67,7 +67,8 @@ SITUAÇÃO DESTA CONVERSA:
 - Identidade confirmada: ${conf ? 'SIM' : 'NÃO'}${conf && g ? ` — responsável ${nomeBonito(g.nome_responsavel)}; alunos: ${g.alunos.map((a) => `${nomeBonito(a.nome)} (cód. ${a.cod_alu})`).join(', ')}` : ''}
 - Nome no WhatsApp: ${conversa.nome_contato || 'desconhecido'}
 - CADASTROS_PELO_TELEFONE: ${JSON.stringify(conf ? [] : resumoGrupos(grupos))}
-${unidade.atendimento_humano ? `- Atendimento da secretaria: ${unidade.atendimento_humano}` : ''}`;
+${unidade.atendimento_humano ? `- Atendimento da secretaria: ${unidade.atendimento_humano}` : ''}
+${unidade.instrucoes_agente ? `\nREGRAS DESTA UNIDADE (definidas pela própria unidade — siga-as):\n${unidade.instrucoes_agente}` : ''}`;
 }
 
 /** Executa o agente para a conversa e envia a resposta. */

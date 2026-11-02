@@ -33,6 +33,7 @@ export interface Unidade {
   recebedor_documento: string | null;
   recebedor_nome: string | null;
   atendimento_humano: string | null;
+  instrucoes_agente: string | null;
 }
 
 export interface Conversa {
