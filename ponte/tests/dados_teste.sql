@@ -4,7 +4,7 @@ INSERT INTO s_cad_curso VALUES (1, 'HAR', 'Hardware'), (2, 'INF', 'Informática 
 INSERT INTO s_cad_turma VALUES (1, '001HAR', 'HAR'), (2, '001INF', 'INF');
 
 -- Aluno que é o próprio responsável, 2 matrículas (como no print)
-INSERT INTO s_cad_aluno VALUES (13882, NULL, 'EDILSON JOSE DA SILVA LIMA', '709.000.000-01', '709.000.000-01', 'Edilson Jose da Silva Lima',
+INSERT INTO s_cad_aluno VALUES (13882, NULL, 'EDILSON JOSE DA SILVA LIMA', '111.444.777-35', '111.444.777-35', 'Edilson Jose da Silva Lima',
   '(64) 98888-0002', '(64) 98888-0002', '(64) 98888-0002', '(64) 98888-0002', '', '', 'Ativo', '01/01/1990');
 INSERT INTO s_cad_matricula VALUES ('MAT-HAR', '13882', 'HAR', '001HAR', 'Ativo', '05/11/2026'), ('MAT-INF', '13882', 'INF', '001INF', 'Ativo', '05/11/2026');
 INSERT INTO s_cad_parcela (COD_PAR, COD_ALU, DAT_LAN, DAT_VEN, DAT_BAI, VLR_PAR, TIP_PAR, TIPO_PAR, NUM_MATRICULA, NUM_BOLETO) VALUES

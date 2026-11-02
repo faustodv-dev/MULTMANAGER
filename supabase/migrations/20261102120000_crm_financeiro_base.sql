@@ -321,3 +321,42 @@ alter table public.conversas drop constraint conversas_unit_id_telefone_key;
 alter table public.conversas add constraint conversas_unit_telefone_canal_key unique (unit_id, telefone, canal);
 alter table public.comprovantes add column simulacao boolean not null default false;
 alter table public.pendencias add column simulacao boolean not null default false;
+
+-- ============ Cobranças Asaas (boleto + Pix) ============
+alter table public.unit_secrets add column if not exists asaas_webhook_token text;
+
+create table public.cobrancas_asaas (
+  id uuid primary key default gen_random_uuid(),
+  unit_id text not null references public.units(id),
+  conversa_id uuid references public.conversas(id) on delete set null,
+  cod_alu text not null,
+  nome_aluno text,
+  cod_pars int[] not null,
+  vencimento date not null,
+  valor_centavos int not null,
+  cpf_responsavel text,
+  nome_responsavel text,
+  asaas_customer_id text,
+  asaas_payment_id text,
+  external_reference text not null,
+  status text not null default 'pendente' check (status in (
+    'pendente', 'recebido', 'confirmado', 'baixado', 'cancelado', 'estornado', 'erro')),
+  boleto_url text,
+  pix_copia_cola text,
+  linha_digitavel text,
+  criado_por text not null default 'ia',
+  baixado_no_sistema boolean not null default false,
+  recebido_em timestamptz,
+  observacao text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create unique index cobrancas_external_ref on public.cobrancas_asaas (unit_id, external_reference);
+create unique index cobrancas_payment_id on public.cobrancas_asaas (asaas_payment_id) where asaas_payment_id is not null;
+create index cobrancas_ativas on public.cobrancas_asaas (unit_id, status) where status in ('pendente', 'recebido');
+create index cobrancas_pars on public.cobrancas_asaas using gin (cod_pars);
+
+alter table public.cobrancas_asaas enable row level security;
+create policy cobrancas_ler on public.cobrancas_asaas for select to authenticated
+  using (public.pode(unit_id, 'financeiro') or public.pode(unit_id, 'comprovantes'));
+alter publication supabase_realtime add table public.cobrancas_asaas;

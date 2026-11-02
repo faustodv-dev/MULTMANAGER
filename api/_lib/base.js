@@ -19,6 +19,8 @@ export const CFG = {
   groqKey: limpar(process.env.GROQ_API_KEY),
   groqModelos: String(process.env.GROQ_MODELS || 'llama-3.3-70b-versatile').split(',').map((s) => s.trim()).filter(Boolean),
   asaasSandbox: String(process.env.ASAAS_SANDBOX || '').toLowerCase() === 'true',
+  asaasWebhookToken: limpar(process.env.ASAAS_WEBHOOK_TOKEN),
+  cronSecret: limpar(process.env.CRON_SECRET),
   bucket: 'whatsapp-midia'
 };
 
@@ -53,6 +55,19 @@ export const reais = (centavos) =>
 export const dataBr = (iso) => (iso ? String(iso).slice(0, 10).split('-').reverse().join('/') : '');
 
 export const digitos = (s) => String(s || '').replace(/\D+/g, '');
+
+/** Valida CPF pelos dígitos verificadores (não só o tamanho). */
+export function cpfValido(cpf) {
+  const d = digitos(cpf);
+  if (d.length !== 11 || /^(\d)\1{10}$/.test(d)) return false;
+  const dig = (base) => {
+    let soma = 0;
+    for (let i = 0; i < base; i++) soma += Number(d[i]) * (base + 1 - i);
+    const r = (soma * 10) % 11;
+    return r === 10 ? 0 : r;
+  };
+  return dig(9) === Number(d[9]) && dig(10) === Number(d[10]);
+}
 
 /** Autentica o usuário do CRM pelo token do Supabase enviado no cabeçalho. */
 export async function usuarioDaRequisicao(req) {

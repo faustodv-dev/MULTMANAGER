@@ -4,5 +4,8 @@
   ],
   "functions": {
     "api/**/*.js": { "maxDuration": 60 }
-  }
+  },
+  "crons": [
+    { "path": "/api/reconciliar", "schedule": "0 6 * * *" }
+  ]
 }

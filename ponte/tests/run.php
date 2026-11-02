@@ -163,5 +163,16 @@ file_put_contents($saida . '/carne_teste.pdf', base64_decode($carne['pdf_base64'
 $atr = $escola->parcelasEmAberto(['20001'], date('Y-m-d'));
 confere('parcela antiga atrasada tem juros', ($atr['documentos'][0]['juros'] ?? 0) > 0, true);
 
+echo "== Reconciliação (parcelas_status) e baixa confirmada pelo Asaas\n";
+$st0 = $escola->parcelasStatus([400002, 400001]);
+confere('parcelas_status: 400002 ainda aberta', current(array_filter($st0, fn($s) => $s['cod_par'] === 400002))['baixada'], false);
+// Baixa confirmada (ex.: Asaas) com valor diferente do recomputado, mas desconto <= 30
+$fin->baixar([400002], 13000, '2026-11-04', 'asaas-teste', false, 'asaas', 'Pago no Asaas.', true);
+$p400 = $db->um('SELECT VLR_COB, VLR_DES, DAT_BAI FROM s_cad_parcela WHERE COD_PAR = 400002');
+confere('baixa confirmada grava valor recebido', $p400['VLR_COB'], '130,00');
+confere('baixa confirmada: desconto', $p400['VLR_DES'], Texto::subtracaoLegada('149,90', '130,00'));
+$st1 = $escola->parcelasStatus([400002]);
+confere('parcelas_status: 400002 agora baixada', $st1[0]['baixada'], true);
+
 echo "\n$total verificações, $falhas falha(s)\n";
 exit($falhas ? 1 : 0);

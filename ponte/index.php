@@ -120,6 +120,7 @@ try {
             \Ponte\Texto::dataIso($s('data_referencia')) ?: $hoje
         ),
         'frequencia' => $escola->frequencia($s('cod_alu')),
+        'parcelas_status' => $escola->parcelasStatus(array_map('intval', (array)($req['cod_pars'] ?? []))),
         'ocorrencias' => $escola->ocorrencias($s('cod_alu'), (int)($req['limite'] ?? 15)),
         'agendamentos' => $escola->agendamentos((array)($req['cod_alus'] ?? []), $hoje),
         'cartas' => (new Financeiro($db, $escola, $U['agente']))->cartas(),
@@ -132,7 +133,7 @@ try {
         'simular_baixa' => $fin()->baixar((array)($req['cod_pars'] ?? []), (int)($req['valor_pago'] ?? 0), $s('data_pagamento'), '', true, $s('origem', 'agente')),
         'baixar' => empty($U['baixa_automatica'])
             ? throw new ErroPonte('baixa_desligada', 'Baixa automática desligada nesta unidade (modo sombra).', [], 403)
-            : $fin()->baixar((array)($req['cod_pars'] ?? []), (int)($req['valor_pago'] ?? 0), $s('data_pagamento'), $s('chave'), false, $s('origem', 'agente'), $s('detalhe')),
+            : $fin()->baixar((array)($req['cod_pars'] ?? []), (int)($req['valor_pago'] ?? 0), $s('data_pagamento'), $s('chave'), false, $s('origem', 'agente'), $s('detalhe'), !empty($req['confiar_valor'])),
         'registrar_ocorrencia' => $fin()->registrarOcorrencia($s('cod_alu'), $s('matricula'), $s('texto'), $s('chave')),
         'agendar_pagamento' => $fin()->agendarPagamento($s('cod_alu'), $s('matricula'), $s('vencimento'), $s('data_pagamento'), $s('chave')),
         'registrar_carta' => $fin()->registrarCarta($s('cod_alu'), (int)($req['cod_carta'] ?? 0), $s('data'), $s('chave')),

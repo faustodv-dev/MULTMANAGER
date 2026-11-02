@@ -32,7 +32,7 @@ final class Financeiro
      *
      * @param array<int,int> $codPars parcelas a baixar (devem formar documentos completos)
      */
-    public function baixar(array $codPars, int $valorPago, string $dataPagamento, string $chave, bool $simular, string $origem, string $detalhe = ''): array
+    public function baixar(array $codPars, int $valorPago, string $dataPagamento, string $chave, bool $simular, string $origem, string $detalhe = '', bool $confiarValor = false): array
     {
         $dataPagamento = Texto::dataIso($dataPagamento);
         if ($dataPagamento === '') {
@@ -54,7 +54,7 @@ final class Financeiro
             }
         }
 
-        $plano = $this->planejarBaixa($codPars, $valorPago, $dataPagamento);
+        $plano = $this->planejarBaixa($codPars, $valorPago, $dataPagamento, $confiarValor);
         $req = ['cod_pars' => $codPars, 'valor_pago' => $valorPago, 'data_pagamento' => $dataPagamento, 'origem' => $origem, 'detalhe' => $detalhe];
         if ($simular) {
             return ['simulacao' => true] + $plano;
@@ -150,7 +150,7 @@ final class Financeiro
      * Confere as parcelas, monta os documentos completos e o rateio do valor pago.
      * Nunca aceita valor diferente do devido nem desconto acima de R$ 30 por parcela.
      */
-    public function planejarBaixa(array $codPars, int $valorPago, string $dataPagamento): array
+    public function planejarBaixa(array $codPars, int $valorPago, string $dataPagamento, bool $confiarValor = false): array
     {
         $in = implode(',', array_fill(0, count($codPars), '?'));
         $rows = $this->db->todos("SELECT COD_PAR, COD_ALU, DAT_BAI, VLR_PAR FROM s_cad_parcela WHERE COD_PAR IN ($in)", $codPars);
@@ -189,7 +189,7 @@ final class Financeiro
             throw new ErroPonte('parcela_invalida', 'Parcela(s) sem valor válido para baixa automática: ' . implode(', ', $fora));
         }
         $devido = array_sum(array_column($selecionados, 'valor_devido'));
-        if (abs($devido - $valorPago) > 1) {
+        if (abs($devido - $valorPago) > 1 && !$confiarValor) {
             throw new ErroPonte('valor_divergente', sprintf(
                 'Valor pago %s difere do devido %s em %s.',
                 Texto::reais($valorPago),
@@ -197,12 +197,24 @@ final class Financeiro
                 Texto::dataBr($dataPagamento)
             ), ['valor_devido' => $devido, 'documentos' => $selecionados]);
         }
+        // Pagamento já confirmado (ex.: Asaas): distribui o valor recebido entre os
+        // documentos, mantendo todas as demais travas (documento completo, desconto ≤ 30).
+        if ($confiarValor && $devido > 0 && $devido !== $valorPago) {
+            $acum = 0;
+            $ult = array_key_last($selecionados);
+            foreach ($selecionados as $k => &$d) {
+                $v = $k === $ult ? $valorPago - $acum : (int)round($valorPago * $d['valor_devido'] / $devido);
+                $d['valor_devido'] = $v;
+                $acum += $v;
+            }
+            unset($d);
+        }
 
         $parcelas = [];
         $porAluno = [];
         foreach ($selecionados as $i => $doc) {
             // diferença de 1 centavo vai para o último documento
-            if ($i === array_key_last($selecionados)) {
+            if (!$confiarValor && $i === array_key_last($selecionados)) {
                 $doc['valor_devido'] += $valorPago - $devido;
             }
             foreach (Calculo::rateio($doc) as $cod => $cobrado) {

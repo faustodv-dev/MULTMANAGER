@@ -3,6 +3,7 @@ import { ponte } from './ponte.js';
 import { agente } from './ia.js';
 import { historico, atualizarConversa, chamarHumano, responder } from './conversa.js';
 import { reprocessarPendentes } from './comprovante.js';
+import { prepararCobranca, emitirCobranca } from './cobranca.js';
 
 const primeiroNome = (n) => String(n || '').trim().split(/\s+/)[0]?.toLowerCase().replace(/^./, (c) => c.toUpperCase()) || '';
 const nomeBonito = (n) => String(n || '').toLowerCase().replace(/(^|\s)\S/g, (c) => c.toUpperCase());
@@ -20,7 +21,7 @@ function resumoGrupos(grupos) {
   }));
 }
 
-function sistema(unidade, conversa, grupos) {
+function sistema(unidade, conversa, grupos, asaasAtivo) {
   const conf = conversa.identidade_confirmada;
   const g = conversa.contexto?.grupo;
   return `Você é a assistente virtual do FINANCEIRO da MULT Profissões (cursos profissionalizantes), unidade ${unidade.name}.
@@ -43,8 +44,15 @@ O QUE VOCÊ FAZ:
 - Regras de valor: pagando até o vencimento há desconto de pontualidade de R$ 30,00 por parcela (o valor "em dia"
   já vem calculado). Após o vencimento perde o desconto e há juros de 0,33% ao dia (o valor do dia já vem calculado).
 - Formas de pagamento: Pix para a chave ${unidade.pix_chave || '(consultar secretaria)'} (${unidade.recebedor_nome || 'MULT Profissões'}) ou no balcão da secretaria.
-  Não aceitamos boleto bancário. Depois do Pix, a pessoa deve enviar o comprovante (foto ou PDF) aqui.
-- Enviar o carnê em PDF (enviar_carne) quando pedirem boleto, carnê ou segunda via.
+  Depois do Pix, a pessoa deve enviar o comprovante (foto ou PDF) aqui.
+${asaasAtivo
+  ? `- BOLETO (quando pedirem boleto, segunda via, ou como pagar pelo banco): use SEMPRE dois passos.
+  1) Chame preparar_cobranca(cod_alu). Ele devolve nome do responsável, vencimento e valor.
+  2) CONFIRME com a pessoa: diga o nome do responsável, o vencimento e o VALOR, e pergunte se pode gerar o boleto.
+  3) Só depois do "sim" chame emitir_cobranca. Ele devolve o link do boleto, o Pix copia-e-cola e a linha digitável — envie-os.
+  O boleto já vem com opção de pagar por boleto bancário OU Pix. Nunca gere boleto sem a confirmação do passo 2.
+  Se preparar_cobranca devolver erro de CPF, chame chamar_humano avisando "erro de CPF — gerar boleto".`
+  : `- Enviar o carnê em PDF (enviar_carne) quando pedirem boleto, carnê ou segunda via.`}
 - Registrar promessa de pagamento com data (agendar_pagamento), até 30 dias.
 - Consultar frequência (consultar_frequencia). Se o aluno estiver faltando, incentive com carinho a voltar às aulas:
   falta de pagamento não é motivo para deixar de frequentar; problemas financeiros se resolvem com a secretaria.
@@ -219,6 +227,49 @@ export async function atender({ conversa, unidade, segredos }) {
       }
     },
     {
+      nome: 'preparar_cobranca',
+      descricao: 'Passo 1 do boleto: calcula a parcela e o valor para um aluno. NÃO gera o boleto ainda. Devolve nome do responsável, vencimento e valor para você CONFIRMAR com a pessoa antes de emitir.',
+      parametros: {
+        type: 'object',
+        properties: {
+          cod_alu: { type: 'string' },
+          vencimento: { type: 'string', description: 'opcional, DD/MM/AAAA da parcela desejada; sem isso usa a mais antiga em aberto' }
+        },
+        required: ['cod_alu']
+      },
+      executar: async ({ cod_alu, vencimento }) => {
+        const bloq = exigirIdentidade();
+        if (bloq) return bloq;
+        const r = await prepararCobranca({ conversa, codAlu: cod_alu, vencimentoBr: vencimento });
+        if (r.erro === 'erro_cpf') {
+          await chamarHumano(conversa, `Erro de CPF ao gerar boleto de ${r.nome_responsavel || cod_alu}: ${r.mensagem}`);
+          pediuHumano = true;
+        }
+        return r;
+      }
+    },
+    {
+      nome: 'emitir_cobranca',
+      descricao: 'Passo 2 do boleto: só chame DEPOIS que a pessoa confirmar o valor e o vencimento informados por preparar_cobranca. Gera o boleto (boleto bancário + Pix) e devolve o link, o Pix copia-e-cola e a linha digitável.',
+      parametros: { type: 'object', properties: {} },
+      executar: async () => {
+        const bloq = exigirIdentidade();
+        if (bloq) return bloq;
+        const r = await emitirCobranca({ conversa, segredos });
+        if ((r.emitido || r.reenvio) && (r.boleto_url || r.pix_copia_cola)) {
+          const linhas = [
+            `Boleto de ${r.valor} (vencimento ${r.vencimento}):`,
+            r.boleto_url ? `📄 ${r.boleto_url}` : '',
+            r.linha_digitavel ? `Código de barras: ${r.linha_digitavel}` : '',
+            r.pix_copia_cola ? `Ou pague por Pix (copia e cola):\n${r.pix_copia_cola}` : ''
+          ].filter(Boolean).join('\n');
+          const env = await responder(conversa, linhas);
+          if (env.ok) documentoEnviado = true;
+        }
+        return r;
+      }
+    },
+    {
       nome: 'agendar_pagamento',
       descricao: 'Registra no sistema a data em que o contato promete pagar uma parcela vencida (no máximo 30 dias).',
       parametros: {
@@ -267,7 +318,7 @@ export async function atender({ conversa, unidade, segredos }) {
   if (!linhas.length) return;
 
   const r = await agente({
-    sistema: sistema(unidade, conversa, grupos),
+    sistema: sistema(unidade, conversa, grupos, !!segredos.asaas),
     historico: linhas,
     ferramentas,
     chaves: { gemini: segredos.gemini, groq: segredos.groq },

@@ -298,6 +298,29 @@ final class Escola
         return $out;
     }
 
+    /**
+     * Situação de parcelas específicas (para a reconciliação com o Asaas):
+     * se foram baixadas no sistema escolar e quando.
+     *
+     * @param array<int,int> $codPars
+     * @return array<int,array{cod_par:int,baixada:bool,data_baixa:string}>
+     */
+    public function parcelasStatus(array $codPars): array
+    {
+        $codPars = array_values(array_unique(array_map('intval', array_filter($codPars))));
+        if (!$codPars) {
+            return [];
+        }
+        $in = implode(',', array_fill(0, count($codPars), '?'));
+        $rows = $this->db->todos("SELECT COD_PAR, DAT_BAI, VLR_COB FROM s_cad_parcela WHERE COD_PAR IN ($in)", $codPars);
+        return array_map(fn($r) => [
+            'cod_par' => (int)$r['COD_PAR'],
+            'baixada' => !empty($r['DAT_BAI']),
+            'data_baixa' => Texto::dataIso($r['DAT_BAI']),
+            'valor_cobrado' => (int)Texto::centavos($r['VLR_COB']),
+        ], $rows);
+    }
+
     public function ocorrencias(string $codAlu, int $limite = 15): array
     {
         $limite = max(1, min(50, $limite));

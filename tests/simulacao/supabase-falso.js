@@ -1,6 +1,6 @@
 // Supabase em memória (só o que o código usa)
 import crypto from 'crypto';
-export const DB = { units: [], unit_secrets: [], conversas: [], mensagens: [], comprovantes: [], pendencias: [], registro_acoes: [], profiles: [] };
+export const DB = { units: [], unit_secrets: [], conversas: [], mensagens: [], comprovantes: [], pendencias: [], registro_acoes: [], profiles: [], cobrancas_asaas: [] };
 export const STORAGE = new Map();
 const uniq = { conversas: [['unit_id','telefone','canal']], mensagens: [['unit_id','wa_message_id']] };
 const defaults = {
@@ -18,6 +18,8 @@ class Q {
   gte(k, v) { this.f.push((r) => r[k] >= v); return this; }
   lte(k, v) { this.f.push((r) => r[k] <= v); return this; }
   is(k, v) { this.f.push((r) => (r[k] ?? null) === v); return this; }
+  in(k, arr) { this.f.push((r) => arr.includes(r[k])); return this; }
+  overlaps(k, arr) { this.f.push((r) => (r[k] || []).some((x) => arr.includes(x))); return this; }
   not(k, op, v) {
     if (op === 'in') { const l = v.replace(/[()]/g, '').split(','); this.f.push((r) => !l.includes(r[k])); }
     if (op === 'is') this.f.push((r) => (r[k] ?? null) !== null);

@@ -164,6 +164,21 @@ console.log('== Simulador: mesmo fluxo, sem WhatsApp e sem gravar no sistema');
   ok('ação registrada como simulada', DB.registro_acoes.some((r) => r.acao === 'agendar_pagamento (simulado)'));
 }
 
+console.log('== Boleto Asaas (simulador não cria nada real)');
+{
+  const { prepararCobranca, emitirCobranca } = await import('./api/_lib/cobranca.js');
+  const { contexto } = await import('./api/_lib/contexto.js');
+  const run = (fn) => contexto.run({ simulacao: true }, fn);
+  DB.conversas.push({ id: 'conv-bol', unit_id: 'rio_verde', telefone: '5564988880002', canal: 'simulador', status: 'ia', identidade_confirmada: true, cod_alus: ['13882'], contexto: {}, nao_lidas: 0 });
+  const prev = await run(() => prepararCobranca({ conversa: DB.conversas.find((c) => c.id === 'conv-bol'), codAlu: '13882' }));
+  ok('boleto: prévia traz valor e responsável', /R\$/.test(prev.valor || '') && /EDILSON/i.test(prev.nome_responsavel || ''), JSON.stringify(prev));
+  const emi = await run(() => emitirCobranca({ conversa: DB.conversas.find((c) => c.id === 'conv-bol'), segredos: { asaas: 'asaas-key' } }));
+  ok('boleto: emissão simulada, nada criado no Asaas/Supabase', emi.simulado === true && DB.cobrancas_asaas.length === 0, JSON.stringify(emi));
+  DB.conversas.push({ id: 'conv-cpf', unit_id: 'rio_verde', telefone: '5564999990001', canal: 'simulador', status: 'ia', identidade_confirmada: true, cod_alus: ['20001'], contexto: {}, nao_lidas: 0 });
+  const prevCpf = await run(() => prepararCobranca({ conversa: DB.conversas.find((c) => c.id === 'conv-cpf'), codAlu: '20001' }));
+  ok('boleto: CPF inválido do responsável vira erro_cpf (vai para humano)', prevCpf.erro === 'erro_cpf', JSON.stringify(prevCpf));
+}
+
 console.log('\nMensagens enviadas:', enviados.length, '| registro de erros:', DB.registro_acoes.filter((x) => !x.ok && x.tipo !== 'ia').map((x) => x.acao + ':' + JSON.stringify(x.detalhe)).slice(0, 5));
 console.log(falhas ? `${falhas} FALHA(S)` : 'Tudo certo.');
 process.exit(falhas ? 1 : 0);

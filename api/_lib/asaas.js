@@ -2,20 +2,100 @@ import { CFG, registrar } from './base.js';
 
 const base = () => (CFG.asaasSandbox ? 'https://api-sandbox.asaas.com/v3' : 'https://api.asaas.com/v3');
 
+function headers(chave) {
+  return { access_token: chave, 'Content-Type': 'application/json', 'User-Agent': 'mult-crm-financeiro' };
+}
+
 async function get(chave, caminho, params, unitId) {
   const qs = new URLSearchParams(Object.entries(params).filter(([, v]) => v !== undefined && v !== null && v !== ''));
   const inicio = Date.now();
-  const r = await fetch(`${base()}${caminho}?${qs}`, {
-    headers: { access_token: chave, 'User-Agent': 'mult-crm-financeiro' },
-    signal: AbortSignal.timeout(15000)
-  });
+  const r = await fetch(`${base()}${caminho}?${qs}`, { headers: headers(chave), signal: AbortSignal.timeout(15000) });
   const j = await r.json().catch(() => ({}));
-  await registrar('asaas', caminho, r.ok, { unitId, duracaoMs: Date.now() - inicio, detalhe: r.ok ? { total: j?.totalCount } : { http: r.status, erro: j?.errors?.[0]?.description } });
+  await registrar('asaas', 'GET ' + caminho, r.ok, { unitId, duracaoMs: Date.now() - inicio, detalhe: r.ok ? { total: j?.totalCount } : { http: r.status, erro: j?.errors?.[0]?.description } });
   if (!r.ok) throw new Error(j?.errors?.[0]?.description || `asaas_http_${r.status}`);
   return j;
 }
 
+async function metodo(verbo, chave, caminho, corpo, unitId) {
+  const inicio = Date.now();
+  const r = await fetch(`${base()}${caminho}`, {
+    method: verbo, headers: headers(chave), body: corpo ? JSON.stringify(corpo) : undefined, signal: AbortSignal.timeout(20000)
+  });
+  const j = await r.json().catch(() => ({}));
+  await registrar('asaas', `${verbo} ${caminho}`, r.ok, { unitId, duracaoMs: Date.now() - inicio, detalhe: r.ok ? { id: j?.id } : { http: r.status, erro: j?.errors?.[0]?.description } });
+  if (!r.ok) {
+    const e = new Error(j?.errors?.[0]?.description || `asaas_http_${r.status}`);
+    e.http = r.status;
+    e.asaas = j?.errors;
+    throw e;
+  }
+  return j;
+}
+
 const centavos = (v) => Math.round(Number(v || 0) * 100);
+const reais = (c) => Math.round(Number(c || 0)) / 100;
+const soDigitos = (s) => String(s || '').replace(/\D+/g, '');
+
+/**
+ * Cliente Asaas do responsável: procura pelo CPF; se não existir, cria.
+ * notificationDisabled = true: todo controle de cobrança é nosso (sem e-mail/SMS do Asaas).
+ */
+export async function garantirCliente(chave, { nome, cpf, telefone, email, unitId }) {
+  const doc = soDigitos(cpf);
+  const lista = await get(chave, '/customers', { cpfCnpj: doc, limit: 100 }, unitId);
+  const existente = (lista.data || []).find((c) => soDigitos(c.cpfCnpj) === doc);
+  if (existente) {
+    if (!existente.notificationDisabled) {
+      await metodo('POST', chave, `/customers/${existente.id}`, { notificationDisabled: true }, unitId).catch(() => {});
+    }
+    return existente.id;
+  }
+  const criado = await metodo('POST', chave, '/customers', {
+    name: nome, cpfCnpj: doc, mobilePhone: soDigitos(telefone) || undefined, email: email || undefined,
+    notificationDisabled: true
+  }, unitId);
+  return criado.id;
+}
+
+/**
+ * Cria a cobrança (boleto + Pix na mesma cobrança). Opção A: valor fechado,
+ * sem desconto/juros/multa automáticos do Asaas — o valor é o calculado pela ponte.
+ */
+export async function criarCobranca(chave, { customer, valorCentavos, vencimento, descricao, externalReference, unitId }) {
+  return metodo('POST', chave, '/payments', {
+    customer,
+    billingType: 'UNDEFINED', // deixa o pagador escolher boleto ou Pix
+    value: reais(valorCentavos),
+    dueDate: vencimento,
+    description: String(descricao || '').slice(0, 500),
+    externalReference,
+    daysAfterDueDateToRegistrationCancellation: 30
+  }, unitId);
+}
+
+/** Linha digitável do boleto e QR/copia-e-cola do Pix (cada um pode falhar isolado). */
+export async function detalhesPagamento(chave, paymentId, unitId) {
+  const out = {};
+  try {
+    const b = await get(chave, `/payments/${paymentId}/identificationField`, {}, unitId);
+    out.linha_digitavel = b?.identificationField || null;
+  } catch {}
+  try {
+    const p = await get(chave, `/payments/${paymentId}/pixQrCode`, {}, unitId);
+    out.pix_copia_cola = p?.payload || null;
+  } catch {}
+  return out;
+}
+
+/** Remove uma cobrança não paga (aluno pagou na escola). */
+export async function excluirCobranca(chave, paymentId, unitId) {
+  return metodo('DELETE', chave, `/payments/${paymentId}`, null, unitId);
+}
+
+/** Situação atual de uma cobrança no Asaas. */
+export async function obterCobranca(chave, paymentId, unitId) {
+  return get(chave, `/payments/${paymentId}`, {}, unitId);
+}
 
 /**
  * Procura no extrato da conta Asaas um crédito Pix com o valor do comprovante,
