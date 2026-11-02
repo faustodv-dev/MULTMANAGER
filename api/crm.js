@@ -273,6 +273,32 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true, colaboradores: await listarColaboradores(unitId) });
     }
 
+    /* ───────── Chaves por unidade (admin) — nunca devolve os valores ───────── */
+    const adminUnidade = eu.papel === 'master' || (eu.papel === 'admin' && eu.unit_id === unitId);
+    if (acao === 'segredos_status') {
+      if (!adminUnidade) return res.status(403).json({ erro: 'sem_permissao' });
+      const { data } = await supabase.from('unit_secrets').select('asaas_api_key, gemini_api_key, groq_api_key').eq('unit_id', unitId).maybeSingle();
+      return res.status(200).json({ ok: true, status: { asaas: !!data?.asaas_api_key, gemini: !!data?.gemini_api_key, groq: !!data?.groq_api_key } });
+    }
+    if (acao === 'segredos_salvar') {
+      if (!adminUnidade) return res.status(403).json({ erro: 'sem_permissao' });
+      const limpa = (v) => String(v || '').replace(/[\r\n\s]+/g, '');
+      const patch = { unit_id: unitId, updated_at: new Date().toISOString() };
+      for (const [campo, col] of [['asaas', 'asaas_api_key'], ['gemini', 'gemini_api_key'], ['groq', 'groq_api_key']]) {
+        if (typeof b[campo] === 'string' && limpa(b[campo])) patch[col] = limpa(b[campo]);
+      }
+      // Copia a chave Asaas de outra unidade (server-side, sem expor o valor). Ex.: Aparecida usa a da Rio Verde.
+      if (b.copiar_asaas_de) {
+        const { data: fonte } = await supabase.from('unit_secrets').select('asaas_api_key').eq('unit_id', String(b.copiar_asaas_de)).maybeSingle();
+        if (fonte?.asaas_api_key) patch.asaas_api_key = fonte.asaas_api_key;
+        else return res.status(200).json({ ok: false, erro: 'fonte_sem_asaas', mensagem: 'A unidade de origem não tem chave Asaas.' });
+      }
+      if (Object.keys(patch).length <= 2) return res.status(400).json({ erro: 'nada_para_salvar' });
+      const { error } = await supabase.from('unit_secrets').upsert(patch, { onConflict: 'unit_id' });
+      if (error) return res.status(400).json({ erro: 'falha', mensagem: error.message });
+      return res.status(200).json({ ok: true });
+    }
+
     /* ───────── Unidades (master) ───────── */
     if (acao === 'unidades_comercial') {
       if (eu.papel !== 'master') return res.status(403).json({ erro: 'sem_permissao' });

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Plus, Download } from "lucide-react";
+import { Plus, Download, KeyRound } from "lucide-react";
 import { api, supabase, type Unidade } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
@@ -111,8 +111,61 @@ export default function Unidades() {
             <div><Label>CNPJ do recebedor (só números)</Label><Input value={campo(u, "recebedor_documento") || ""} onChange={(e) => mudar(u, "recebedor_documento", e.target.value.replace(/\D/g, ""))} /></div>
             <div><Label>Horário/contato da secretaria (a assistente informa)</Label><Textarea rows={2} value={campo(u, "atendimento_humano") || ""} onChange={(e) => mudar(u, "atendimento_humano", e.target.value)} /></div>
           </div>
+          <ChavesUnidade unitId={u.id} />
         </div>
       ))}
+    </div>
+  );
+}
+
+/** Chaves/integrações da unidade: mostra apenas o status (configurada ou não) e permite atualizar. */
+function ChavesUnidade({ unitId }: { unitId: string }) {
+  const [aberto, setAberto] = useState(false);
+  const [status, setStatus] = useState<any>(null);
+  const [vals, setVals] = useState<any>({ asaas: "", gemini: "", groq: "" });
+  const [busy, setBusy] = useState(false);
+
+  const carregar = async () => {
+    try { const r = await api<any>("crm", { acao: "segredos_status", unidade: unitId }); setStatus(r.status); }
+    catch (e: any) { toast.error(e.message); }
+  };
+  const abrir = () => { setAberto(!aberto); if (!status) carregar(); };
+  const salvar = async (extra: any = {}) => {
+    setBusy(true);
+    try {
+      const r = await api<any>("crm", { acao: "segredos_salvar", unidade: unitId, ...vals, ...extra });
+      if (!r.ok) return toast.error(r.mensagem || r.erro);
+      toast.success("Chaves atualizadas.");
+      setVals({ asaas: "", gemini: "", groq: "" }); carregar();
+    } catch (e: any) { toast.error(e.message); } finally { setBusy(false); }
+  };
+  const Bolinha = ({ ok }: { ok: boolean }) => <span className={`inline-block h-2 w-2 rounded-full ${ok ? "bg-green-500" : "bg-slate-300"}`} />;
+
+  return (
+    <div className="rounded-lg border bg-muted/30 p-3">
+      <button onClick={abrir} className="flex w-full items-center gap-2 text-sm font-medium">
+        <KeyRound className="h-4 w-4" />Chaves &amp; integrações
+        {status && <span className="ml-2 flex items-center gap-2 text-xs text-muted-foreground">
+          <Bolinha ok={status.asaas} />Asaas <Bolinha ok={status.gemini} />Gemini <Bolinha ok={status.groq} />Groq
+        </span>}
+        <span className="ml-auto text-xs text-muted-foreground">{aberto ? "ocultar" : "editar"}</span>
+      </button>
+      {aberto && (
+        <div className="mt-3 space-y-2">
+          <p className="text-xs text-muted-foreground">As chaves ficam guardadas em segurança e nunca são exibidas. Preencha só o que quiser trocar.</p>
+          <div className="grid gap-2 md:grid-cols-3">
+            <div><Label className="text-xs">Chave Asaas {status?.asaas ? "✓" : ""}</Label><Input type="password" placeholder="$aact_..." value={vals.asaas} onChange={(e) => setVals({ ...vals, asaas: e.target.value })} /></div>
+            <div><Label className="text-xs">Chave Gemini {status?.gemini ? "✓" : ""}</Label><Input type="password" placeholder="AIza..." value={vals.gemini} onChange={(e) => setVals({ ...vals, gemini: e.target.value })} /></div>
+            <div><Label className="text-xs">Chave Groq {status?.groq ? "✓" : ""}</Label><Input type="password" placeholder="gsk_..." value={vals.groq} onChange={(e) => setVals({ ...vals, groq: e.target.value })} /></div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" onClick={() => salvar()} disabled={busy || (!vals.asaas && !vals.gemini && !vals.groq)}>Salvar chaves</Button>
+            {unitId !== "rio_verde" && (
+              <Button size="sm" variant="outline" onClick={() => salvar({ copiar_asaas_de: "rio_verde" })} disabled={busy}>Usar Asaas da Rio Verde</Button>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
