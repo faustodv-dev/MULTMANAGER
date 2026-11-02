@@ -137,6 +137,17 @@ function ChavesUnidade({ unitId }: { unitId: string }) {
   const [qrAberto, setQrAberto] = useState(false);
   const [vals, setVals] = useState<any>({ asaas: "", gemini: "", groq: "" });
   const [busy, setBusy] = useState(false);
+  const [diag, setDiag] = useState<any>(null);
+  const [diagBusy, setDiagBusy] = useState(false);
+
+  const testar = async () => {
+    setDiagBusy(true);
+    try {
+      const { data } = await supabase.auth.getSession();
+      const r = await fetch(`/api/status?unidade=${unitId}`, { headers: { Authorization: `Bearer ${data.session?.access_token}` } });
+      setDiag(await r.json());
+    } catch (e: any) { toast.error(e.message); } finally { setDiagBusy(false); }
+  };
 
   const carregar = async () => {
     try { const r = await api<any>("crm", { acao: "segredos_status", unidade: unitId }); setStatus(r.status); }
@@ -187,7 +198,18 @@ function ChavesUnidade({ unitId }: { unitId: string }) {
               WhatsApp {waConectado ? `conectado${wa?.phone ? ` · ${wa.phone}` : ""}` : "desconectado"}
             </span>
             <Button size="sm" variant="outline" onClick={() => setQrAberto(true)}><Smartphone className="mr-1 h-4 w-4" />Conectar WhatsApp</Button>
+            <Button size="sm" variant="outline" onClick={testar} disabled={diagBusy}>{diagBusy ? "Testando…" : "Testar integrações"}</Button>
           </div>
+          {diag && (
+            <div className="space-y-1 rounded-md border bg-muted/40 p-2 text-xs">
+              <div className="flex flex-wrap gap-x-4 gap-y-0.5">
+                <span>Banco escolar (ponte): <b className={diag.ponte?.banco ? "text-green-600" : "text-red-600"}>{diag.ponte?.banco ? "conectado" : (diag.ponte?.erro || "erro")}</b></span>
+                <span>Gateway: <b className={diag.gateway?.http === 200 ? "text-green-600" : "text-red-600"}>{diag.gateway?.http || diag.gateway?.erro || "—"}</b></span>
+                <span>Asaas: <b className={diag.config?.asaas_chave_unidade ? "text-green-600" : "text-amber-600"}>{diag.config?.asaas_chave_unidade ? "ok" : "sem chave"}</b></span>
+              </div>
+              {diag.ponte?.erro === "unidade_desconhecida" && <p className="text-amber-700">A ponte ainda não conhece <b>{unitId}</b> — confira o bloco no <code>config.php</code>.</p>}
+            </div>
+          )}
         </div>
       )}
       {qrAberto && <QrDialog unitId={unitId} aoFechar={() => { setQrAberto(false); carregar(); }} />}

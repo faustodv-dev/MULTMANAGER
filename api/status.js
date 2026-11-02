@@ -3,11 +3,14 @@ import { CFG } from './_lib/base.js';
 import { ponte } from './_lib/ponte.js';
 import { segredosUnidade } from './_lib/conversa.js';
 
-/** Diagnóstico para o master: configuração, ponte e gateway. */
+/** Diagnóstico: master vê qualquer unidade; admin vê a própria. */
 export default async function handler(req, res) {
   const eu = await usuarioDaRequisicao(req);
-  if (!eu || eu.papel !== 'master') return res.status(403).json({ erro: 'sem_permissao' });
-  const unidade = String(req.query?.unidade || 'rio_verde');
+  if (!eu) return res.status(401).json({ erro: 'nao_autenticado' });
+  const unidade = String(req.query?.unidade || eu.unit_id || 'rio_verde');
+  if (eu.papel !== 'master' && !(eu.papel === 'admin' && eu.unit_id === unidade)) {
+    return res.status(403).json({ erro: 'sem_permissao' });
+  }
   const segredos = await segredosUnidade(unidade).catch(() => ({}));
   const r = {
     config: {
