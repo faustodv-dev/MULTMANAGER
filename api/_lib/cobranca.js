@@ -132,7 +132,13 @@ export async function emitirCobranca({ conversa, segredos, via = 'whatsapp' }) {
   }
 
   if (simulando()) {
-    return { simulado: true, valor: reais(p.valor_centavos), vencimento: dataBr(p.due_date), nome_responsavel: p.nome_responsavel };
+    return {
+      simulado: true,
+      valor: reais(p.valor_centavos),
+      vencimento: dataBr(p.due_date),
+      nome_responsavel: p.nome_responsavel,
+      instrucao_para_voce: `MODO SIMULADO: não existe boleto real. NÃO invente link, código de barras nem Pix. Diga à pessoa que, em produção, o boleto de ${reais(p.valor_centavos)} (vencimento ${dataBr(p.due_date)}) seria gerado e enviado agora, com o link, a linha digitável e o Pix copia-e-cola.`
+    };
   }
 
   if (!segredos.asaas) return { erro: 'asaas_nao_configurado' };

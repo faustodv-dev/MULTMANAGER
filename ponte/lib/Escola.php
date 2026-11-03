@@ -362,6 +362,54 @@ final class Escola
         ], $rows);
     }
 
+    /**
+     * Carteira para a régua de cobrança: parcelas EM ABERTO cujo vencimento cai
+     * numa das datas informadas (ISO AAAA-MM-DD), já com o contato do responsável.
+     * Somente leitura. Usado pelo disparo automático (varre todos os alunos da unidade).
+     *
+     * @param array<int,string> $datasIso
+     * @return array<int,array<string,mixed>>
+     */
+    public function carteiraPorVencimento(array $datasIso): array
+    {
+        $datas = array_values(array_unique(array_filter(array_map(fn($d) => Texto::dataIso((string)$d) ?: (string)$d, $datasIso))));
+        if (!$datas) {
+            return [];
+        }
+        $rows = $this->db->todos(
+            "SELECT p.COD_PAR, p.COD_ALU, p.NUM_MATRICULA, p.TIPO_PAR, p.VLR_PAR, p.DAT_VEN,
+                    a.NOM_ALU, a.CPF_RES, a.NOM_PAI_ALU, a.WHATS, a.CEL_ALU, a.TEL_RESP, a.FON_ALU, a.EMAIL_ALU
+             FROM s_cad_parcela p
+             JOIN s_cad_aluno a ON a.COD_ALU = p.COD_ALU
+             WHERE (p.DAT_BAI IS NULL OR p.DAT_BAI = '')",
+            []
+        );
+        $out = [];
+        foreach ($rows as $r) {
+            $venc = Texto::dataIso($r['DAT_VEN']);
+            if (!in_array($venc, $datas, true)) {
+                continue;
+            }
+            $tel = Texto::telefoneWhatsapp($r['TEL_RESP'] ?? '')
+                ?: Texto::telefoneWhatsapp($r['WHATS'] ?? '')
+                ?: Texto::telefoneWhatsapp($r['CEL_ALU'] ?? '')
+                ?: Texto::telefoneWhatsapp($r['FON_ALU'] ?? '');
+            $out[] = [
+                'cod_par' => (int)$r['COD_PAR'],
+                'cod_alu' => (string)$r['COD_ALU'],
+                'num_matricula' => (string)($r['NUM_MATRICULA'] ?? ''),
+                'nome_aluno' => trim(Texto::doBanco($r['NOM_ALU'] ?? '')),
+                'cpf_responsavel' => Texto::digitos($r['CPF_RES'] ?? ''),
+                'nome_responsavel' => trim(Texto::doBanco($r['NOM_PAI_ALU'] ?? '')),
+                'telefone' => $tel,
+                'email' => trim(Texto::doBanco($r['EMAIL_ALU'] ?? '')),
+                'vencimento' => $venc,
+                'valor' => (int)Texto::centavos($r['VLR_PAR']),
+            ];
+        }
+        return $out;
+    }
+
     /** Dados da unidade (tabela franquia) para o carnê. */
     public function unidade(): array
     {
