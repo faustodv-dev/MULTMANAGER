@@ -46,7 +46,7 @@ O QUE VOCÊ FAZ:
 - Formas de pagamento: Pix para a chave ${unidade.pix_chave || '(consultar secretaria)'} (${unidade.recebedor_nome || 'MULT Profissões'}) ou no balcão da secretaria.
   Depois do Pix, a pessoa deve enviar o comprovante (foto ou PDF) aqui.
 ${asaasAtivo
-  ? `- BOLETO (quando pedirem boleto, segunda via, ou como pagar pelo banco): use SEMPRE dois passos.
+  ? `- BOLETO (quando pedirem boleto, carnê, segunda via, ou como pagar pelo banco): use SEMPRE dois passos e gere o boleto real (nunca um carnê genérico).
   1) Chame preparar_cobranca(cod_alu). Ele devolve nome do responsável, vencimento e valor.
   2) CONFIRME com a pessoa: diga o nome do responsável, o vencimento e o VALOR, e pergunte se pode gerar o boleto.
   3) Só depois do "sim" chame emitir_cobranca. Ele devolve o link do boleto, o Pix copia-e-cola e a linha digitável — envie-os.
@@ -113,7 +113,8 @@ export async function atender({ conversa, unidade, segredos }) {
   let pediuHumano = false;
   let documentoEnviado = false;
 
-  const ferramentas = [
+  const asaasAtivo = !!segredos.asaas;
+  const ferramentasTodas = [
     {
       nome: 'confirmar_identidade',
       descricao: 'Marca a identidade como confirmada depois que o contato confirmou ser o responsável (ou o aluno) de um dos CADASTROS_PELO_TELEFONE.',
@@ -306,6 +307,14 @@ export async function atender({ conversa, unidade, segredos }) {
       }
     }
   ];
+
+  // Com Asaas ativo na unidade: só o boleto real (esconde o carnê genérico).
+  // Sem Asaas: cai no carnê em PDF. Respeita a chave de cada unidade.
+  const ferramentas = ferramentasTodas.filter((f) => {
+    if (f.nome === 'enviar_carne') return !asaasAtivo;
+    if (f.nome === 'preparar_cobranca' || f.nome === 'emitir_cobranca') return asaasAtivo;
+    return true;
+  });
 
   const hist = await historico(conversa.id, 24);
   const linhas = hist
