@@ -96,12 +96,19 @@ export default async function handler(req, res) {
 
     if (acao === 'disparar_manual') {
       if (!b.de || !b.ate) return res.status(400).json({ erro: 'periodo_obrigatorio' });
-      const r = await dispararManual(unitId, {
+      // trava anti-reenvio: mesmo disparo repetido em menos de 2 min
+      const { data: recente } = await supabase.from('regua_jobs')
+        .select('id').eq('unit_id', unitId)
+        .contains('params', { de: String(b.de), ate: String(b.ate), offset: Number(b.offset) })
+        .gte('created_at', new Date(Date.now() - 120000).toISOString()).limit(1);
+      if (recente && recente.length) return res.status(429).json({ erro: 'reenvio_rapido', mensagem: 'Esse mesmo disparo foi feito há pouco. Aguarde ~2 minutos.' });
+
+      const { job_id, resumo } = await dispararManual(unitId, {
         de: String(b.de), ate: String(b.ate),
         statuses: Array.isArray(b.statuses) ? b.statuses : [],
-        offset: Number(b.offset)
+        offset: Number(b.offset), criadoPor: eu.id
       });
-      return res.status(200).json({ ok: true, resumo: r });
+      return res.status(200).json({ ok: true, job_id, resumo });
     }
 
     return res.status(400).json({ erro: 'acao_invalida' });

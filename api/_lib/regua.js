@@ -4,18 +4,18 @@ import { enviarWhatsapp } from './gateway.js';
 
 /**
  * Régua de cobrança (disparo automático e manual de mensagens no WhatsApp).
- * Cada unidade tem a sua régua; quando `regua` é null na unidade, vale este padrão.
+ * O envio é fire-and-forget: o gateway enfileira e humaniza (digitação + espaçamento),
+ * então o chip fica protegido e a função não trava esperando entrega.
  * Variáveis dos textos: {responsavel} {aluno} {valor} {vencimento}
  */
 
-// Status da matrícula financeira (s_cad_matricula.STATUS_MAT). Mesmos em todas as unidades.
 export const STATUS_CANONICOS = ['Ativo', 'Desistente', 'Rescindido', 'Trancado', 'Formado'];
 
 export const REGUA_PADRAO = {
-  ativa: false, // a unidade liga quando o WhatsApp estiver conectado
+  ativa: false,
   horario: 9,
   pula_domingo: true,
-  statuses: ['Ativo'], // só cobra matrícula ativa, por padrão
+  statuses: ['Ativo'],
   passos: [
     { offset: -3, ativo: true, texto: 'Oi, {responsavel}! 😊 Passando pra lembrar que a mensalidade de {aluno} ({valor}) vence em {vencimento}. Pagando até o vencimento você garante o desconto de pontualidade. Se quiser o boleto ou o Pix, é só responder aqui que eu te mando!' },
     { offset: 0, ativo: true, texto: 'Olá, {responsavel}! A mensalidade de {aluno} ({valor}) vence hoje ({vencimento}). Dá pra pagar por boleto ou Pix — me responde aqui que eu envio na hora. 😉' },
@@ -33,7 +33,6 @@ export function rotuloOffset(o) {
   return `${n} dia${n > 1 ? 's' : ''} depois de vencer`;
 }
 
-/** Mescla a config salva com o padrão (preenche o que faltar; mantém passos extras). */
 export function mesclarRegua(salva) {
   const base = JSON.parse(JSON.stringify(REGUA_PADRAO));
   if (!salva || typeof salva !== 'object') return base;
@@ -88,89 +87,102 @@ export function preencherDemo(texto) {
   return preencher(texto, { responsavel: 'Maria', aluno: 'João', valor: 'R$ 150,00', vencimento: dataBr(hojeSP()) });
 }
 
-async function temBoletoAtivo(unitId, codPars) {
-  if (!codPars.length) return false;
-  const { data } = await supabase.from('cobrancas_asaas').select('id')
-    .eq('unit_id', unitId).in('status', ['pendente', 'recebido']).overlaps('cod_pars', codPars).limit(1);
-  return !!(data && data.length);
-}
+const MAX_POR_EXECUCAO = 250; // teto de segurança por chamada (cabe no limite da Vercel)
 
-/** Envia (ou pula) um grupo já montado. Retorna 'enviado' | 'simulado' | 'pulado' | 'erro'. */
-async function enviarGrupo(unitId, g, origem) {
-  const { data: jaExiste } = await supabase.from('regua_envios').select('id').eq('unit_id', unitId).eq('chave', g.chave).maybeSingle();
-  if (jaExiste) return 'pulado';
+/**
+ * Processa uma lista já agrupada (um grupo = uma mensagem por responsável).
+ * Pré-carrega os já-enviados e os boletos ativos (2 consultas) para rodar rápido;
+ * o índice único (unit_id, chave) é a garantia final contra duplicidade.
+ * Envia fire-and-forget (o gateway humaniza). Retorna o relatório.
+ */
+async function processarGrupos(unitId, gruposMap, origem) {
+  const grupos = [...gruposMap.values()];
+  const resumo = { total: grupos.length, enviados: 0, pulados: 0, erros: 0, limitado: false, erros_detalhe: [] };
+  if (!grupos.length) return resumo;
 
-  const base = {
-    unit_id: unitId, chave: g.chave, offset_dias: g.passo.offset, vencimento: g.vencimento || null,
-    telefone: digitos(g.telefone), cod_pars: g.cod_pars, alunos: g.alunosTxt, valor_centavos: g.valor, origem
-  };
-
-  if (await temBoletoAtivo(unitId, g.cod_pars)) {
-    await supabase.from('regua_envios').insert({ ...base, status: 'pulado_boleto_ativo' }).then(() => {}, () => {});
-    return 'pulado';
+  // Pré-carrega já-enviados (por chave) e boletos ativos (por cod_par)
+  const chaves = grupos.map((g) => g.chave);
+  const enviadosSet = new Set();
+  for (let i = 0; i < chaves.length; i += 200) {
+    const { data } = await supabase.from('regua_envios').select('chave').eq('unit_id', unitId).in('chave', chaves.slice(i, i + 200));
+    (data || []).forEach((r) => enviadosSet.add(r.chave));
   }
+  const { data: cobr } = await supabase.from('cobrancas_asaas').select('cod_pars').eq('unit_id', unitId).in('status', ['pendente', 'recebido']);
+  const boletoSet = new Set();
+  (cobr || []).forEach((c) => (c.cod_pars || []).forEach((p) => boletoSet.add(Number(p))));
 
-  const texto = preencher(g.passo.texto, {
-    responsavel: primeiroNome(g.responsavel) || 'tudo bem',
-    aluno: g.alunosTxt, valor: reais(g.valor), vencimento: dataBr(g.vencimento)
-  });
-  const env = await enviarWhatsapp(unitId, g.telefone, texto, { conversaId: null });
-  if (env.ok || env.status === 'simulado') {
-    await supabase.from('regua_envios').insert({ ...base, status: env.status === 'simulado' ? 'simulado' : 'enviado' }).then(() => {}, () => {});
-    return env.status === 'simulado' ? 'simulado' : 'enviado';
+  const registros = [];
+  let processados = 0;
+  for (const g of grupos) {
+    if (processados >= MAX_POR_EXECUCAO) { resumo.limitado = true; break; }
+    if (enviadosSet.has(g.chave)) { resumo.pulados++; continue; }
+    processados++;
+    const alunosTxt = nomesAlunos(g._alunos);
+    const baseReg = {
+      unit_id: unitId, chave: g.chave, offset_dias: g.passo.offset, vencimento: g.vencimento || null,
+      telefone: digitos(g.telefone), cod_pars: g.cod_pars, alunos: alunosTxt, valor_centavos: g.valor, origem
+    };
+    if (g.cod_pars.some((p) => boletoSet.has(Number(p)))) {
+      resumo.pulados++;
+      registros.push({ ...baseReg, status: 'pulado_boleto_ativo' });
+      continue;
+    }
+    const texto = preencher(g.passo.texto, {
+      responsavel: primeiroNome(g.responsavel) || 'tudo bem', aluno: alunosTxt, valor: reais(g.valor), vencimento: dataBr(g.vencimento)
+    });
+    const env = await enviarWhatsapp(unitId, g.telefone, texto, { conversaId: null, aguardarEntrega: false });
+    if (env.ok || env.status === 'simulado') {
+      resumo.enviados++;
+      registros.push({ ...baseReg, status: env.status === 'simulado' ? 'simulado' : 'enviado' });
+    } else {
+      resumo.erros++;
+      if (resumo.erros_detalhe.length < 50) resumo.erros_detalhe.push({ telefone: digitos(g.telefone), aluno: alunosTxt, erro: env.erro || 'falha no envio' });
+    }
   }
-  await registrar('regua', 'envio_erro', false, { unitId, detalhe: { chave: g.chave, erro: env.erro } });
-  return 'erro';
+  if (registros.length) {
+    await supabase.from('regua_envios').upsert(registros, { onConflict: 'unit_id,chave', ignoreDuplicates: true }).then(() => {}, () => {});
+  }
+  await registrar('regua', origem === 'manual' ? 'manual' : 'disparo', resumo.erros === 0, { unitId, detalhe: { total: resumo.total, enviados: resumo.enviados, pulados: resumo.pulados, erros: resumo.erros, limitado: resumo.limitado } });
+  return resumo;
 }
 
-function contabilizar(resumo, r) {
-  if (r === 'enviado' || r === 'simulado') resumo.enviados++;
-  else if (r === 'pulado') resumo.pulados++;
-  else resumo.erros++;
+/** Monta os grupos (uma msg por responsável) a partir da carteira. escolherPasso(parcela)->passo ou null. */
+function agrupar(carteira, escolherPasso, chaveDe) {
+  const grupos = new Map();
+  for (const p of carteira) {
+    const passo = escolherPasso(p);
+    if (!passo) continue;
+    const tel = digitos(p.telefone);
+    const chave = chaveDe(passo, p, tel);
+    if (!grupos.has(chave)) grupos.set(chave, { chave, passo, telefone: p.telefone, vencimento: p.vencimento, responsavel: p.nome_responsavel || '', _alunos: [], cod_pars: [], valor: 0 });
+    const g = grupos.get(chave);
+    g._alunos.push(p.nome_aluno); g.cod_pars.push(p.cod_par); g.valor += Number(p.valor || 0);
+    if (p.vencimento && (!g.vencimento || p.vencimento < g.vencimento)) g.vencimento = p.vencimento;
+    if (!g.responsavel && p.nome_responsavel) g.responsavel = p.nome_responsavel;
+  }
+  return grupos;
 }
 
-/** Disparo AUTOMÁTICO de uma unidade: parcelas vencendo nos prazos ativos, nos status escolhidos. */
-export async function processarReguaUnidade(unitId, { forcar = false, limite = 400 } = {}) {
+/** Disparo AUTOMÁTICO de uma unidade. */
+export async function processarReguaUnidade(unitId, { forcar = false } = {}) {
   const regua = await reguaDaUnidade(unitId);
-  const resumo = { unit_id: unitId, grupos: 0, enviados: 0, pulados: 0, erros: 0 };
-  if (!regua.ativa && !forcar) return { ...resumo, pulou: 'inativa' };
+  if (!regua.ativa && !forcar) return { unit_id: unitId, total: 0, enviados: 0, pulados: 0, erros: 0, pulou: 'inativa' };
   const passos = regua.passos.filter((p) => p.ativo);
-  if (!passos.length) return { ...resumo, pulou: 'sem_passos' };
+  if (!passos.length) return { unit_id: unitId, total: 0, enviados: 0, pulados: 0, erros: 0, pulou: 'sem_passos' };
 
   const hoje = hojeSP();
   const porData = new Map(passos.map((p) => [somaDias(hoje, -p.offset), p]));
-
   let carteira;
   try {
     carteira = await ponte(unitId, 'carteira', { datas: [...porData.keys()], statuses: regua.statuses }, { timeoutMs: 40000 });
   } catch (e) {
     await registrar('regua', 'carteira_erro', false, { unitId, detalhe: { erro: e.message } });
-    return { ...resumo, erros: 1, erro: e.codigo || e.message };
+    return { unit_id: unitId, total: 0, enviados: 0, pulados: 0, erros: 1, erro: e.codigo || e.message };
   }
   carteira = (carteira || []).filter((p) => p.telefone && digitos(p.telefone).length >= 10);
-
-  const grupos = new Map();
-  for (const p of carteira) {
-    const passo = porData.get(p.vencimento);
-    if (!passo) continue;
-    const tel = digitos(p.telefone);
-    const chave = `${passo.offset}|${p.vencimento}|${tel}`;
-    if (!grupos.has(chave)) grupos.set(chave, { chave, passo, telefone: p.telefone, vencimento: p.vencimento, responsavel: p.nome_responsavel || '', _alunos: [], cod_pars: [], valor: 0 });
-    const g = grupos.get(chave);
-    g._alunos.push(p.nome_aluno); g.cod_pars.push(p.cod_par); g.valor += Number(p.valor || 0);
-    if (!g.responsavel && p.nome_responsavel) g.responsavel = p.nome_responsavel;
-  }
-  resumo.grupos = grupos.size;
-
-  let feitos = 0;
-  for (const g of grupos.values()) {
-    if (feitos >= limite) break;
-    feitos++;
-    g.alunosTxt = nomesAlunos(g._alunos);
-    contabilizar(resumo, await enviarGrupo(unitId, g, 'auto'));
-  }
-  await registrar('regua', 'disparo', resumo.erros === 0, { unitId, detalhe: resumo });
-  return resumo;
+  const grupos = agrupar(carteira, (p) => porData.get(p.vencimento), (passo, p, tel) => `${passo.offset}|${p.vencimento}|${tel}`);
+  const r = await processarGrupos(unitId, grupos, 'auto');
+  return { unit_id: unitId, ...r };
 }
 
 /** Prévia do disparo MANUAL: quantos responsáveis/parcelas entram, sem enviar nada. */
@@ -186,33 +198,36 @@ export async function previaManual(unitId, { de, ate, statuses }) {
   };
 }
 
-/** Disparo MANUAL: envia a mensagem escolhida a quem tem parcela no período e status escolhidos. */
-export async function dispararManual(unitId, { de, ate, statuses, offset, limite = 600 }) {
+/**
+ * Disparo MANUAL com relatório (job). Enfileira todos (lotes geridos pelo gateway),
+ * grava um regua_jobs com o resultado e devolve o relatório.
+ */
+export async function dispararManual(unitId, { de, ate, statuses, offset, criadoPor = null }) {
   const regua = await reguaDaUnidade(unitId);
   const passo = regua.passos.find((p) => Number(p.offset) === Number(offset)) || regua.passos[0];
-  const carteira = await ponte(unitId, 'carteira', { de, ate, statuses }, { timeoutMs: 40000 });
-  const lista = (carteira || []).filter((p) => p.telefone && digitos(p.telefone).length >= 10);
 
-  // Uma mensagem por responsável (agrupa todas as parcelas da pessoa no período)
-  const grupos = new Map();
-  for (const p of lista) {
-    const tel = digitos(p.telefone);
-    const chave = `M|${tel}|${passo.offset}|${de}|${ate}`;
-    if (!grupos.has(chave)) grupos.set(chave, { chave, passo, telefone: p.telefone, vencimento: p.vencimento, responsavel: p.nome_responsavel || '', _alunos: [], cod_pars: [], valor: 0 });
-    const g = grupos.get(chave);
-    g._alunos.push(p.nome_aluno); g.cod_pars.push(p.cod_par); g.valor += Number(p.valor || 0);
-    if (p.vencimento && (!g.vencimento || p.vencimento < g.vencimento)) g.vencimento = p.vencimento;
-    if (!g.responsavel && p.nome_responsavel) g.responsavel = p.nome_responsavel;
+  const { data: job } = await supabase.from('regua_jobs').insert({
+    unit_id: unitId, criado_por: criadoPor, tipo: 'manual',
+    params: { de, ate, offset: passo.offset, statuses }, status: 'processando'
+  }).select('id').single();
+  const jobId = job?.id || null;
+
+  let resumo;
+  try {
+    const carteira = await ponte(unitId, 'carteira', { de, ate, statuses }, { timeoutMs: 40000 });
+    const lista = (carteira || []).filter((p) => p.telefone && digitos(p.telefone).length >= 10);
+    const grupos = agrupar(lista, () => passo, (_passo, _p, tel) => `M|${tel}|${passo.offset}|${de}|${ate}`);
+    resumo = await processarGrupos(unitId, grupos, 'manual');
+  } catch (e) {
+    resumo = { total: 0, enviados: 0, pulados: 0, erros: 1, limitado: false, erros_detalhe: [{ erro: e.message }] };
   }
 
-  const resumo = { unit_id: unitId, grupos: grupos.size, enviados: 0, pulados: 0, erros: 0 };
-  let feitos = 0;
-  for (const g of grupos.values()) {
-    if (feitos >= limite) break;
-    feitos++;
-    g.alunosTxt = nomesAlunos(g._alunos);
-    contabilizar(resumo, await enviarGrupo(unitId, g, 'manual'));
+  if (jobId) {
+    await supabase.from('regua_jobs').update({
+      total: resumo.total, enviados: resumo.enviados, pulados: resumo.pulados, erros: resumo.erros,
+      erros_detalhe: resumo.erros_detalhe, status: resumo.limitado ? 'parcial' : (resumo.erros ? 'concluido_com_erros' : 'concluido'),
+      finalizado_em: new Date().toISOString()
+    }).eq('id', jobId).then(() => {}, () => {});
   }
-  await registrar('regua', 'manual', resumo.erros === 0, { unitId, detalhe: { ...resumo, de, ate, statuses, offset: passo.offset } });
-  return resumo;
+  return { job_id: jobId, resumo };
 }

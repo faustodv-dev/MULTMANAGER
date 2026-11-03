@@ -74,6 +74,7 @@ export default function Regua() {
   const [previa, setPrevia] = useState<Previa | null>(null);
   const [calcPrevia, setCalcPrevia] = useState(false);
   const [disparando, setDisparando] = useState(false);
+  const [relatorio, setRelatorio] = useState<any | null>(null);
 
   const podeEditar = perfil?.papel === "master" || perfil?.papel === "admin";
 
@@ -113,7 +114,7 @@ export default function Regua() {
   };
 
   const verPrevia = async () => {
-    setCalcPrevia(true); setPrevia(null);
+    setCalcPrevia(true); setPrevia(null); setRelatorio(null);
     try {
       const r = await api<{ previa: Previa }>("regua", { acao: "previa_manual", unit_id: unidade, de: mDe, ate: mAte, statuses: mStatus });
       setPrevia(r.previa);
@@ -125,12 +126,14 @@ export default function Regua() {
     setDisparando(true);
     try {
       const r = await api<{ resumo: any }>("regua", { acao: "disparar_manual", unit_id: unidade, de: mDe, ate: mAte, statuses: mStatus, offset: mOffset });
-      const x = r.resumo;
-      toast.success(`Disparo concluído: ${x.enviados} enviada(s), ${x.pulados} pulada(s)${x.erros ? `, ${x.erros} erro(s)` : ""}.`);
-      setPrevia(null); carregar();
+      setRelatorio(r.resumo);
+      setPrevia(null);
+      toast.success("Disparo concluído. Veja o relatório.");
+      carregar();
     } catch (e: any) { toast.error(e.message); }
     setDisparando(false);
   };
+  const limparManual = () => { setRelatorio(null); setPrevia(null); };
 
   const ativos = useMemo(() => regua?.passos.filter((p) => p.ativo).length ?? 0, [regua]);
 
@@ -273,8 +276,8 @@ export default function Regua() {
                 <div className="mb-3 mt-1"><StatusPicker opcoes={statusOpcoes} value={mStatus} onChange={setMStatus} disabled={!podeEditar} /></div>
 
                 <div className="flex flex-wrap items-end gap-3">
-                  <div><Label className="text-xs">Vencimento de</Label><Input type="date" className="w-40" value={mDe} onChange={(e) => { setMDe(e.target.value); setPrevia(null); }} /></div>
-                  <div><Label className="text-xs">até</Label><Input type="date" className="w-40" value={mAte} onChange={(e) => { setMAte(e.target.value); setPrevia(null); }} /></div>
+                  <div><Label className="text-xs">Vencimento de</Label><Input type="date" className="w-40" value={mDe} onChange={(e) => { setMDe(e.target.value); setPrevia(null); setRelatorio(null); }} /></div>
+                  <div><Label className="text-xs">até</Label><Input type="date" className="w-40" value={mAte} onChange={(e) => { setMAte(e.target.value); setPrevia(null); setRelatorio(null); }} /></div>
                   <div>
                     <Label className="text-xs">Mensagem</Label>
                     <select className="h-10 w-56 rounded-md border bg-background px-2 text-sm" value={mOffset} onChange={(e) => setMOffset(Number(e.target.value))}>
@@ -284,20 +287,24 @@ export default function Regua() {
                   <Button variant="secondary" onClick={verPrevia} disabled={calcPrevia || !mStatus.length}>{calcPrevia ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Users className="mr-1 h-4 w-4" />} Ver prévia</Button>
                 </div>
 
-                {previa && (
+                {disparando && (
+                  <p className="mt-3 text-sm text-muted-foreground"><Loader2 className="mr-1 inline h-4 w-4 animate-spin" /> Disparando… enfileirando as mensagens, aguarde.</p>
+                )}
+
+                {previa && !relatorio && !disparando && (
                   <div className="mt-3 rounded-md border bg-muted/40 p-3 text-sm">
                     <p><b>{previa.responsaveis}</b> responsável(is) · <b>{previa.parcelas}</b> parcela(s) · total {reais(previa.valor_total)}</p>
                     {previa.sem_telefone > 0 && <p className="text-xs text-muted-foreground">{previa.sem_telefone} parcela(s) sem telefone válido — não entram.</p>}
                     {podeEditar && previa.responsaveis > 0 && (
                       <AlertDialog>
                         <AlertDialogTrigger asChild>
-                          <Button className="mt-3 bg-orange-600 hover:bg-orange-700" disabled={disparando}>{disparando ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Megaphone className="mr-1 h-4 w-4" />} Disparar para {previa.responsaveis} responsável(is)</Button>
+                          <Button className="mt-3 bg-orange-600 hover:bg-orange-700"><Megaphone className="mr-1 h-4 w-4" /> Disparar para {previa.responsaveis} responsável(is)</Button>
                         </AlertDialogTrigger>
                         <AlertDialogContent>
                           <AlertDialogHeader>
                             <AlertDialogTitle>Confirmar disparo manual</AlertDialogTitle>
                             <AlertDialogDescription>
-                              Vai enviar a mensagem "{rotulo(mOffset)}" para <b>{previa.responsaveis}</b> responsável(is) com parcela entre {mDe.split("-").reverse().join("/")} e {mAte.split("-").reverse().join("/")} ({mStatus.join(", ")}). As mensagens são enviadas de verdade pelo WhatsApp. Confirmar?
+                              Vai enviar a mensagem "{rotulo(mOffset)}" para <b>{previa.responsaveis}</b> responsável(is) com parcela entre {mDe.split("-").reverse().join("/")} e {mAte.split("-").reverse().join("/")} ({mStatus.join(", ")}). As mensagens são enviadas de verdade pelo WhatsApp, em ritmo seguro. Confirmar?
                             </AlertDialogDescription>
                           </AlertDialogHeader>
                           <AlertDialogFooter>
@@ -308,6 +315,26 @@ export default function Regua() {
                       </AlertDialog>
                     )}
                     {!previa.responsaveis && <p className="mt-1 text-xs text-muted-foreground">Ninguém se encaixa nesse filtro.</p>}
+                  </div>
+                )}
+
+                {relatorio && (
+                  <div className="mt-3 rounded-md border bg-card p-3 text-sm">
+                    <p className="font-semibold">Relatório do disparo</p>
+                    <p className="mt-1">
+                      ✅ <b>{relatorio.enviados}</b> enviada(s) · ⏭️ {relatorio.pulados} pulada(s) ·{" "}
+                      {relatorio.erros ? <span className="text-rose-600">❌ {relatorio.erros} erro(s)</span> : "sem erros"} · de {relatorio.total}
+                      {relatorio.limitado ? " (parcial — rode de novo p/ enviar o restante)" : ""}
+                    </p>
+                    {relatorio.erros_detalhe?.length > 0 && (
+                      <div className="mt-2 max-h-40 overflow-y-auto rounded border bg-rose-50 p-2 text-xs text-rose-800">
+                        {relatorio.erros_detalhe.map((e: any, i: number) => (
+                          <div key={i}>{e.telefone || "—"}{e.aluno ? ` (${e.aluno})` : ""} — {e.erro}</div>
+                        ))}
+                      </div>
+                    )}
+                    <p className="mt-2 text-xs text-muted-foreground">As mensagens saem em ritmo seguro pelo gateway (digitação + espaçamento), então podem levar alguns minutos pra todas chegarem. Quem já pagou ou tem boleto ativo foi pulado.</p>
+                    <Button variant="outline" className="mt-2" onClick={limparManual}>Novo disparo</Button>
                   </div>
                 )}
                 {!podeEditar && <p className="mt-3 text-xs text-muted-foreground">Só admin/master pode disparar.</p>}
