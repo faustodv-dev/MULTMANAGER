@@ -20,7 +20,8 @@ type Filtro = "todas" | "aguardando_humano" | "humano" | "ia";
 const ehGrupo = (c: any) => String(c?.remote_jid || "").includes("@g.us");
 
 export default function Atendimento() {
-  const { perfil } = useAuth();
+  const { perfil, unidades } = useAuth();
+  const [unidade, setUnidade] = useState(perfil?.papel === "master" ? "rio_verde" : (perfil?.unit_id || "rio_verde"));
   const [conversas, setConversas] = useState<Conversa[]>([]);
   const [filtro, setFiltro] = useState<Filtro>("todas");
   const [tipo, setTipo] = useState<"avulsas" | "grupos">("avulsas");
@@ -28,7 +29,7 @@ export default function Atendimento() {
   const [atual, setAtual] = useState<string | null>(null);
 
   const carregar = async () => {
-    const { data } = await supabase.from("conversas").select("*").eq("canal", "whatsapp").order("ultimo_contato", { ascending: false }).limit(300);
+    const { data } = await supabase.from("conversas").select("*").eq("canal", "whatsapp").eq("unit_id", unidade).order("ultimo_contato", { ascending: false }).limit(300);
     setConversas((data as Conversa[]) ?? []);
   };
 
@@ -39,7 +40,8 @@ export default function Atendimento() {
       .on("postgres_changes", { event: "*", schema: "public", table: "conversas" }, carregar)
       .subscribe();
     return () => { supabase.removeChannel(canal); };
-  }, []);
+    /* eslint-disable-next-line */
+  }, [unidade]);
 
   const lista = useMemo(() => {
     const t = busca.trim().toLowerCase();
@@ -59,6 +61,11 @@ export default function Atendimento() {
     <div className="flex h-full">
       <section className={cn("flex w-full flex-col border-r md:w-96", atual && "hidden md:flex")}>
         <div className="space-y-2 border-b p-3">
+          {perfil?.papel === "master" && unidades.length > 1 && (
+            <select className="h-9 w-full rounded-md border bg-background px-2 text-sm" value={unidade} onChange={(e) => setUnidade(e.target.value)}>
+              {unidades.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+            </select>
+          )}
           <div className="flex gap-1 rounded-lg border bg-muted/40 p-1">
             <button onClick={() => setTipo("avulsas")} className={cn("flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors", tipo === "avulsas" ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground")}>Conversas</button>
             <button onClick={() => setTipo("grupos")} className={cn("flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors", tipo === "grupos" ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground")}>Grupos{totalGrupos ? ` (${totalGrupos})` : ""}</button>
