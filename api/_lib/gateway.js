@@ -2,15 +2,15 @@ import { CFG, registrar } from './base.js';
 import { simulando } from './contexto.js';
 
 /** Envia texto (e opcionalmente um documento) pelo gateway WhatsApp da unidade. */
-export async function enviarWhatsapp(unitId, telefone, texto, { remoteJid = null, documento = null, conversaId = null } = {}) {
+export async function enviarWhatsapp(unitId, telefone, texto, { remoteJid = null, documento = null, conversaId = null, aguardarEntrega = true } = {}) {
   if (simulando()) return { ok: true, status: 'simulado', erro: null, msgId: null };
   const inicio = Date.now();
   try {
     const resp = await fetch(`${CFG.gatewayUrl}/send`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', apikey: CFG.gatewayKey },
-      body: JSON.stringify({ unitId, phone: telefone, remoteJid, message: texto || '', document: documento, waitForDelivery: true }),
-      signal: AbortSignal.timeout(50000)
+      body: JSON.stringify({ unitId, phone: telefone, remoteJid, message: texto || '', document: documento, waitForDelivery: aguardarEntrega }),
+      signal: AbortSignal.timeout(aguardarEntrega ? 50000 : 20000)
     });
     const json = await resp.json().catch(() => ({}));
     const ok = resp.ok && (json.status === 'sent' || json.status === 'queued_humanized');
