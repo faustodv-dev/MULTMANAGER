@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/lib/auth";
 
 const STATUS: Record<string, { rotulo: string; cor: string }> = {
   recebido: { rotulo: "Recebido", cor: "bg-gray-100 text-gray-800" },
@@ -32,6 +33,8 @@ export default function Comprovantes() {
   const [busca, setBusca] = useState("");
   const [itens, setItens] = useState<Comprovante[]>([]);
   const [carregando, setCarregando] = useState(false);
+  const { perfil, unidades } = useAuth();
+  const [unidade, setUnidade] = useState(perfil?.papel === "master" ? "rio_verde" : (perfil?.unit_id || "rio_verde"));
 
   const carregar = async () => {
     setCarregando(true);
@@ -39,6 +42,7 @@ export default function Comprovantes() {
       .from("comprovantes")
       .select("*")
       .eq("simulacao", false)
+      .eq("unit_id", unidade)
       .gte("recebido_em", `${de}T00:00:00-03:00`)
       .lte("recebido_em", `${ate}T23:59:59-03:00`)
       .order("recebido_em", { ascending: false })
@@ -48,14 +52,14 @@ export default function Comprovantes() {
     setItens((data as Comprovante[]) ?? []);
   };
 
-  useEffect(() => { carregar(); }, [de, ate]);
+  useEffect(() => { carregar(); /* eslint-disable-next-line */ }, [de, ate, unidade]);
   useEffect(() => {
     const canal = supabase
       .channel("comprovantes")
       .on("postgres_changes", { event: "*", schema: "public", table: "comprovantes" }, () => carregar())
       .subscribe();
     return () => { supabase.removeChannel(canal); };
-  }, [de, ate]);
+  }, [de, ate, unidade]);
 
   const pendentes = ["aguardando_humano", "divergente", "sombra_ok", "aguardando_aluno"];
   const lista = useMemo(() => {
@@ -101,6 +105,14 @@ export default function Comprovantes() {
           <p className="text-xs text-muted-foreground">{lista.length} comprovante(s) · {reais(total)}</p>
         </div>
         <div className="ml-auto flex flex-wrap items-end gap-2">
+          {perfil?.papel === "master" && unidades.length > 1 && (
+            <div>
+              <Label className="text-xs">Unidade</Label>
+              <select className="h-10 rounded-md border bg-background px-2 text-sm" value={unidade} onChange={(e) => setUnidade(e.target.value)}>
+                {unidades.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+              </select>
+            </div>
+          )}
           <div><Label className="text-xs">De</Label><Input type="date" value={de} onChange={(e) => setDe(e.target.value)} /></div>
           <div><Label className="text-xs">Até</Label><Input type="date" value={ate} onChange={(e) => setAte(e.target.value)} /></div>
           <div>

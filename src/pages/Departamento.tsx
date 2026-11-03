@@ -48,7 +48,7 @@ interface Exec {
 export default function Departamento({ departamento, titulo, Icone }: { departamento: string; titulo: string; Icone: ComponentType<any> }) {
   const DEP = departamento;
   const { perfil, unidades } = useAuth();
-  const [unidade, setUnidade] = useState(perfil?.unit_id || unidades[0]?.id || "rio_verde");
+  const [unidade, setUnidade] = useState(perfil?.papel === "master" ? "rio_verde" : (perfil?.unit_id || "rio_verde"));
   const [cards, setCards] = useState<Card[]>([]);
   const [colabs, setColabs] = useState<Colab[]>([]);
   const [execs, setExecs] = useState<Exec[]>([]);
