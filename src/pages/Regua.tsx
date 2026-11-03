@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { BellRing, Send, Save, CalendarOff, Loader2, Clock } from "lucide-react";
+import { BellRing, Send, Save, CalendarOff, Loader2, Clock, RefreshCw } from "lucide-react";
 
 type Passo = { offset: number; ativo: boolean; texto: string };
 type Regua = { ativa: boolean; horario: number; pula_domingo: boolean; passos: Passo[] };
@@ -100,6 +100,7 @@ export default function Regua() {
   if (carregando && !regua) return <div className="p-8 text-muted-foreground">Carregando régua…</div>;
 
   return (
+    <div className="h-full overflow-y-auto">
     <div className="mx-auto max-w-3xl space-y-4 p-4 md:p-8">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
@@ -110,19 +111,24 @@ export default function Regua() {
             Mensagens automáticas no WhatsApp, por template, nos prazos de vencimento. Quando o aluno responde, a assistente assume a conversa.
           </p>
         </div>
-        {unidades.length > 1 && (
-          <div>
-            <Label className="text-xs">Unidade</Label>
-            <select
-              className="h-10 w-48 rounded-md border bg-background px-2 text-sm"
-              value={unidade}
-              onChange={(e) => setUnidade(e.target.value)}
-              disabled={perfil?.papel !== "master"}
-            >
-              {unidades.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
-            </select>
-          </div>
-        )}
+        <div className="flex items-end gap-2">
+          {unidades.length > 1 && (
+            <div>
+              <Label className="text-xs">Unidade</Label>
+              <select
+                className="h-10 w-48 rounded-md border bg-background px-2 text-sm"
+                value={unidade}
+                onChange={(e) => setUnidade(e.target.value)}
+                disabled={perfil?.papel !== "master"}
+              >
+                {unidades.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+              </select>
+            </div>
+          )}
+          <Button variant="outline" onClick={carregar} disabled={carregando} title="Atualizar">
+            <RefreshCw className={`h-4 w-4 ${carregando ? "animate-spin" : ""}`} />
+          </Button>
+        </div>
       </header>
 
       {regua && (
@@ -247,6 +253,7 @@ export default function Regua() {
           )}
         </>
       )}
+    </div>
     </div>
   );
 }
