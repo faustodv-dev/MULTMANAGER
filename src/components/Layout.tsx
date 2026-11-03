@@ -1,6 +1,6 @@
 import { NavLink } from "react-router-dom";
 import { useEffect, useState, type ReactNode } from "react";
-import { MessageCircle, Receipt, Users, Building2, LogOut, FlaskConical, Banknote, ClipboardList, GraduationCap, Briefcase } from "lucide-react";
+import { MessageCircle, Receipt, Users, Building2, LogOut, FlaskConical, Banknote, ClipboardList, GraduationCap, Briefcase, BellRing } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
@@ -30,6 +30,7 @@ export default function Layout({ children }: { children: ReactNode }) {
     { to: "/pedagogico", rotulo: "Pedagógico", icone: GraduationCap, ok: pode("pedagogico") },
     { to: "/encaminhamento", rotulo: "Encaminhamento", icone: Briefcase, ok: pode("encaminhamento") },
     { to: "/comprovantes", rotulo: "Comprovantes", icone: Banknote, ok: pode("comprovantes") },
+    { to: "/regua", rotulo: "Régua de cobrança", icone: BellRing, ok: pode("financeiro") },
     { to: "/pops", rotulo: "POPs", icone: ClipboardList, ok: perfil?.papel === "master" || perfil?.papel === "admin" },
     { to: "/simulador", rotulo: "Simulador", icone: FlaskConical, ok: perfil?.papel === "master" || perfil?.papel === "admin" },
     { to: "/boleto-teste", rotulo: "Boleto (teste)", icone: Banknote, ok: perfil?.papel === "master" },

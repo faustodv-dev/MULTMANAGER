@@ -123,6 +123,7 @@ try {
         'parcelas_status' => $escola->parcelasStatus(array_map('intval', (array)($req['cod_pars'] ?? []))),
         'ocorrencias' => $escola->ocorrencias($s('cod_alu'), (int)($req['limite'] ?? 15)),
         'agendamentos' => $escola->agendamentos((array)($req['cod_alus'] ?? []), $hoje),
+        'carteira' => $escola->carteiraPorVencimento((array)($req['datas'] ?? [])),
         'cartas' => (new Financeiro($db, $escola, $U['agente']))->cartas(),
         'conciliar' => (function () use ($escola, $req, $s, $hoje) {
             $data = \Ponte\Texto::dataIso($s('data_pagamento')) ?: $hoje;

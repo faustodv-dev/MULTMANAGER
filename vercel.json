@@ -6,6 +6,7 @@
     "api/**/*.js": { "maxDuration": 60 }
   },
   "crons": [
-    { "path": "/api/reconciliar", "schedule": "0 6 * * *" }
+    { "path": "/api/reconciliar", "schedule": "0 6 * * *" },
+    { "path": "/api/regua", "schedule": "0 12 * * *" }
   ]
 }
