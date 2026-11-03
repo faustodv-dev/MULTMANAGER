@@ -363,31 +363,47 @@ final class Escola
     }
 
     /**
-     * Carteira para a régua de cobrança: parcelas EM ABERTO cujo vencimento cai
-     * numa das datas informadas (ISO AAAA-MM-DD), já com o contato do responsável.
-     * Somente leitura. Usado pelo disparo automático (varre todos os alunos da unidade).
+     * Carteira para a régua de cobrança: parcelas EM ABERTO filtradas por vencimento
+     * (datas exatas OU intervalo de/ate, ISO AAAA-MM-DD) e, opcionalmente, pelo STATUS
+     * da matrícula financeira da parcela (s_cad_matricula.STATUS_MAT). Já traz o contato.
+     * Somente leitura.
      *
-     * @param array<int,string> $datasIso
+     * @param array{datas?:array<int,string>,de?:string,ate?:string,statuses?:array<int,string>} $opts
      * @return array<int,array<string,mixed>>
      */
-    public function carteiraPorVencimento(array $datasIso): array
+    public function carteiraPorVencimento(array $opts): array
     {
-        $datas = array_values(array_unique(array_filter(array_map(fn($d) => Texto::dataIso((string)$d) ?: (string)$d, $datasIso))));
-        if (!$datas) {
+        $datas = array_values(array_unique(array_filter(array_map(fn($d) => Texto::dataIso((string)$d) ?: (string)$d, (array)($opts['datas'] ?? [])))));
+        $de = Texto::dataIso((string)($opts['de'] ?? ''));
+        $ate = Texto::dataIso((string)($opts['ate'] ?? ''));
+        $statuses = array_values(array_filter(array_map(fn($x) => trim((string)$x), (array)($opts['statuses'] ?? [])), fn($x) => $x !== ''));
+        if (!$datas && !($de && $ate)) {
             return [];
         }
-        $rows = $this->db->todos(
-            "SELECT p.COD_PAR, p.COD_ALU, p.NUM_MATRICULA, p.TIPO_PAR, p.VLR_PAR, p.DAT_VEN,
-                    a.NOM_ALU, a.CPF_RES, a.NOM_PAI_ALU, a.WHATS, a.CEL_ALU, a.TEL_RESP, a.FON_ALU, a.EMAIL_ALU
-             FROM s_cad_parcela p
-             JOIN s_cad_aluno a ON a.COD_ALU = p.COD_ALU
-             WHERE (p.DAT_BAI IS NULL OR p.DAT_BAI = '')",
-            []
-        );
+
+        $sql = "SELECT p.COD_PAR, p.COD_ALU, p.NUM_MATRICULA, p.VLR_PAR, p.DAT_VEN,
+                       a.NOM_ALU, a.CPF_RES, a.NOM_PAI_ALU, a.WHATS, a.CEL_ALU, a.TEL_RESP, a.FON_ALU, a.EMAIL_ALU,
+                       m.STATUS_MAT, m.NOM_CUR
+                FROM s_cad_parcela p
+                JOIN s_cad_aluno a ON a.COD_ALU = p.COD_ALU
+                LEFT JOIN s_cad_matricula m ON m.COD_MATRICULA = p.NUM_MATRICULA
+                WHERE (p.DAT_BAI IS NULL OR p.DAT_BAI = '')";
+        $params = [];
+        if ($statuses) {
+            // STATUS_MAT costuma ter collation case-insensitive; IN cobre Ativo/ativo/ATIVO.
+            $sql .= ' AND m.STATUS_MAT IN (' . implode(',', array_fill(0, count($statuses), '?')) . ')';
+            $params = $statuses;
+        }
+        $rows = $this->db->todos($sql, $params);
+
         $out = [];
         foreach ($rows as $r) {
             $venc = Texto::dataIso($r['DAT_VEN']);
-            if (!in_array($venc, $datas, true)) {
+            if ($datas) {
+                if (!in_array($venc, $datas, true)) {
+                    continue;
+                }
+            } elseif ($venc === '' || $venc < $de || $venc > $ate) {
                 continue;
             }
             $tel = Texto::telefoneWhatsapp($r['TEL_RESP'] ?? '')
@@ -405,6 +421,8 @@ final class Escola
                 'email' => trim(Texto::doBanco($r['EMAIL_ALU'] ?? '')),
                 'vencimento' => $venc,
                 'valor' => (int)Texto::centavos($r['VLR_PAR']),
+                'status' => trim(Texto::doBanco($r['STATUS_MAT'] ?? '')),
+                'curso' => trim(Texto::doBanco($r['NOM_CUR'] ?? '')),
             ];
         }
         return $out;

@@ -1,6 +1,6 @@
 import { CFG, igual, supabase, usuarioDaRequisicao, lerCorpo, registrar, digitos } from './_lib/base.js';
 import { enviarWhatsapp } from './_lib/gateway.js';
-import { reguaDaUnidade, mesclarRegua, processarReguaUnidade, preencherDemo, REGUA_PADRAO } from './_lib/regua.js';
+import { reguaDaUnidade, mesclarRegua, processarReguaUnidade, previaManual, dispararManual, preencherDemo, REGUA_PADRAO, STATUS_CANONICOS } from './_lib/regua.js';
 
 export const config = { maxDuration: 60 };
 
@@ -61,7 +61,7 @@ export default async function handler(req, res) {
         .from('regua_envios')
         .select('offset_dias,vencimento,telefone,alunos,valor_centavos,status,enviado_em')
         .eq('unit_id', unitId).order('enviado_em', { ascending: false }).limit(20);
-      return res.status(200).json({ ok: true, regua, padrao: REGUA_PADRAO, ultimos: ultimos || [] });
+      return res.status(200).json({ ok: true, regua, padrao: REGUA_PADRAO, statuses_disponiveis: STATUS_CANONICOS, ultimos: ultimos || [] });
     }
 
     if (!podeEditar) return res.status(403).json({ erro: 'sem_permissao' });
@@ -86,6 +86,21 @@ export default async function handler(req, res) {
 
     if (acao === 'rodar_agora') {
       const r = await processarReguaUnidade(unitId, { forcar: true });
+      return res.status(200).json({ ok: true, resumo: r });
+    }
+
+    if (acao === 'previa_manual') {
+      const r = await previaManual(unitId, { de: String(b.de || ''), ate: String(b.ate || ''), statuses: Array.isArray(b.statuses) ? b.statuses : [] });
+      return res.status(200).json({ ok: true, previa: r });
+    }
+
+    if (acao === 'disparar_manual') {
+      if (!b.de || !b.ate) return res.status(400).json({ erro: 'periodo_obrigatorio' });
+      const r = await dispararManual(unitId, {
+        de: String(b.de), ate: String(b.ate),
+        statuses: Array.isArray(b.statuses) ? b.statuses : [],
+        offset: Number(b.offset)
+      });
       return res.status(200).json({ ok: true, resumo: r });
     }
 
