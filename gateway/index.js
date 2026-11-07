@@ -1189,6 +1189,75 @@ async function triggerAutomatedFollowupCron() {
 
 if (FUP_ENABLED) setInterval(triggerAutomatedFollowupCron, FUP_CRON_INTERVAL_MIN * 60 * 1000);
 
+// ---- Drenador da fila de mensagens (réguas/avisos) ----
+// O Vercel só enfileira (fila_mensagens) com agendado_para = horário da unidade.
+// Aqui o gateway (always-on) drena respeitando o horário e o ritmo humanizado,
+// e grava enviado_em REAL. Reusa a fila serializada por unidade (enqueueUnitSend).
+const FILA_ENABLED = String(process.env.FILA_ENABLED ?? '1') !== '0';
+const FILA_INTERVAL_MS = Number(process.env.FILA_INTERVAL_MS || 6000);
+const FILA_BUFFER = Number(process.env.FILA_BUFFER || 3); // mensagens "em voo" por unidade
+let filaDraining = false;
+const supaHeaders = () => ({ apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` });
+
+async function patchFila(id, patch) {
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/fila_mensagens?id=eq.${id}`, {
+      method: 'PATCH',
+      headers: { ...supaHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch),
+      signal: AbortSignal.timeout(15000)
+    });
+  } catch {}
+}
+
+async function drainFila() {
+  if (filaDraining || shuttingDown || !SUPABASE_KEY) return;
+  filaDraining = true;
+  try {
+    const nowIso = new Date().toISOString();
+    for (const unitId of Object.keys(sessions)) {
+      const session = sessions[unitId];
+      if (!session || session.status !== 'connected' || !session.sock) continue;
+      const faltam = FILA_BUFFER - (pendingSendCount[unitId] || 0);
+      if (faltam <= 0) continue;
+      const url = `${SUPABASE_URL}/rest/v1/fila_mensagens?unit_id=eq.${encodeURIComponent(unitId)}`
+        + `&status=eq.pendente&agendado_para=lte.${encodeURIComponent(nowIso)}`
+        + `&order=prioridade.asc,enfileirado_em.asc&limit=${faltam}`;
+      let rows = [];
+      try { rows = await fetch(url, { headers: supaHeaders(), signal: AbortSignal.timeout(15000) }).then((r) => r.json()); } catch { rows = []; }
+      if (!Array.isArray(rows) || !rows.length) continue;
+      for (const msg of rows) {
+        let claimed = [];
+        try {
+          claimed = await fetch(`${SUPABASE_URL}/rest/v1/fila_mensagens?id=eq.${msg.id}&status=eq.pendente`, {
+            method: 'PATCH',
+            headers: { ...supaHeaders(), 'Content-Type': 'application/json', Prefer: 'return=representation' },
+            body: JSON.stringify({ status: 'enviando', tentativas: (msg.tentativas || 0) + 1 }),
+            signal: AbortSignal.timeout(15000)
+          }).then((r) => r.json());
+        } catch { claimed = []; }
+        if (!Array.isArray(claimed) || !claimed.length) continue; // já foi pego
+        const digits = String(msg.telefone || '').replace(/\D/g, '');
+        if (digits.length < 10) { await patchFila(msg.id, { status: 'erro', erro: 'telefone_invalido' }); continue; }
+        const targetJid = `${digits}@s.whatsapp.net`;
+        enqueueUnitSend(unitId, async () => {
+          try {
+            await sendHumanizedMessage(unitId, targetJid, null, String(msg.texto || ''), null);
+            await patchFila(msg.id, { status: 'enviado', enviado_em: new Date().toISOString(), erro: null });
+          } catch (e) {
+            const tent = (msg.tentativas || 0) + 1;
+            if (tent >= 3) await patchFila(msg.id, { status: 'erro', erro: String(e.message || e).slice(0, 300) });
+            else await patchFila(msg.id, { status: 'pendente', erro: String(e.message || e).slice(0, 300), agendado_para: new Date(Date.now() + 120000).toISOString() });
+          }
+        });
+      }
+    }
+  } finally {
+    filaDraining = false;
+  }
+}
+if (FILA_ENABLED) setInterval(drainFila, FILA_INTERVAL_MS);
+
 async function sendHumanizedMessage(unitId, targetJid, mappedLid, messageText, document = null) {
   messageText = String(messageText ?? '');
   const session = sessions[unitId];
