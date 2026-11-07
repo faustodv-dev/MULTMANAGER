@@ -106,9 +106,12 @@ export async function processarFaltantesUnidade(unitId, { dataIso = null, forcar
       categoria: etapa.id,
       prioridade: 4,
       agendado_para: agendado,
-      chave: `falt|${etapa.id}|${data}|${digitos(f.telefone)}`,
+      // Chave POR ALUNO: irmãos no mesmo celular do responsável geram um alerta cada
+      // (nomeando o aluno certo). Só deduplica o MESMO aluno (ex.: 2 turmas / re-run do dia).
+      chave: `falt|${etapa.id}|${data}|${f.cod_alu ? 'a' + f.cod_alu : 't' + digitos(f.telefone)}`,
       cod_alu: f.cod_alu,
-      alunos: primeiroNome(f.nome_aluno)
+      alunos: primeiroNome(f.nome_aluno),
+      metadata: { matricula: f.matricula ? String(f.matricula) : '', etapa: etapa.id }
     });
   }
   resumo.enfileiradas = await enfileirar(unitId, itens);

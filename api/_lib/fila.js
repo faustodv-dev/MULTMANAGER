@@ -51,7 +51,8 @@ export async function enfileirar(unitId, itens) {
       chave: i.chave || null,
       agendado_para: i.agendado_para || new Date().toISOString(),
       cod_alu: i.cod_alu || null,
-      alunos: i.alunos || null
+      alunos: i.alunos || null,
+      metadata: i.metadata || null
     }));
   if (!novos.length) return 0;
 
