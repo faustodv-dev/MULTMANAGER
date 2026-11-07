@@ -33,6 +33,7 @@ no máximo 1 emoji. Trate pelo primeiro nome. Uma pergunta por vez. Nunca diga q
 
 PASSO 1 — COM QUEM VOCÊ FALA:
 - Aluno ou responsável já matriculado: confirme a identidade (abaixo) antes de qualquer dado.
+- EMPRESA parceira querendo divulgar/oferecer uma vaga de emprego: não precisa de cadastro — trate como Encaminhamento (veja abaixo).
 - Interessado em se matricular, conhecer cursos novos, promoções ou indicação de amigo (LEAD, sem cadastro):
   não é o seu setor — acolha com simpatia e chame chamar_humano com motivo "comercial - novo interesse".
 
@@ -80,8 +81,14 @@ ${asaasAtivo
 - Numa conversa de falta não trate de finanças, salvo se houver 2+ faltas E parcela vencida — aí ofereça renegociação condicionada à frequência e encaminhe ao financeiro.
 
 == ENCAMINHAMENTO ==
-- Pergunte se a pessoa quer fazer o teste de perfil profissional (em breve) ou falar agora com o atendimento humano do encaminhamento.
-  Chame chamar_humano com motivo "encaminhamento - <assunto>".
+Primeiro identifique quem fala:
+- EMPRESA querendo divulgar uma vaga: colha empresa, cargo/vaga, requisitos (horário, salário) e o contato, e registre com registrar_vaga_empresa. Agradeça a parceria.
+- ALUNO/RESPONSÁVEL querendo saber de vagas ou se candidatar: pergunte se quer FAZER O TESTE DE PERFIL profissional (rápido, aqui no WhatsApp) ou falar com o atendimento humano do encaminhamento.
+  - Falar com humano: chame chamar_humano "encaminhamento - <assunto>".
+  - Fazer o teste: faça UMA pergunta por vez, de forma leve, valorizando quem está começando (sem experiência também é bem-vindo):
+    1) área/profissão desejada; 2) já trabalhou antes e em quê (ou ainda não); 3) escolaridade; 4) disponibilidade (período/dias e quando pode começar);
+    5) tem CNH e em qual região trabalha; 6) pontos fortes; 7) algo a destacar (opcional).
+    Ao terminar, monte um resumo do perfil e salve com salvar_perfil_encaminhamento; depois diga que o time de encaminhamento vai analisar o perfil para as vagas.
 
 CHAME UM HUMANO (chamar_humano) quando: pedirem desconto, acordo, renegociação ou parcelamento; cancelamento, trancamento, rescisão
 ou transferência; reclamação; valor que a pessoa contesta; pedirem para falar com uma pessoa; ou algo que você não resolve.
@@ -403,6 +410,31 @@ export async function atender({ conversa, unidade, segredos }) {
         conversa = await atualizarConversa(conversa.id, { departamento: 'pedagogico' });
         await garantirCardWhatsapp(conversa, { departamento: 'pedagogico', titulo: `${prefixo} - ${primeiroNome(aluno.nome)}`, status: 'andamento', prioridade: tipo === 'alerta_evasao' ? 'alta' : undefined }).catch(() => null);
         return { ok: true, registrado: tipo };
+      }
+    },
+    {
+      nome: 'salvar_perfil_encaminhamento',
+      descricao: 'Salva o perfil profissional do aluno (teste de encaminhamento) nas ocorrências e abre o card no Encaminhamento. Chame ao terminar o questionário, com o resumo do perfil.',
+      parametros: { type: 'object', properties: { cod_alu: { type: 'string' }, perfil: { type: 'string', description: 'resumo do perfil: área desejada, experiência, escolaridade, disponibilidade, CNH/região, pontos fortes, destaques' } }, required: ['cod_alu', 'perfil'] },
+      executar: async ({ cod_alu, perfil }) => {
+        const bloq = exigirIdentidade(); if (bloq) return bloq;
+        const aluno = alunoDoGrupo(cod_alu); if (!aluno) return { erro: 'aluno_fora_do_grupo' };
+        await ponte(conversa.unit_id, 'registrar_ocorrencia', { cod_alu: String(cod_alu), texto: `PERFIL PROFISSIONAL (teste de encaminhamento via WhatsApp):\n${String(perfil || '').slice(0, 1500)}`, chave: `oco-perfil-${conversa.id}-${cod_alu}` }, { conversaId: conversa.id }).catch(() => null);
+        conversa = await atualizarConversa(conversa.id, { departamento: 'encaminhamento' });
+        await garantirCardWhatsapp(conversa, { departamento: 'encaminhamento', titulo: `Perfil profissional - ${primeiroNome(aluno.nome)}`, status: 'andamento' }).catch(() => null);
+        return { ok: true, salvo: true };
+      }
+    },
+    {
+      nome: 'registrar_vaga_empresa',
+      descricao: 'Registra uma vaga oferecida por uma EMPRESA parceira e encaminha para o time de Encaminhamento. Use quando quem fala é uma empresa querendo divulgar vaga (não precisa de identidade de aluno).',
+      parametros: { type: 'object', properties: { empresa: { type: 'string' }, cargo: { type: 'string' }, detalhe: { type: 'string', description: 'requisitos, horário, salário, etc.' }, contato: { type: 'string', description: 'telefone/nome do contato na empresa' } }, required: ['empresa', 'cargo'] },
+      executar: async ({ empresa, cargo, detalhe, contato }) => {
+        conversa = await atualizarConversa(conversa.id, { departamento: 'encaminhamento' });
+        await garantirCardWhatsapp(conversa, { departamento: 'encaminhamento', titulo: `Vaga: ${String(cargo || '').slice(0, 60)} - ${String(empresa || '').slice(0, 60)}`, status: 'andamento', prioridade: 'alta' }).catch(() => null);
+        await chamarHumano(conversa, `Encaminhamento - NOVA VAGA de empresa parceira. Empresa: ${empresa || '-'}; Cargo: ${cargo || '-'}; Contato: ${contato || conversa.telefone}; Detalhes: ${String(detalhe || '').slice(0, 500)}`);
+        pediuHumano = true;
+        return { ok: true };
       }
     },
     {
