@@ -129,6 +129,8 @@ try {
             'ate' => (string)($req['ate'] ?? ''),
             'statuses' => (array)($req['statuses'] ?? []),
         ]),
+        'faltantes_do_dia' => $escola->faltantesDoDia($s('data'), (array)($req['statuses'] ?? [])),
+        'justificativa_falta' => $escola->justificativaDeFalta($s('cod_alu'), $s('data')),
         'status_certificado' => $escola->statusCertificado($s('cod_alu')),
         'cronograma_turma' => $escola->cronogramaTurma($s('cod_alu')),
         'vagas_turmas' => $escola->vagasTurmas($s('cod_alu')),
