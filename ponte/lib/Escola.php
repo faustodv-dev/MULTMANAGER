@@ -488,6 +488,126 @@ final class Escola
     }
 
     /**
+     * Faltantes de um dia (FAL_PRE='N' em DAT_FAL), com contato, status da matrícula,
+     * faltas seguidas, % de presença e se já há justificativa registrada perto da data.
+     * Base da régua de faltantes. Somente leitura.
+     *
+     * @param array<int,string> $statuses filtra por STATUS_MAT (ex.: ['Ativo'])
+     */
+    public function faltantesDoDia(string $dataIso, array $statuses = []): array
+    {
+        $data = Texto::dataIso($dataIso);
+        if ($data === '') {
+            return [];
+        }
+        $statuses = array_values(array_filter(array_map(fn($x) => trim((string)$x), $statuses), fn($x) => $x !== ''));
+
+        $sql = "SELECT p.COD_ALU, p.COD_MATRICULA_PRES, p.COD_TUR,
+                       a.NOM_ALU, a.NOM_PAI_ALU, a.WHATS, a.CEL_ALU, a.TEL_RESP, a.FON_ALU,
+                       m.STATUS_MAT, m.NOM_CUR
+                FROM s_cad_pres_aluno p
+                JOIN s_cad_aluno a ON a.COD_ALU = p.COD_ALU
+                LEFT JOIN s_cad_matricula m ON m.COD_MATRICULA = p.COD_MATRICULA_PRES
+                WHERE p.FAL_PRE = 'N' AND p.DAT_FAL = ?";
+        $params = [$data];
+        if ($statuses) {
+            $sql .= ' AND m.STATUS_MAT IN (' . implode(',', array_fill(0, count($statuses), '?')) . ')';
+            $params = array_merge($params, $statuses);
+        }
+        $faltas = $this->db->todos($sql, $params);
+        if (!$faltas) {
+            return [];
+        }
+
+        $codAlus = array_values(array_unique(array_map(fn($r) => (string)$r['COD_ALU'], $faltas)));
+        $hist = [];
+        $just = [];
+        for ($i = 0; $i < count($codAlus); $i += 200) {
+            $slice = array_slice($codAlus, $i, 200);
+            $ph = implode(',', array_fill(0, count($slice), '?'));
+            foreach ($this->db->todos("SELECT COD_ALU, FAL_PRE, DAT_FAL FROM s_cad_pres_aluno WHERE COD_ALU IN ($ph) ORDER BY COD_ALU, DAT_FAL", $slice) as $r) {
+                $iso = Texto::dataIso($r['DAT_FAL']);
+                if ($iso === '' || $iso > $data) {
+                    continue;
+                }
+                $hist[(string)$r['COD_ALU']][] = ['data' => $iso, 'pres' => strtoupper((string)$r['FAL_PRE']) === 'S'];
+            }
+            foreach ($this->db->todos("SELECT COD_ALU, DAT_OCO FROM s_cad_ocorrencia WHERE STATUS_OCO = 'Justificativa de falta' AND COD_ALU IN ($ph)", $slice) as $r) {
+                $just[(string)$r['COD_ALU']][] = Texto::dataIso($r['DAT_OCO']);
+            }
+        }
+
+        $out = [];
+        foreach ($faltas as $r) {
+            $codAlu = (string)$r['COD_ALU'];
+            $aulas = $hist[$codAlu] ?? [];
+            usort($aulas, fn($x, $y) => strcmp($x['data'], $y['data']));
+            $pres = 0;
+            $falt = 0;
+            $seguidas = 0;
+            foreach ($aulas as $au) {
+                if ($au['pres']) {
+                    $pres++;
+                    $seguidas = 0;
+                } else {
+                    $falt++;
+                    $seguidas++;
+                }
+            }
+            $total = $pres + $falt;
+            $temJust = false;
+            foreach ($just[$codAlu] ?? [] as $dj) {
+                if ($dj !== '' && abs((strtotime($dj) - strtotime($data)) / 86400) <= 7) {
+                    $temJust = true;
+                    break;
+                }
+            }
+            $tel = Texto::telefoneWhatsapp($r['TEL_RESP'] ?? '')
+                ?: Texto::telefoneWhatsapp($r['WHATS'] ?? '')
+                ?: Texto::telefoneWhatsapp($r['CEL_ALU'] ?? '')
+                ?: Texto::telefoneWhatsapp($r['FON_ALU'] ?? '');
+            $out[] = [
+                'cod_alu' => $codAlu,
+                'nome_aluno' => trim(Texto::doBanco($r['NOM_ALU'] ?? '')),
+                'nome_responsavel' => trim(Texto::doBanco($r['NOM_PAI_ALU'] ?? '')),
+                'telefone' => $tel,
+                'curso' => Texto::doBanco($r['NOM_CUR'] ?? ''),
+                'turma' => (string)($r['COD_TUR'] ?? ''),
+                'status' => trim(Texto::doBanco($r['STATUS_MAT'] ?? '')),
+                'matricula' => (string)($r['COD_MATRICULA_PRES'] ?? ''),
+                'faltas_seguidas' => $seguidas,
+                'percentual_presenca' => $total ? round($pres * 100 / $total, 1) : null,
+                'tem_justificativa' => $temJust,
+            ];
+        }
+        return $out;
+    }
+
+    /** Justificativas de falta (ocorrência 'Justificativa de falta') do aluno; marca se cobre a data. */
+    public function justificativaDeFalta(string $codAlu, string $dataIso = '', int $diasJanela = 7): array
+    {
+        $rows = $this->db->todos(
+            "SELECT DAT_OCO, OCO_OCO FROM s_cad_ocorrencia WHERE COD_ALU = ? AND STATUS_OCO = 'Justificativa de falta' ORDER BY COD_OCO DESC LIMIT 20",
+            [$codAlu]
+        );
+        $data = Texto::dataIso($dataIso);
+        $lista = array_map(fn($r) => [
+            'data' => Texto::dataIso($r['DAT_OCO'] ?? ''),
+            'texto' => trim(strip_tags(str_replace(['<br>', '<br/>', '<br />'], ' ', Texto::doBanco($r['OCO_OCO'] ?? '')))),
+        ], $rows);
+        $justificado = false;
+        if ($data !== '') {
+            foreach ($lista as $j) {
+                if ($j['data'] !== '' && abs((strtotime($j['data']) - strtotime($data)) / 86400) <= $diasJanela) {
+                    $justificado = true;
+                    break;
+                }
+            }
+        }
+        return ['justificado' => $justificado, 'justificativas' => $lista];
+    }
+
+    /**
      * Carteira para a régua de cobrança: parcelas EM ABERTO filtradas por vencimento
      * (datas exatas OU intervalo de/ate, ISO AAAA-MM-DD) e, opcionalmente, pelo STATUS
      * da matrícula financeira da parcela (s_cad_matricula.STATUS_MAT). Já traz o contato.
