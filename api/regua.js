@@ -1,6 +1,7 @@
 import { CFG, igual, supabase, usuarioDaRequisicao, lerCorpo, registrar, digitos } from './_lib/base.js';
 import { enviarWhatsapp } from './_lib/gateway.js';
 import { reguaDaUnidade, mesclarRegua, processarReguaUnidade, previaManual, dispararManual, preencherDemo, REGUA_PADRAO, STATUS_CANONICOS } from './_lib/regua.js';
+import { mesclarFaltantes, processarFaltantesUnidade } from './_lib/faltantes.js';
 
 export const config = { maxDuration: 60 };
 
@@ -19,17 +20,25 @@ function ehDomingoSP() {
 async function rodarCron(res) {
   const hora = horaSP();
   const domingo = ehDomingoSP();
-  const { data: units } = await supabase.from('units').select('id, regua').not('regua', 'is', null);
-  const resumo = { hora, processadas: 0, enviados: 0, pulados: 0, erros: 0 };
+  const { data: units } = await supabase.from('units').select('id, regua, regua_faltantes');
+  const resumo = { hora, processadas: 0, enviados: 0, pulados: 0, erros: 0, faltantes_unidades: 0, faltantes_enfileiradas: 0 };
   for (const u of units || []) {
+    // Régua financeira (envio direto — inalterada)
     const regua = mesclarRegua(u.regua);
-    if (!regua.ativa) continue;
-    if (domingo && regua.pula_domingo) continue;
-    resumo.processadas++;
-    const r = await processarReguaUnidade(u.id);
-    resumo.enviados += r.enviados || 0;
-    resumo.pulados += r.pulados || 0;
-    resumo.erros += r.erros || 0;
+    if (regua.ativa && !(domingo && regua.pula_domingo)) {
+      resumo.processadas++;
+      const r = await processarReguaUnidade(u.id);
+      resumo.enviados += r.enviados || 0;
+      resumo.pulados += r.pulados || 0;
+      resumo.erros += r.erros || 0;
+    }
+    // Régua de faltantes (enfileira na fila; o gateway envia no horário da unidade)
+    const falt = mesclarFaltantes(u.regua_faltantes);
+    if (falt.ativa && !(domingo && falt.pula_domingo)) {
+      resumo.faltantes_unidades++;
+      const rf = await processarFaltantesUnidade(u.id);
+      resumo.faltantes_enfileiradas += rf.enfileiradas || 0;
+    }
   }
   await registrar('regua', 'cron', true, { detalhe: resumo });
   return res.status(200).json({ ok: true, ...resumo });
