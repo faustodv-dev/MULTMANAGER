@@ -2,6 +2,7 @@ import { CFG, igual, supabase, usuarioDaRequisicao, lerCorpo, registrar, digitos
 import { enviarWhatsapp } from './_lib/gateway.js';
 import { reguaDaUnidade, mesclarRegua, processarReguaUnidade, previaManual, dispararManual, preencherDemo, REGUA_PADRAO, STATUS_CANONICOS } from './_lib/regua.js';
 import { mesclarFaltantes, processarFaltantesUnidade } from './_lib/faltantes.js';
+import { flushOcorrenciasEnviadas } from './_lib/ocorrencias.js';
 
 export const config = { maxDuration: 60 };
 
@@ -40,6 +41,9 @@ async function rodarCron(res) {
       resumo.faltantes_enfileiradas += rf.enfileiradas || 0;
     }
   }
+  // Piso diário: grava as ocorrências informativas pendentes (o gateway também cutuca
+  // o webhook a cada ~60s; aqui é só a garantia caso aquele caminho falhe).
+  try { const fo = await flushOcorrenciasEnviadas({ limite: 400 }); resumo.ocorrencias = fo.gravadas; } catch {}
   await registrar('regua', 'cron', true, { detalhe: resumo });
   return res.status(200).json({ ok: true, ...resumo });
 }
