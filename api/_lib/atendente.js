@@ -63,10 +63,21 @@ ${asaasAtivo
 - Comprovantes são conferidos automaticamente; não peça dados do comprovante.
 
 == PEDAGÓGICO ==
-- Acolha com empatia; evitar a evasão é prioridade. Você pode consultar a frequência (consultar_frequencia) e incentivar a volta às aulas
-  (problema de pagamento não é motivo para faltar).
-- Para justificar falta, agendar reposição, trocar de turma/horário, certificado, material/apostila, ou intenção de trancar/cancelar:
-  por enquanto registre o pedido e chame chamar_humano com motivo "pedagógico - <assunto>" (o card fica no Pedagógico). Nunca deixe o aluno desamparado.
+- Acolha com empatia; evitar a evasão é prioridade. Ferramentas: consultar_frequencia (presença/faltas),
+  consultar_cronograma_turma (método do curso, dia/horário, módulos), consultar_vagas_turmas (turmas com vaga),
+  consultar_status_certificado, consultar_entrega_apostila.
+- FALTA: acolha, pergunte o motivo e registre com registrar_pedagogico(tipo="justificativa_falta"). Explique conforme o método do curso:
+  rotativo = a aula começa e termina no dia, o conteúdo é reposto/revisto no ciclo; individual = ele retoma de onde parou, não perde matéria;
+  sequencial = reforce a assiduidade e ofereça reposição. Problema de pagamento não é motivo para faltar.
+- REPOSIÇÃO: ofereça e registre com registrar_pedagogico(tipo="reposicao") — a secretaria agenda e confirma.
+- TROCA DE TURMA/HORÁRIO: mostre as vagas (consultar_vagas_turmas) e registre com registrar_pedagogico(tipo="troca_turma").
+- DIFICULDADE / foi mal na prova: explique a Garantia de Aprendizado (quem tem frequência pode refazer o módulo sem custo) e registre uma reposição/reforço.
+- CERTIFICADO: consulte com consultar_status_certificado. Critérios: presença ≥ 80% e média 7,0. Se elegível e ainda não solicitado, use solicitar_certificado;
+  se faltar frequência, diga quantas reposições faltam.
+- MATERIAL/APOSTILA: consulte com consultar_entrega_apostila.
+- QUER TRANCAR/CANCELAR: tente reverter com carinho (remanejar horário, trocar de curso, transferir a matrícula a um familiar, ou trancar por até 6 meses).
+  Registre com registrar_pedagogico(tipo="alerta_evasao") e chame chamar_humano "pedagógico - retenção" (o coordenador formaliza). Nunca deixe o aluno desamparado.
+- Numa conversa de falta não trate de finanças, salvo se houver 2+ faltas E parcela vencida — aí ofereça renegociação condicionada à frequência e encaminhe ao financeiro.
 
 == ENCAMINHAMENTO ==
 - Pergunte se a pessoa quer fazer o teste de perfil profissional (em breve) ou falar agora com o atendimento humano do encaminhamento.
@@ -319,6 +330,79 @@ export async function atender({ conversa, unidade, segredos }) {
           cod_alu: String(cod_alu), vencimento, data_pagamento, chave: `ag-${conversa.id}-${cod_alu}-${iso}`
         }, { conversaId: conversa.id });
         return { agendado: true, id: r.agendamento_id };
+      }
+    },
+    {
+      nome: 'consultar_status_certificado',
+      descricao: 'Certificado do aluno: emitidos e solicitações em andamento (status e previsão de entrega).',
+      parametros: { type: 'object', properties: { cod_alu: { type: 'string' } }, required: ['cod_alu'] },
+      executar: async ({ cod_alu }) => {
+        const bloq = exigirIdentidade(); if (bloq) return bloq;
+        if (!alunoDoGrupo(cod_alu)) return { erro: 'aluno_fora_do_grupo' };
+        return await ponte(conversa.unit_id, 'status_certificado', { cod_alu: String(cod_alu) }, { conversaId: conversa.id });
+      }
+    },
+    {
+      nome: 'consultar_cronograma_turma',
+      descricao: 'Turma do aluno, método do curso (rotativo/individual/sequencial), dia, horário e módulos.',
+      parametros: { type: 'object', properties: { cod_alu: { type: 'string' } }, required: ['cod_alu'] },
+      executar: async ({ cod_alu }) => {
+        const bloq = exigirIdentidade(); if (bloq) return bloq;
+        if (!alunoDoGrupo(cod_alu)) return { erro: 'aluno_fora_do_grupo' };
+        return await ponte(conversa.unit_id, 'cronograma_turma', { cod_alu: String(cod_alu) }, { conversaId: conversa.id });
+      }
+    },
+    {
+      nome: 'consultar_vagas_turmas',
+      descricao: 'Outras turmas do mesmo curso com vaga, para remanejamento/troca de horário.',
+      parametros: { type: 'object', properties: { cod_alu: { type: 'string' } }, required: ['cod_alu'] },
+      executar: async ({ cod_alu }) => {
+        const bloq = exigirIdentidade(); if (bloq) return bloq;
+        if (!alunoDoGrupo(cod_alu)) return { erro: 'aluno_fora_do_grupo' };
+        return { turmas: await ponte(conversa.unit_id, 'vagas_turmas', { cod_alu: String(cod_alu) }, { conversaId: conversa.id }) };
+      }
+    },
+    {
+      nome: 'consultar_entrega_apostila',
+      descricao: 'Verifica se o aluno já retirou o material/apostila e a situação.',
+      parametros: { type: 'object', properties: { cod_alu: { type: 'string' } }, required: ['cod_alu'] },
+      executar: async ({ cod_alu }) => {
+        const bloq = exigirIdentidade(); if (bloq) return bloq;
+        if (!alunoDoGrupo(cod_alu)) return { erro: 'aluno_fora_do_grupo' };
+        return { apostilas: await ponte(conversa.unit_id, 'entrega_apostila', { cod_alu: String(cod_alu) }, { conversaId: conversa.id }) };
+      }
+    },
+    {
+      nome: 'solicitar_certificado',
+      descricao: 'Coloca o certificado do aluno na fila de emissão da secretaria. Use quando o aluno concluiu e é elegível (presença ≥ 80% e média 7,0).',
+      parametros: { type: 'object', properties: { cod_alu: { type: 'string' } }, required: ['cod_alu'] },
+      executar: async ({ cod_alu }) => {
+        const bloq = exigirIdentidade(); if (bloq) return bloq;
+        const aluno = alunoDoGrupo(cod_alu); if (!aluno) return { erro: 'aluno_fora_do_grupo' };
+        const r = await ponte(conversa.unit_id, 'solicitar_certificado', { cod_alu: String(cod_alu), chave: `cert-${conversa.id}-${cod_alu}` }, { conversaId: conversa.id });
+        conversa = await atualizarConversa(conversa.id, { departamento: 'pedagogico' });
+        await garantirCardWhatsapp(conversa, { departamento: 'pedagogico', titulo: `Certificado - ${primeiroNome(aluno.nome)}`, status: 'andamento' }).catch(() => null);
+        await ponte(conversa.unit_id, 'registrar_ocorrencia', { cod_alu: String(cod_alu), texto: `SOLICITAÇÃO DE CERTIFICADO via WhatsApp para ${conversa.telefone}.`, chave: `oco-cert-${conversa.id}-${cod_alu}` }, { conversaId: conversa.id }).catch(() => null);
+        return r;
+      }
+    },
+    {
+      nome: 'registrar_pedagogico',
+      descricao: 'Registra um pedido pedagógico (ocorrência no sistema) e abre o card no Pedagógico para a secretaria executar. tipo: justificativa_falta, reposicao, troca_turma, alerta_evasao.',
+      parametros: { type: 'object', properties: { cod_alu: { type: 'string' }, tipo: { type: 'string', enum: ['justificativa_falta', 'reposicao', 'troca_turma', 'alerta_evasao'] }, detalhe: { type: 'string', description: 'resumo do pedido (motivo, data da aula, turma desejada, etc.)' } }, required: ['cod_alu', 'tipo', 'detalhe'] },
+      executar: async ({ cod_alu, tipo, detalhe }) => {
+        const bloq = exigirIdentidade(); if (bloq) return bloq;
+        const aluno = alunoDoGrupo(cod_alu); if (!aluno) return { erro: 'aluno_fora_do_grupo' };
+        const prefixo = {
+          justificativa_falta: 'JUSTIFICATIVA DE FALTA',
+          reposicao: 'SOLICITAÇÃO DE REPOSIÇÃO DE AULA',
+          troca_turma: 'SOLICITAÇÃO DE TROCA DE TURMA/HORÁRIO',
+          alerta_evasao: 'ALERTA DE RISCO DE EVASÃO'
+        }[tipo] || 'PEDIDO PEDAGÓGICO';
+        await ponte(conversa.unit_id, 'registrar_ocorrencia', { cod_alu: String(cod_alu), texto: `${prefixo} (via WhatsApp): ${String(detalhe || '').slice(0, 800)}`, chave: `oco-ped-${conversa.id}-${tipo}-${Date.now()}` }, { conversaId: conversa.id }).catch(() => null);
+        conversa = await atualizarConversa(conversa.id, { departamento: 'pedagogico' });
+        await garantirCardWhatsapp(conversa, { departamento: 'pedagogico', titulo: `${prefixo} - ${primeiroNome(aluno.nome)}`, status: 'andamento', prioridade: tipo === 'alerta_evasao' ? 'alta' : undefined }).catch(() => null);
+        return { ok: true, registrado: tipo };
       }
     },
     {
