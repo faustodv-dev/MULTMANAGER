@@ -19,7 +19,19 @@ export async function enfileirar(unitId, itens) {
   const lista = (itens || []).filter((i) => i && i.telefone && i.texto && digitos(i.telefone).length >= 10);
   if (!lista.length) return 0;
 
-  const chaves = lista.map((i) => i.chave).filter(Boolean);
+  // Dedup DENTRO do lote: a constraint é UNIQUE (unit_id, chave), então duas linhas
+  // com a mesma chave (ex.: mesmo telefone/etapa/dia — aluno em 2 turmas ou irmãos no
+  // mesmo celular) derrubariam o insert inteiro. Mantém a primeira de cada chave.
+  const vistas = new Set();
+  const unicos = lista.filter((i) => {
+    if (!i.chave) return true;
+    if (vistas.has(i.chave)) return false;
+    vistas.add(i.chave);
+    return true;
+  });
+
+  // Dedup contra o que já está na fila (não reenviar o que já foi enfileirado).
+  const chaves = [...vistas];
   const existentes = new Set();
   for (let i = 0; i < chaves.length; i += 200) {
     const { data } = await supabase.from('fila_mensagens').select('chave')
@@ -27,7 +39,7 @@ export async function enfileirar(unitId, itens) {
     (data || []).forEach((r) => existentes.add(r.chave));
   }
 
-  const novos = lista
+  const novos = unicos
     .filter((i) => !i.chave || !existentes.has(i.chave))
     .map((i) => ({
       unit_id: unitId,
@@ -44,9 +56,22 @@ export async function enfileirar(unitId, itens) {
   if (!novos.length) return 0;
 
   const { data, error } = await supabase.from('fila_mensagens').insert(novos).select('id');
-  if (error) {
-    await registrar('fila', 'enfileirar_erro', false, { unitId, detalhe: { erro: error.message } });
-    return 0;
+  if (!error) return data?.length || 0;
+
+  // Resiliência: se ainda assim colidir (corrida/chave repetida solta), não perde o lote.
+  // Insere linha a linha e ignora só as que a constraint rejeitar.
+  if (/duplicate key|unique/i.test(error.message || '')) {
+    let ok = 0;
+    for (const n of novos) {
+      const r = await supabase.from('fila_mensagens').insert(n).select('id');
+      if (!r.error) ok += r.data?.length || 0;
+      else if (!/duplicate key|unique/i.test(r.error.message || '')) {
+        await registrar('fila', 'enfileirar_erro', false, { unitId, detalhe: { erro: r.error.message } });
+      }
+    }
+    return ok;
   }
-  return data?.length || 0;
+
+  await registrar('fila', 'enfileirar_erro', false, { unitId, detalhe: { erro: error.message } });
+  return 0;
 }
