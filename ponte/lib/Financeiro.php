@@ -321,6 +321,38 @@ final class Financeiro
         return $res;
     }
 
+    /** Coloca o certificado do aluno na fila de emissão da secretaria (s_cad_solicita_certificado). */
+    public function solicitarCertificado(string $codAlu, string $chave): array
+    {
+        if (trim($codAlu) === '') {
+            throw new ErroPonte('cod_alu_invalido', 'Aluno não informado.');
+        }
+        if ($chave !== '' && ($ant = $this->registro->anterior($chave))) {
+            return $ant;
+        }
+        $aberta = $this->db->um(
+            "SELECT id FROM s_cad_solicita_certificado WHERE cod_alu = ? AND status IN ('S','G','I') ORDER BY id DESC LIMIT 1",
+            [$codAlu]
+        );
+        if ($aberta) {
+            $res = ['ok' => true, 'ja_solicitado' => true, 'id' => (int)$aberta['id']];
+            $this->registro->gravar('solicita_certificado', $chave ?: null, 'ok', compact('codAlu'), $res);
+            return $res;
+        }
+        $mat = $this->db->um(
+            "SELECT COD_MATRICULA, NOM_CUR FROM s_cad_matricula WHERE COD_ALU = ? ORDER BY (STATUS_MAT = 'Ativo') DESC, COD_MATRICULA DESC LIMIT 1",
+            [$codAlu]
+        ) ?? [];
+        $login = (string)($this->agente['login'] ?? 'AGENTE IA');
+        $this->db->executar(
+            "INSERT INTO s_cad_solicita_certificado (cod_alu, matricula, curso, data_solicitacao, status, `user`) VALUES (?, ?, ?, CURDATE(), 'S', ?)",
+            [$codAlu, mb_substr((string)($mat['COD_MATRICULA'] ?? ''), 0, 30), mb_substr((string)($mat['NOM_CUR'] ?? ''), 0, 30), $login]
+        );
+        $res = ['ok' => true, 'id' => $this->db->ultimoId()];
+        $this->registro->gravar('solicita_certificado', $chave ?: null, 'ok', compact('codAlu'), $res);
+        return $res;
+    }
+
     /** addocorrencia.php, ramo agend_pag: s_cad_agend_pag + ocorrência. */
     public function agendarPagamento(string $codAlu, string $matricula, string $vencimento, string $dataPagamento, string $chave): array
     {

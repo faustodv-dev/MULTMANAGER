@@ -362,6 +362,131 @@ final class Escola
         ], $rows);
     }
 
+    /** Turma/curso ativos do aluno (matrícula nova ativa; senão COD_TUR do cadastro). */
+    private function turmaDoAluno(string $codAlu): string
+    {
+        $m = $this->db->um(
+            "SELECT COD_TUR FROM s_cad_matricula WHERE COD_ALU = ? ORDER BY (STATUS_MAT = 'Ativo') DESC, COD_MATRICULA DESC LIMIT 1",
+            [$codAlu]
+        );
+        if ($m && !empty($m['COD_TUR'])) {
+            return (string)$m['COD_TUR'];
+        }
+        $a = $this->db->um('SELECT COD_TUR FROM s_cad_aluno WHERE COD_ALU = ? LIMIT 1', [$codAlu]);
+        return (string)($a['COD_TUR'] ?? '');
+    }
+
+    /** Certificados emitidos + solicitações em andamento do aluno. */
+    public function statusCertificado(string $codAlu): array
+    {
+        $emitidos = $this->db->todos(
+            "SELECT NUM_CERT, EMISSOR, `data`, DESC_CERT FROM s_cad_certificado WHERE COD_ALU = ? ORDER BY `data` DESC",
+            [$codAlu]
+        );
+        $solic = $this->db->todos(
+            'SELECT curso, data_solicitacao, data_previsao, data_entrega, status FROM s_cad_solicita_certificado WHERE cod_alu = ? ORDER BY id DESC',
+            [$codAlu]
+        );
+        $rot = fn($s) => match (strtoupper(trim((string)$s))) {
+            'S' => 'solicitado', 'G' => 'em_processamento', 'I' => 'impresso', 'E' => 'entregue', default => (string)$s
+        };
+        return [
+            'emitidos' => array_map(fn($c) => [
+                'numero' => Texto::doBanco($c['NUM_CERT'] ?? ''),
+                'curso' => Texto::doBanco($c['DESC_CERT'] ?? ''),
+                'emissor' => Texto::doBanco($c['EMISSOR'] ?? ''),
+                'data' => Texto::dataIso($c['data'] ?? ''),
+            ], $emitidos),
+            'solicitacoes' => array_map(fn($x) => [
+                'curso' => Texto::doBanco($x['curso'] ?? ''),
+                'status' => $rot($x['status'] ?? ''),
+                'solicitado_em' => Texto::dataIso($x['data_solicitacao'] ?? ''),
+                'previsao' => Texto::dataIso($x['data_previsao'] ?? ''),
+                'entregue_em' => Texto::dataIso($x['data_entrega'] ?? ''),
+            ], $solic),
+        ];
+    }
+
+    /** Turma do aluno + método do curso (rotativo/individual/sequencial) + módulos. */
+    public function cronogramaTurma(string $codAlu): array
+    {
+        $turmaCod = $this->turmaDoAluno($codAlu);
+        if ($turmaCod === '') {
+            return ['encontrou' => false];
+        }
+        $t = $this->db->um(
+            'SELECT COD_CUR, NOM_TUR, DIA_SEMANA, PERIODO, HS_INICIO, HS_FIM, SAL_TUR FROM s_cad_turma WHERE COD_TUR = ? LIMIT 1',
+            [$turmaCod]
+        ) ?? [];
+        $curCod = (string)($t['COD_CUR'] ?? '');
+        $crono = $this->db->todos('SELECT TIPO, NOME FROM s_cad_cronograma WHERE COD_CUR = ? ORDER BY COD', [$curCod]);
+        $metodos = ['I' => 'individual', 'R' => 'rotativo', 'S' => 'sequencial'];
+        $tipo = strtoupper(trim((string)($crono[0]['TIPO'] ?? '')));
+        return [
+            'encontrou' => true,
+            'curso' => $this->nomesCursos([$curCod])[$curCod] ?? Texto::doBanco($t['NOM_TUR'] ?? ''),
+            'turma' => Texto::doBanco($t['NOM_TUR'] ?? ''),
+            'metodo' => $metodos[$tipo] ?? (string)$tipo,
+            'dia_semana' => Texto::doBanco($t['DIA_SEMANA'] ?? ''),
+            'periodo' => Texto::doBanco($t['PERIODO'] ?? ''),
+            'horario' => trim(Texto::doBanco($t['HS_INICIO'] ?? '') . ' - ' . Texto::doBanco($t['HS_FIM'] ?? ''), ' -'),
+            'sala' => Texto::doBanco($t['SAL_TUR'] ?? ''),
+            'modulos' => array_values(array_filter(array_map(fn($c) => Texto::doBanco($c['NOME'] ?? ''), $crono))),
+        ];
+    }
+
+    /** Outras turmas do mesmo curso com vaga (para remanejamento). */
+    public function vagasTurmas(string $codAlu): array
+    {
+        $turmaCod = $this->turmaDoAluno($codAlu);
+        if ($turmaCod === '') {
+            return [];
+        }
+        $t = $this->db->um('SELECT COD_CUR FROM s_cad_turma WHERE COD_TUR = ? LIMIT 1', [$turmaCod]);
+        $curCod = (string)($t['COD_CUR'] ?? '');
+        if ($curCod === '') {
+            return [];
+        }
+        $rows = $this->db->todos(
+            'SELECT COD_TUR, NOM_TUR, DIA_SEMANA, PERIODO, HS_INICIO, HS_FIM, VAG_TUR FROM s_cad_turma WHERE COD_CUR = ?',
+            [$curCod]
+        );
+        $out = [];
+        foreach ($rows as $r) {
+            if ((string)$r['COD_TUR'] === $turmaCod) {
+                continue;
+            }
+            $vagas = (int)preg_replace('/\D/', '', (string)($r['VAG_TUR'] ?? '0'));
+            if ($vagas <= 0) {
+                continue;
+            }
+            $out[] = [
+                'turma' => Texto::doBanco($r['NOM_TUR'] ?? ''),
+                'dia_semana' => Texto::doBanco($r['DIA_SEMANA'] ?? ''),
+                'periodo' => Texto::doBanco($r['PERIODO'] ?? ''),
+                'horario' => trim(Texto::doBanco($r['HS_INICIO'] ?? '') . ' - ' . Texto::doBanco($r['HS_FIM'] ?? ''), ' -'),
+                'vagas' => $vagas,
+            ];
+        }
+        return $out;
+    }
+
+    /** Histórico de entrega de material/apostila do aluno. */
+    public function entregaApostila(string $codAlu): array
+    {
+        $rows = $this->db->todos(
+            'SELECT COD_CUR, SIT_AP, QTD, DAT_ENT FROM historico_apostila WHERE COD_ALU = ? ORDER BY COD_HIST DESC',
+            [$codAlu]
+        );
+        $cursos = $this->nomesCursos(array_column($rows, 'COD_CUR'));
+        return array_map(fn($r) => [
+            'curso' => $cursos[(string)($r['COD_CUR'] ?? '')] ?? (string)($r['COD_CUR'] ?? ''),
+            'situacao' => Texto::doBanco($r['SIT_AP'] ?? ''),
+            'quantidade' => (string)($r['QTD'] ?? ''),
+            'entregue_em' => Texto::dataIso($r['DAT_ENT'] ?? ''),
+        ], $rows);
+    }
+
     /**
      * Carteira para a régua de cobrança: parcelas EM ABERTO filtradas por vencimento
      * (datas exatas OU intervalo de/ate, ISO AAAA-MM-DD) e, opcionalmente, pelo STATUS
