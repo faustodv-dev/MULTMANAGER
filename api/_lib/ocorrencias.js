@@ -26,11 +26,23 @@ function dataHoraSP(iso) {
   return `${data} às ${hora}`;
 }
 
+// Detalhe por turma (números ficam SÓ no CRM, nunca no WhatsApp do responsável).
+function detalheTurmas(meta) {
+  const ts = meta && Array.isArray(meta.turmas) ? meta.turmas : [];
+  if (!ts.length) return '';
+  const partes = ts.map((t) => {
+    const fs = Number(t.faltas_seguidas || 0);
+    const info = fs > 0 ? ` (${fs} falta${fs > 1 ? 's' : ''} seg.)` : '';
+    return `${t.turma || '?'}${info}`;
+  });
+  return ` Turmas: ${partes.join('; ')}.`;
+}
+
 function textoOcorrencia(row) {
   const origem = row.origem === 'regua_faltantes' ? 'régua de faltantes' : 'régua de cobrança';
   const rot = ROTULO_ETAPA[row.categoria];
   const etapa = rot ? ` – ${rot}` : '';
-  return `📲 Contato automático (${origem}${etapa}) enviado ao WhatsApp do responsável em ${dataHoraSP(row.enviado_em)}. [MULT Manager]`;
+  return `📲 Contato automático (${origem}${etapa}) enviado ao WhatsApp do responsável em ${dataHoraSP(row.enviado_em)}.${detalheTurmas(row.metadata)} [MULT Manager]`;
 }
 
 // Erros de negócio que não adianta repetir: marca como tratada pra não ficar em loop.
