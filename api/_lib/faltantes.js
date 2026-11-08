@@ -77,6 +77,24 @@ function preencher(texto, f) {
   });
 }
 
+/** A turma mais crítica do aluno no dia: mais faltas seguidas e, no empate, menor presença. */
+function turmaPior(rows) {
+  return rows.reduce((a, b) => {
+    const fa = Number(a.faltas_seguidas || 0), fb = Number(b.faltas_seguidas || 0);
+    if (fb !== fa) return fb > fa ? b : a;
+    const pa = a.percentual_presenca ?? 101, pb = b.percentual_presenca ?? 101;
+    return pb < pa ? b : a;
+  });
+}
+
+/** Junta os cursos para citar na mensagem (acoplamento): "A", "A e B", "A, B e C". */
+function juntarCursos(lista) {
+  const cursos = [...new Set((lista || []).map((c) => String(c || '').trim()).filter(Boolean))];
+  if (!cursos.length) return 'seu curso';
+  if (cursos.length === 1) return cursos[0];
+  return cursos.slice(0, -1).join(', ') + ' e ' + cursos[cursos.length - 1];
+}
+
 /** Processa os faltantes de uma unidade para um dia (padrão: ontem) e enfileira. */
 export async function processarFaltantesUnidade(unitId, { dataIso = null, forcar = false } = {}) {
   const cfg = await faltantesDaUnidade(unitId);
@@ -94,32 +112,56 @@ export async function processarFaltantesUnidade(unitId, { dataIso = null, forcar
   faltantes = (faltantes || []).filter((f) => f.telefone && digitos(f.telefone).length >= 10);
   resumo.faltantes = faltantes.length;
 
-  // Termômetro (4d): avalia cada faltante (reusa este lote), grava a temperatura e,
-  // se FRIO, abre/escala o card de Risco de Evasão. Em paralelo; não trava o envio.
+  // Agrupa por ALUNO: ele pode faltar em mais de uma turma no mesmo dia. Mandamos UMA
+  // mensagem por aluno, acoplando os cursos; o tom segue a turma mais crítica.
+  // (Irmãos no mesmo celular continuam um alerta cada, porque a chave é por cod_alu.)
+  const grupos = new Map();
+  for (const f of faltantes) {
+    const k = f.cod_alu ? 'a' + f.cod_alu : 't' + digitos(f.telefone);
+    if (!grupos.has(k)) grupos.set(k, []);
+    grupos.get(k).push(f);
+  }
+
+  // Termômetro (4d): 1x por aluno, pela turma MAIS CRÍTICA. Em paralelo; não trava o envio.
   try {
-    const faixas = await Promise.all(faltantes.map((f) => avaliarFaltante(unitId, f).catch(() => null)));
+    const faixas = await Promise.all([...grupos.values()].map((rows) => avaliarFaltante(unitId, turmaPior(rows)).catch(() => null)));
     resumo.frios = faixas.filter((x) => x === 'frio').length;
   } catch { /* termômetro é best-effort, não impede a régua */ }
 
   const agendado = agendadoParaHoje(cfg.horario);
   const itens = [];
-  for (const f of faltantes) {
-    const etapa = escolherEtapa(f, cfg);
+  for (const [k, rows] of grupos) {
+    const base = rows[0];
+    // Justificativa é sinal do aluno (cobre o dia) → texto suave de reposição.
+    // Senão, o tom é o da turma mais crítica (consec3 > consec2 > falta1).
+    const etapa = (base.tem_justificativa && cfg.pre_verificar_justificativa)
+      ? porId(cfg.etapas, 'justificada')
+      : escolherEtapa(turmaPior(rows), cfg);
     if (!etapa || etapa.ativo === false) continue;
     if (etapa.id === 'justificada') resumo.puladas_justificadas++;
+    // Acopla os cursos das turmas em cobrança numa mensagem só (números só no CRM).
+    const fMsg = { ...base, curso: juntarCursos(rows.map((r) => r.curso)) };
     itens.push({
-      telefone: f.telefone,
-      texto: preencher(etapa.texto, f),
+      telefone: base.telefone,
+      texto: preencher(etapa.texto, fMsg),
       origem: 'regua_faltantes',
       categoria: etapa.id,
       prioridade: 4,
       agendado_para: agendado,
-      // Chave POR ALUNO: irmãos no mesmo celular do responsável geram um alerta cada
-      // (nomeando o aluno certo). Só deduplica o MESMO aluno (ex.: 2 turmas / re-run do dia).
-      chave: `falt|${etapa.id}|${data}|${f.cod_alu ? 'a' + f.cod_alu : 't' + digitos(f.telefone)}`,
-      cod_alu: f.cod_alu,
-      alunos: primeiroNome(f.nome_aluno),
-      metadata: { matricula: f.matricula ? String(f.matricula) : '', etapa: etapa.id }
+      // Uma chave por aluno/dia: o mesmo aluno em 2 turmas vira UM alerta (acoplado aqui).
+      chave: `falt|${data}|${k}`,
+      cod_alu: base.cod_alu,
+      alunos: primeiroNome(base.nome_aluno),
+      metadata: {
+        matricula: base.matricula ? String(base.matricula) : '',
+        etapa: etapa.id,
+        // Detalhe por turma — só para o CRM (ocorrência + card), nunca no WhatsApp.
+        turmas: rows.map((r) => ({
+          turma: r.turma, curso: r.curso,
+          faltas_seguidas: Number(r.faltas_seguidas || 0),
+          presenca: r.percentual_presenca
+        }))
+      }
     });
   }
   resumo.enfileiradas = await enfileirar(unitId, itens);

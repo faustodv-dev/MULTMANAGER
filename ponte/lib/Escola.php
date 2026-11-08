@@ -520,7 +520,8 @@ final class Escola
         }
 
         $codAlus = array_values(array_unique(array_map(fn($r) => (string)$r['COD_ALU'], $faltas)));
-        $hist = [];
+        $hist = [];   // [COD_ALU][COD_MATRICULA_PRES] => [ ['data'=>ISO, 'v'=>'S'|'N'|outro] ] — POR MATRÍCULA
+        $turmas = []; // [COD_ALU] => [ ['turma'=>COD_TUR, 'curso'=>NOM_CUR, 'status'=>STATUS_MAT] ]
         $just = [];
         $repo = [];   // reposições recentes por aluno (4d termômetro)
         $notas = [];  // média das notas por aluno (4d termômetro)
@@ -528,12 +529,26 @@ final class Escola
         for ($i = 0; $i < count($codAlus); $i += 200) {
             $slice = array_slice($codAlus, $i, 200);
             $ph = implode(',', array_fill(0, count($slice), '?'));
-            foreach ($this->db->todos("SELECT COD_ALU, FAL_PRE, DAT_FAL FROM s_cad_pres_aluno WHERE COD_ALU IN ($ph) ORDER BY COD_ALU, DAT_FAL", $slice) as $r) {
+            // Histórico de presença POR MATRÍCULA — não misturar os cursos do mesmo aluno.
+            foreach ($this->db->todos("SELECT COD_ALU, COD_MATRICULA_PRES, FAL_PRE, DAT_FAL FROM s_cad_pres_aluno WHERE COD_ALU IN ($ph) ORDER BY COD_ALU, COD_MATRICULA_PRES, DAT_FAL", $slice) as $r) {
                 $iso = Texto::dataIso($r['DAT_FAL']);
                 if ($iso === '' || $iso > $data) {
                     continue;
                 }
-                $hist[(string)$r['COD_ALU']][] = ['data' => $iso, 'pres' => strtoupper((string)$r['FAL_PRE']) === 'S'];
+                $mat = (string)($r['COD_MATRICULA_PRES'] ?? '');
+                $hist[(string)$r['COD_ALU']][$mat][] = ['data' => $iso, 'v' => strtoupper((string)$r['FAL_PRE'])];
+            }
+            // Todas as turmas do aluno + status da matrícula (para o cabeçalho do card).
+            foreach ($this->db->todos("SELECT DISTINCT p.COD_ALU, p.COD_TUR, m.NOM_CUR, m.STATUS_MAT FROM s_cad_pres_aluno p LEFT JOIN s_cad_matricula m ON m.COD_MATRICULA = p.COD_MATRICULA_PRES WHERE p.COD_ALU IN ($ph)", $slice) as $r) {
+                $tur = (string)($r['COD_TUR'] ?? '');
+                if ($tur === '') {
+                    continue;
+                }
+                $turmas[(string)$r['COD_ALU']][] = [
+                    'turma' => $tur,
+                    'curso' => Texto::doBanco($r['NOM_CUR'] ?? ''),
+                    'status' => trim(Texto::doBanco($r['STATUS_MAT'] ?? '')),
+                ];
             }
             foreach ($this->db->todos("SELECT COD_ALU, DAT_OCO FROM s_cad_ocorrencia WHERE STATUS_OCO = 'Justificativa de falta' AND COD_ALU IN ($ph)", $slice) as $r) {
                 $just[(string)$r['COD_ALU']][] = Texto::dataIso($r['DAT_OCO']);
@@ -551,19 +566,22 @@ final class Escola
         $out = [];
         foreach ($faltas as $r) {
             $codAlu = (string)$r['COD_ALU'];
-            $aulas = $hist[$codAlu] ?? [];
+            $mat = (string)($r['COD_MATRICULA_PRES'] ?? '');
+            // Presença e faltas seguidas SÓ desta matrícula (turma), não de todos os cursos juntos.
+            $aulas = $hist[$codAlu][$mat] ?? [];
             usort($aulas, fn($x, $y) => strcmp($x['data'], $y['data']));
             $pres = 0;
             $falt = 0;
             $seguidas = 0;
             foreach ($aulas as $au) {
-                if ($au['pres']) {
+                if ($au['v'] === 'S') {        // presença
                     $pres++;
                     $seguidas = 0;
-                } else {
+                } elseif ($au['v'] === 'N') {  // falta
                     $falt++;
                     $seguidas++;
                 }
+                // Reposição e demais marcações não contam como falta (o MULT credita a reposição).
             }
             $total = $pres + $falt;
             $temJust = false;
@@ -591,6 +609,7 @@ final class Escola
                 'tem_justificativa' => $temJust,
                 'reposicoes' => $repo[$codAlu] ?? 0,
                 'media_notas' => $notas[$codAlu] ?? null,
+                'turmas' => $turmas[$codAlu] ?? [],
             ];
         }
         return $out;

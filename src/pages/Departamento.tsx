@@ -55,6 +55,7 @@ interface Card {
   id: string; cod_alu: string | null; nome_aluno: string | null; nome_responsavel: string | null;
   telefone: string | null; titulo: string; descricao: string | null; status: string; prioridade: string;
   responsavel_id: string | null; prazo: string | null; canal_origem: string; updated_at: string;
+  turmas?: { turma: string; curso?: string; status?: string }[] | null;
 }
 interface Colab { id: string; nome: string; email: string; papel: string }
 interface Exec {
@@ -394,6 +395,25 @@ function DossieDialog({ dep, card, unidade, colabs, aoFechar, aoMudar, mover, ab
           <Campo r="Cód. aluno">{card.cod_alu || "—"}</Campo>
           <Campo r="Origem">{card.canal_origem || "—"}</Campo>
         </div>
+
+        {Array.isArray(card.turmas) && card.turmas.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-xs text-muted-foreground">Turmas:</span>
+            {card.turmas.map((t, i) => {
+              const st = (t.status || "").toLowerCase();
+              const cor = st.startsWith("ativ") ? "bg-emerald-500"
+                : st.startsWith("form") ? "bg-sky-500"
+                : st.startsWith("tranc") ? "bg-amber-500"
+                : "bg-muted-foreground";
+              return (
+                <span key={i} className="inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs" title={t.curso || ""}>
+                  <span className={`h-1.5 w-1.5 rounded-full ${cor}`} />
+                  {t.status ? `${t.status} · ` : ""}{t.turma}
+                </span>
+              );
+            })}
+          </div>
+        )}
 
         <div className="grid grid-cols-3 gap-2">
           <div><Label className="text-xs">Status</Label>

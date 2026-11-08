@@ -70,16 +70,20 @@ export async function upsertTemperatura(unitId, codAlu, matricula, resultado, si
 }
 
 /** Abre (ou escala) um card de Risco de Evasão para o aluno, sem duplicar. */
-export async function abrirCardRiscoEvasao(unitId, { cod_alu, nome, telefone, nivel, descricao }) {
+export async function abrirCardRiscoEvasao(unitId, { cod_alu, nome, telefone, nivel, descricao, turmas }) {
   if (!unitId || !cod_alu) return null;
   const status = Number(nivel) === 2 ? 'risco_evasao_2' : 'risco_evasao_1';
+  const turmasVal = Array.isArray(turmas) && turmas.length ? turmas : null;
   const { data: aberto } = await supabase.from('cards').select('id,status')
     .eq('unit_id', unitId).eq('cod_alu', String(cod_alu)).eq('departamento', 'pedagogico')
     .in('status', ['risco_evasao_1', 'risco_evasao_2']).order('created_at', { ascending: false })
     .limit(1).maybeSingle();
   if (aberto) {
+    const patch = { updated_at: new Date().toISOString() };
+    if (turmasVal) patch.turmas = turmasVal;             // mantém turmas+status do cabeçalho atualizados
+    if (aberto.status !== status) patch.status = status;
+    await supabase.from('cards').update(patch).eq('id', aberto.id).then(() => {}, () => {});
     if (aberto.status !== status) {
-      await supabase.from('cards').update({ status, updated_at: new Date().toISOString() }).eq('id', aberto.id).then(() => {}, () => {});
       await supabase.from('card_eventos').insert({
         card_id: aberto.id, unit_id: unitId, departamento: 'pedagogico', tipo: 'sistema',
         descricao: `Termômetro reclassificou para ${status === 'risco_evasao_2' ? 'Risco de Evasão 2' : 'Risco de Evasão 1'}. ${String(descricao || '').slice(0, 400)}`
@@ -92,6 +96,7 @@ export async function abrirCardRiscoEvasao(unitId, { cod_alu, nome, telefone, ni
     nome_aluno: nome || null, telefone: telefone || null,
     titulo: `Risco de evasão - ${nome || cod_alu}`,
     descricao: String(descricao || '').slice(0, 500),
+    turmas: turmasVal,
     status, prioridade: 'alta', canal_origem: 'sistema'
   }).select('id').single();
   if (data) await supabase.from('card_eventos').insert({
@@ -118,9 +123,11 @@ export async function avaliarFaltante(unitId, f) {
   await upsertTemperatura(unitId, f.cod_alu, f.matricula, r, sinais);
   if (r.faixa === 'frio') {
     const nivel = sinais.faltas_seguidas >= 3 ? 2 : 1;
+    const turmaTxt = f.turma ? `turma ${f.turma} — ` : '';
     await abrirCardRiscoEvasao(unitId, {
       cod_alu: f.cod_alu, nome: f.nome_aluno || f.nome, telefone: f.telefone, nivel,
-      descricao: `${emojiFaixa(r.faixa)} Frio (${r.score}/100) — ${r.motivos.join(', ')}.`
+      turmas: Array.isArray(f.turmas) ? f.turmas : null,
+      descricao: `${emojiFaixa(r.faixa)} Frio (${r.score}/100) — ${turmaTxt}${r.motivos.join(', ')}.`
     });
   }
   return r.faixa;
