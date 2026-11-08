@@ -1,6 +1,6 @@
 import { NavLink } from "react-router-dom";
 import { useEffect, useState, type ReactNode } from "react";
-import { MessageCircle, Receipt, Users, Building2, LogOut, FlaskConical, Banknote, ClipboardList, GraduationCap, Briefcase, BellRing, UserX } from "lucide-react";
+import { MessageCircle, Receipt, Users, Building2, LogOut, FlaskConical, Banknote, ClipboardList, GraduationCap, Briefcase, BellRing, UserX, LayoutDashboard } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
@@ -25,6 +25,7 @@ export default function Layout({ children }: { children: ReactNode }) {
   }, []);
 
   const itens = [
+    { to: "/", rotulo: "Início", icone: LayoutDashboard, ok: true },
     { to: "/atendimento", rotulo: "Atendimento", icone: MessageCircle, ok: pode("atendimento"), badge: pendencias },
     { to: "/financeiro", rotulo: "Financeiro", icone: Receipt, ok: pode("financeiro") },
     { to: "/pedagogico", rotulo: "Pedagógico", icone: GraduationCap, ok: pode("pedagogico") },
@@ -52,6 +53,7 @@ export default function Layout({ children }: { children: ReactNode }) {
           <NavLink
             key={i.to}
             to={i.to}
+            end={i.to === "/"}
             className={({ isActive }) =>
               cn(
                 "flex items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-sm transition-colors",
