@@ -169,6 +169,38 @@ export async function processarFaltantesUnidade(unitId, { dataIso = null, forcar
   return { ...resumo, data };
 }
 
+/**
+ * Reavaliação SEM envio: recalcula temperatura e cards dos faltantes de uma data
+ * (por turma, acoplando por aluno), atualizando os cards de risco já abertos.
+ * Lê a ponte e escreve nos cards; NÃO enfileira nem envia nada no WhatsApp.
+ */
+export async function reavaliarFaltantes(unitId, { dataIso = null } = {}) {
+  const cfg = await faltantesDaUnidade(unitId);
+  const data = dataIso || ontemSP();
+  let faltantes;
+  try {
+    faltantes = await ponte(unitId, 'faltantes_do_dia', { data, statuses: cfg.statuses }, { timeoutMs: 40000 });
+  } catch (e) {
+    await registrar('faltantes', 'reavaliar_erro', false, { unitId, detalhe: { erro: e.message, data } });
+    return { unit_id: unitId, data, avaliados: 0, frios: 0, erro: e.codigo || e.message };
+  }
+  faltantes = (faltantes || []).filter((f) => f.cod_alu);
+  const grupos = new Map();
+  for (const f of faltantes) {
+    const k = 'a' + f.cod_alu;
+    if (!grupos.has(k)) grupos.set(k, []);
+    grupos.get(k).push(f);
+  }
+  let avaliados = 0, frios = 0;
+  for (const rows of grupos.values()) {
+    const faixa = await avaliarFaltante(unitId, turmaPior(rows)).catch(() => null);
+    avaliados++;
+    if (faixa === 'frio') frios++;
+  }
+  await registrar('faltantes', 'reavaliar', true, { unitId, detalhe: { data, avaliados, frios } });
+  return { unit_id: unitId, data, avaliados, frios, modo: 'reavaliacao_sem_envio' };
+}
+
 /** Prévia: quantos faltantes entrariam, sem enfileirar. */
 export async function previaFaltantes(unitId, { dataIso = null } = {}) {
   const cfg = await faltantesDaUnidade(unitId);

@@ -58,6 +58,7 @@ export default function Faltantes() {
   const [carregando, setCarregando] = useState(true);
   const [salvando, setSalvando] = useState(false);
   const [rodando, setRodando] = useState(false);
+  const [reav, setReav] = useState(false);
   const [dataTeste, setDataTeste] = useState(hojeISO());
 
   const podeEditar = perfil?.papel === "master" || perfil?.papel === "admin";
@@ -94,6 +95,18 @@ export default function Faltantes() {
       carregar();
     } catch (e: any) { toast.error(e.message); }
     setRodando(false);
+  };
+
+  // Recalcula temperaturas e cards da data (por turma) SEM enfileirar/enviar nada.
+  const reavaliar = async () => {
+    setReav(true);
+    try {
+      const r = await api<{ resumo: any }>("faltantes", { acao: "reavaliar", unit_id: unidade, data: dataTeste });
+      const x = r.resumo;
+      toast.success(`Temperaturas recalculadas: ${x.avaliados ?? 0} aluno(s), ${x.frios ?? 0} frio(s). Nada foi enviado.`);
+      carregar();
+    } catch (e: any) { toast.error(e.message); }
+    setReav(false);
   };
 
   const ativos = useMemo(() => regua?.etapas.filter((e) => e.ativo).length ?? 0, [regua]);
@@ -170,6 +183,7 @@ export default function Faltantes() {
               <div className="flex flex-wrap items-end gap-3">
                 <div><Label className="text-xs">Data das faltas</Label><Input type="date" className="w-44" value={dataTeste} onChange={(e) => setDataTeste(e.target.value)} /></div>
                 <Button variant="secondary" onClick={rodarAgora} disabled={rodando || !podeEditar}>{rodando ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Play className="mr-1 h-4 w-4" />} Enfileirar faltantes</Button>
+                <Button variant="outline" onClick={reavaliar} disabled={reav || !podeEditar} title="Recalcula temperaturas e cards da data (por turma), sem enviar nada no WhatsApp.">{reav ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-1 h-4 w-4" />} Recalcular temperaturas (sem enviar)</Button>
               </div>
             </div>
 
