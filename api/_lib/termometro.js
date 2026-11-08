@@ -74,19 +74,29 @@ export async function abrirCardRiscoEvasao(unitId, { cod_alu, nome, telefone, ni
   if (!unitId || !cod_alu) return null;
   const status = Number(nivel) === 2 ? 'risco_evasao_2' : 'risco_evasao_1';
   const turmasVal = Array.isArray(turmas) && turmas.length ? turmas : null;
-  const { data: aberto } = await supabase.from('cards').select('id,status')
+  const { data: aberto } = await supabase.from('cards').select('id,status,descricao')
     .eq('unit_id', unitId).eq('cod_alu', String(cod_alu)).eq('departamento', 'pedagogico')
     .in('status', ['risco_evasao_1', 'risco_evasao_2']).order('created_at', { ascending: false })
     .limit(1).maybeSingle();
   if (aberto) {
+    const novaDesc = String(descricao || '').slice(0, 500);
+    const mudouNivel = aberto.status !== status;
+    const mudouTexto = novaDesc && novaDesc !== (aberto.descricao || '');
     const patch = { updated_at: new Date().toISOString() };
     if (turmasVal) patch.turmas = turmasVal;             // mantém turmas+status do cabeçalho atualizados
-    if (aberto.status !== status) patch.status = status;
+    if (novaDesc) patch.descricao = novaDesc;            // mantém o resumo do card atual
+    if (mudouNivel) patch.status = status;
     await supabase.from('cards').update(patch).eq('id', aberto.id).then(() => {}, () => {});
-    if (aberto.status !== status) {
+    if (mudouNivel) {
       await supabase.from('card_eventos').insert({
         card_id: aberto.id, unit_id: unitId, departamento: 'pedagogico', tipo: 'sistema',
         descricao: `Termômetro reclassificou para ${status === 'risco_evasao_2' ? 'Risco de Evasão 2' : 'Risco de Evasão 1'}. ${String(descricao || '').slice(0, 400)}`
+      }).then(() => {}, () => {});
+    } else if (mudouTexto) {
+      // Reanota o "por quê" quando os números mudam, mesmo sem mudar de nível (ex.: recálculo).
+      await supabase.from('card_eventos').insert({
+        card_id: aberto.id, unit_id: unitId, departamento: 'pedagogico', tipo: 'sistema',
+        descricao: `Termômetro recalculou: ${novaDesc.slice(0, 400)}`
       }).then(() => {}, () => {});
     }
     return aberto.id;

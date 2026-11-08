@@ -487,10 +487,32 @@ final class Escola
         ], $rows);
     }
 
+    /** Nome real de uma coluna (1ª candidata que existir) numa tabela MySQL; '' se não achar. */
+    private function colunaReal(string $tabela, array $candidatas): string
+    {
+        if ($this->db->driver() !== 'mysql') {
+            return '';
+        }
+        try {
+            $cols = [];
+            foreach ($this->db->todos('SHOW COLUMNS FROM `' . str_replace('`', '', $tabela) . '`') as $c) {
+                $cols[strtolower((string)($c['Field'] ?? ''))] = (string)($c['Field'] ?? '');
+            }
+            foreach ($candidatas as $cand) {
+                if (isset($cols[strtolower($cand)])) {
+                    return $cols[strtolower($cand)];
+                }
+            }
+        } catch (\Throwable $e) {
+            // Tabela pode não existir nesta unidade — melhor-esforço, sem quebrar a régua.
+        }
+        return '';
+    }
+
     /**
      * Faltantes de um dia (FAL_PRE='N' em DAT_FAL), com contato, status da matrícula,
-     * faltas seguidas, % de presença e se já há justificativa registrada perto da data.
-     * Base da régua de faltantes. Somente leitura.
+     * faltas seguidas, % de FREQUÊNCIA (participações ÷ aulas previstas da turma) e se já
+     * há justificativa registrada perto da data. Base da régua de faltantes. Somente leitura.
      *
      * @param array<int,string> $statuses filtra por STATUS_MAT (ex.: ['Ativo'])
      */
@@ -520,32 +542,45 @@ final class Escola
         }
 
         $codAlus = array_values(array_unique(array_map(fn($r) => (string)$r['COD_ALU'], $faltas)));
-        $hist = [];   // [COD_ALU][COD_MATRICULA_PRES] => [ ['data'=>ISO, 'v'=>'S'|'N'|outro] ] — POR MATRÍCULA
-        $turmas = []; // [COD_ALU] => [ ['turma'=>COD_TUR, 'curso'=>NOM_CUR, 'status'=>STATUS_MAT] ]
+        $hist = [];        // [COD_ALU][MATRICULA] => [ ['data'=>ISO, 'v'=>'S'|'N'|outro] ]
+        $matInfo = [];     // [COD_ALU][MATRICULA] => ['curso'=>..., 'status'=>...]
+        $turmaAtual = [];  // ["COD_ALU|MATRICULA"] => ['data'=>ISO, 'turma'=>COD_TUR] (mais recente)
+        $turmasDaMat = []; // ["COD_ALU|MATRICULA"] => [COD_TUR => true]
         $just = [];
-        $repo = [];   // reposições recentes por aluno (4d termômetro)
-        $notas = [];  // média das notas por aluno (4d termômetro)
-        $limiteRepo = date('Y-m-d', strtotime($data . ' -120 days'));
+        $repoMat = [];     // ["COD_ALU|MATRICULA"] => nº reposições
+        $repoTur = [];     // ["COD_ALU|COD_TUR"]   => nº reposições
+        $repoAlu = [];     // [COD_ALU]             => nº reposições
+        $notas = [];       // média das notas por aluno (4d termômetro)
+
+        // Nomes reais das colunas (as tabelas de reposição variam) — descobertos em runtime.
+        $colRepAlu = $this->colunaReal('s_cad_reposicao', ['COD_ALU']);
+        $colRepMat = $this->colunaReal('s_cad_reposicao', ['COD_MATRICULA_PRES', 'COD_MATRICULA', 'COD_MAT']);
+        $colRepTur = $this->colunaReal('s_cad_reposicao', ['COD_TUR', 'COD_TURMA']);
+
         for ($i = 0; $i < count($codAlus); $i += 200) {
             $slice = array_slice($codAlus, $i, 200);
             $ph = implode(',', array_fill(0, count($slice), '?'));
-            // Histórico de presença POR MATRÍCULA — não misturar os cursos do mesmo aluno.
-            foreach ($this->db->todos("SELECT COD_ALU, COD_MATRICULA_PRES, FAL_PRE, DAT_FAL FROM s_cad_pres_aluno WHERE COD_ALU IN ($ph) ORDER BY COD_ALU, COD_MATRICULA_PRES, DAT_FAL", $slice) as $r) {
+            // Histórico de presença POR MATRÍCULA (+ a turma atual de cada matrícula).
+            foreach ($this->db->todos("SELECT COD_ALU, COD_MATRICULA_PRES, COD_TUR, FAL_PRE, DAT_FAL FROM s_cad_pres_aluno WHERE COD_ALU IN ($ph) ORDER BY COD_ALU, COD_MATRICULA_PRES, DAT_FAL", $slice) as $r) {
                 $iso = Texto::dataIso($r['DAT_FAL']);
                 if ($iso === '' || $iso > $data) {
                     continue;
                 }
+                $alu = (string)$r['COD_ALU'];
                 $mat = (string)($r['COD_MATRICULA_PRES'] ?? '');
-                $hist[(string)$r['COD_ALU']][$mat][] = ['data' => $iso, 'v' => strtoupper((string)$r['FAL_PRE'])];
-            }
-            // Todas as turmas do aluno + status da matrícula (para o cabeçalho do card).
-            foreach ($this->db->todos("SELECT DISTINCT p.COD_ALU, p.COD_TUR, m.NOM_CUR, m.STATUS_MAT FROM s_cad_pres_aluno p LEFT JOIN s_cad_matricula m ON m.COD_MATRICULA = p.COD_MATRICULA_PRES WHERE p.COD_ALU IN ($ph)", $slice) as $r) {
                 $tur = (string)($r['COD_TUR'] ?? '');
-                if ($tur === '') {
-                    continue;
+                $km = $alu . '|' . $mat;
+                $hist[$alu][$mat][] = ['data' => $iso, 'v' => strtoupper((string)$r['FAL_PRE'])];
+                if ($tur !== '') {
+                    $turmasDaMat[$km][$tur] = true;
+                    if (!isset($turmaAtual[$km]) || $iso >= $turmaAtual[$km]['data']) {
+                        $turmaAtual[$km] = ['data' => $iso, 'turma' => $tur];
+                    }
                 }
-                $turmas[(string)$r['COD_ALU']][] = [
-                    'turma' => $tur,
+            }
+            // Curso + status de cada matrícula (uma linha por matrícula) para o cabeçalho.
+            foreach ($this->db->todos("SELECT DISTINCT p.COD_ALU, p.COD_MATRICULA_PRES, m.NOM_CUR, m.STATUS_MAT FROM s_cad_pres_aluno p LEFT JOIN s_cad_matricula m ON m.COD_MATRICULA = p.COD_MATRICULA_PRES WHERE p.COD_ALU IN ($ph)", $slice) as $r) {
+                $matInfo[(string)$r['COD_ALU']][(string)($r['COD_MATRICULA_PRES'] ?? '')] = [
                     'curso' => Texto::doBanco($r['NOM_CUR'] ?? ''),
                     'status' => trim(Texto::doBanco($r['STATUS_MAT'] ?? '')),
                 ];
@@ -553,9 +588,26 @@ final class Escola
             foreach ($this->db->todos("SELECT COD_ALU, DAT_OCO FROM s_cad_ocorrencia WHERE STATUS_OCO = 'Justificativa de falta' AND COD_ALU IN ($ph)", $slice) as $r) {
                 $just[(string)$r['COD_ALU']][] = Texto::dataIso($r['DAT_OCO']);
             }
-            // 4d: reposições recentes (comportamento de aluno engajado)
-            foreach ($this->db->todos("SELECT COD_ALU, COUNT(*) n FROM s_cad_ocorrencia WHERE STATUS_OCO = 'Reposição' AND DAT_OCO >= ? AND COD_ALU IN ($ph) GROUP BY COD_ALU", array_merge([$limiteRepo], $slice)) as $r) {
-                $repo[(string)$r['COD_ALU']] = (int)$r['n'];
+            // Reposições (contam como participação na frequência). Fonte: s_cad_reposicao.
+            if ($colRepAlu !== '') {
+                $g = $colRepAlu;
+                if ($colRepMat !== '') { $g .= ", $colRepMat"; }
+                elseif ($colRepTur !== '') { $g .= ", $colRepTur"; }
+                try {
+                    foreach ($this->db->todos("SELECT $g, COUNT(*) n FROM s_cad_reposicao WHERE $colRepAlu IN ($ph) GROUP BY $g", $slice) as $r) {
+                        $a = (string)$r[$colRepAlu];
+                        $n = (int)$r['n'];
+                        if ($colRepMat !== '') {
+                            $repoMat[$a . '|' . (string)$r[$colRepMat]] = $n;
+                        } elseif ($colRepTur !== '') {
+                            $repoTur[$a . '|' . (string)$r[$colRepTur]] = $n;
+                        } else {
+                            $repoAlu[$a] = $n;
+                        }
+                    }
+                } catch (\Throwable $e) {
+                    // Sem reposição a frequência usa só as presenças — não quebra a régua.
+                }
             }
             // 4d: média das notas (s_cad_nota)
             foreach ($this->db->todos("SELECT COD_ALU, AVG(VALOR) media FROM s_cad_nota WHERE COD_ALU IN ($ph) GROUP BY COD_ALU", $slice) as $r) {
@@ -563,27 +615,84 @@ final class Escola
             }
         }
 
+        // Aulas previstas (qtd_tot_aul da turma atual) = denominador da frequência.
+        $qtdAul = [];
+        $colTurKey = $this->colunaReal('s_cad_turma', ['COD_TUR', 'COD_TURMA', 'TURMA']);
+        $colTurQtd = $this->colunaReal('s_cad_turma', ['qtd_tot_aul']);
+        if ($colTurKey !== '' && $colTurQtd !== '') {
+            $turmasDenom = [];
+            foreach ($turmaAtual as $t) {
+                if (($t['turma'] ?? '') !== '') { $turmasDenom[$t['turma']] = true; }
+            }
+            $turmasDenom = array_keys($turmasDenom);
+            for ($j = 0; $j < count($turmasDenom); $j += 500) {
+                $sl2 = array_slice($turmasDenom, $j, 500);
+                if (!$sl2) { break; }
+                $ph2 = implode(',', array_fill(0, count($sl2), '?'));
+                try {
+                    foreach ($this->db->todos("SELECT $colTurKey k, $colTurQtd q FROM s_cad_turma WHERE $colTurKey IN ($ph2)", $sl2) as $r) {
+                        $qtdAul[(string)$r['k']] = (int)$r['q'];
+                    }
+                } catch (\Throwable $e) {
+                    // Sem qtd_tot_aul caímos no cálculo antigo (abaixo) — não quebra.
+                }
+            }
+        }
+
+        // Cabeçalho: UMA turma por matrícula = a turma ATUAL (não todas as históricas).
+        $turmas = [];
+        foreach ($matInfo as $alu => $mats) {
+            foreach ($mats as $mat => $info) {
+                $tur = $turmaAtual[$alu . '|' . $mat]['turma'] ?? '';
+                if ($tur === '') { continue; }
+                $turmas[$alu][] = ['turma' => $tur, 'curso' => $info['curso'], 'status' => $info['status']];
+            }
+        }
+
         $out = [];
         foreach ($faltas as $r) {
             $codAlu = (string)$r['COD_ALU'];
             $mat = (string)($r['COD_MATRICULA_PRES'] ?? '');
-            // Presença e faltas seguidas SÓ desta matrícula (turma), não de todos os cursos juntos.
+            $km = $codAlu . '|' . $mat;
+            // Presenças e faltas seguidas do CURSO (matrícula) — as turmas da matrícula somam juntas.
             $aulas = $hist[$codAlu][$mat] ?? [];
             usort($aulas, fn($x, $y) => strcmp($x['data'], $y['data']));
             $pres = 0;
             $falt = 0;
             $seguidas = 0;
             foreach ($aulas as $au) {
-                if ($au['v'] === 'S') {        // presença
+                if ($au['v'] === 'S') {
                     $pres++;
                     $seguidas = 0;
-                } elseif ($au['v'] === 'N') {  // falta
+                } elseif ($au['v'] === 'N') {
                     $falt++;
                     $seguidas++;
                 }
-                // Reposição e demais marcações não contam como falta (o MULT credita a reposição).
+                // Reposição/demais marcações não são falta (o MULT credita a reposição).
             }
-            $total = $pres + $falt;
+            // Reposições desta matrícula (pela coluna que a tabela tiver).
+            $reposicoes = 0;
+            if ($colRepMat !== '') {
+                $reposicoes = $repoMat[$km] ?? 0;
+            } elseif ($colRepTur !== '') {
+                foreach (array_keys($turmasDaMat[$km] ?? []) as $t) {
+                    $reposicoes += $repoTur[$codAlu . '|' . $t] ?? 0;
+                }
+            } else {
+                // Só por aluno: aplica apenas quando o aluno tem 1 matrícula (senão não separa por curso).
+                $reposicoes = (count($matInfo[$codAlu] ?? []) <= 1) ? ($repoAlu[$codAlu] ?? 0) : 0;
+            }
+            // FREQUÊNCIA (modelo MULT) = (presenças + reposições) ÷ aulas previstas da turma.
+            $turAtual = $turmaAtual[$km]['turma'] ?? (string)($r['COD_TUR'] ?? '');
+            $previstas = $qtdAul[$turAtual] ?? 0;
+            $participacoes = $pres + $reposicoes;
+            if ($previstas > 0) {
+                $percentual = round($participacoes * 100 / $previstas, 1);
+            } else {
+                // Fallback (sem qtd_tot_aul): mantém o cálculo antigo para não ficar sem número.
+                $total = $pres + $falt;
+                $percentual = $total ? round($pres * 100 / $total, 1) : null;
+            }
             $temJust = false;
             foreach ($just[$codAlu] ?? [] as $dj) {
                 if ($dj !== '' && abs((strtotime($dj) - strtotime($data)) / 86400) <= 7) {
@@ -601,13 +710,15 @@ final class Escola
                 'nome_responsavel' => trim(Texto::doBanco($r['NOM_PAI_ALU'] ?? '')),
                 'telefone' => $tel,
                 'curso' => Texto::doBanco($r['NOM_CUR'] ?? ''),
-                'turma' => (string)($r['COD_TUR'] ?? ''),
+                'turma' => $turAtual,
                 'status' => trim(Texto::doBanco($r['STATUS_MAT'] ?? '')),
-                'matricula' => (string)($r['COD_MATRICULA_PRES'] ?? ''),
+                'matricula' => $mat,
                 'faltas_seguidas' => $seguidas,
-                'percentual_presenca' => $total ? round($pres * 100 / $total, 1) : null,
+                'percentual_presenca' => $percentual,
+                'aulas_previstas' => $previstas ?: null,
+                'participacoes' => $participacoes,
                 'tem_justificativa' => $temJust,
-                'reposicoes' => $repo[$codAlu] ?? 0,
+                'reposicoes' => $reposicoes,
                 'media_notas' => $notas[$codAlu] ?? null,
                 'turmas' => $turmas[$codAlu] ?? [],
             ];
