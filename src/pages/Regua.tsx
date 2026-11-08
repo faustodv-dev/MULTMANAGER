@@ -16,8 +16,8 @@ import {
 import { BellRing, Send, Save, CalendarOff, Loader2, Clock, RefreshCw, Users, Megaphone } from "lucide-react";
 
 type Passo = { offset: number; ativo: boolean; texto: string };
-type Regua = { ativa: boolean; horario: number; pula_domingo: boolean; statuses: string[]; passos: Passo[] };
-type Envio = { offset_dias: number; vencimento: string | null; telefone: string | null; alunos: string | null; valor_centavos: number | null; status: string; enviado_em: string };
+type Regua = { ativa: boolean; horario: number; pula_domingo: boolean; via_fila: boolean; statuses: string[]; passos: Passo[] };
+type Envio = { offset_dias?: number | null; vencimento?: string | null; telefone: string | null; alunos: string | null; valor_centavos?: number | null; status: string; enviado_em: string | null; categoria?: string | null };
 type Previa = { responsaveis: number; parcelas: number; sem_telefone: number; valor_total: number };
 
 const STATUS_FALLBACK = ["Ativo", "Desistente", "Rescindido", "Trancado", "Formado"];
@@ -31,7 +31,7 @@ const tom = (o: number) =>
   o < 0 ? { chip: "bg-emerald-100 text-emerald-700", ponto: "bg-emerald-500" }
   : o <= 7 ? { chip: "bg-orange-100 text-orange-700", ponto: "bg-orange-500" }
   : { chip: "bg-rose-100 text-rose-700", ponto: "bg-rose-500" };
-const statusRotulo: Record<string, string> = { enviado: "Enviado", simulado: "Simulado", erro: "Erro", pulado_boleto_ativo: "Pulado (já tinha boleto)" };
+const statusRotulo: Record<string, string> = { enviado: "Enviado", simulado: "Simulado", erro: "Erro", pulado_boleto_ativo: "Pulado (já tinha boleto)", enfileirado: "Na fila", pendente: "Na fila", enviando: "Enviando", cancelado: "Cancelado" };
 const hojeISO = () => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
 const somaDiasISO = (dias: number) => { const d = new Date(); d.setDate(d.getDate() + dias); return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(d); };
 
@@ -190,6 +190,13 @@ export default function Regua() {
                     <span className="flex items-center gap-1"><CalendarOff className="h-4 w-4" /> Não enviar aos domingos</span>
                   </label>
                 </div>
+                <label className="mt-3 flex items-start gap-3 border-t pt-3 text-sm">
+                  <Switch checked={regua.via_fila} disabled={!podeEditar} onCheckedChange={(v) => setRegua({ ...regua, via_fila: v })} />
+                  <span>
+                    <span className="font-medium">Enviar pela fila (hora real)</span>
+                    <span className="mt-0.5 block text-xs text-muted-foreground">O gateway envia no horário da unidade, registra a <b>hora real</b> do envio e anota a ocorrência no cadastro do aluno. Desligado = envio direto (comportamento antigo).</span>
+                  </span>
+                </label>
                 {regua.ativa && (
                   <p className="mt-3 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800">⚠️ Com a régua ativa, as mensagens são enviadas de verdade. Requer o WhatsApp desta unidade conectado. Quem já tem boleto ativo ou já pagou não é cobrado.</p>
                 )}
@@ -246,10 +253,10 @@ export default function Regua() {
                       <tbody>
                         {ultimos.map((e, i) => (
                           <tr key={i} className="border-t">
-                            <td className="py-1 pr-3 whitespace-nowrap">{dataHora(e.enviado_em)}</td>
-                            <td className="pr-3 whitespace-nowrap">{rotulo(e.offset_dias)}</td>
+                            <td className="py-1 pr-3 whitespace-nowrap">{e.enviado_em ? dataHora(e.enviado_em) : "na fila"}</td>
+                            <td className="pr-3 whitespace-nowrap">{e.offset_dias != null ? rotulo(e.offset_dias) : "—"}</td>
                             <td className="pr-3">{e.alunos || "—"}</td>
-                            <td className="pr-3 whitespace-nowrap">{reais(e.valor_centavos)}</td>
+                            <td className="pr-3 whitespace-nowrap">{e.valor_centavos != null ? reais(e.valor_centavos) : "—"}</td>
                             <td className="whitespace-nowrap"><span className={e.status === "enviado" ? "text-emerald-600" : e.status === "erro" ? "text-rose-600" : "text-muted-foreground"}>{statusRotulo[e.status] || e.status}</span></td>
                           </tr>
                         ))}

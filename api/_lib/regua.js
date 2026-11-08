@@ -1,6 +1,7 @@
 import { supabase, reais, dataBr, hojeSP, digitos, registrar } from './base.js';
 import { ponte } from './ponte.js';
 import { enviarWhatsapp } from './gateway.js';
+import { enfileirar, agendadoParaHoje } from './fila.js';
 
 /**
  * Régua de cobrança (disparo automático e manual de mensagens no WhatsApp).
@@ -16,6 +17,7 @@ export const REGUA_PADRAO = {
   horario: 9,
   pula_domingo: true,
   statuses: ['Ativo'],
+  via_fila: false, // false = envio direto (atual); true = enfileira e o gateway envia (hora real + ocorrência)
   passos: [
     { offset: -3, ativo: true, texto: 'Oi, {responsavel}! 😊 Passando pra lembrar que a mensalidade de {aluno} ({valor}) vence em {vencimento}. Pagando até o vencimento você garante o desconto de pontualidade. Se quiser o boleto ou o Pix, é só responder aqui que eu te mando!' },
     { offset: 0, ativo: true, texto: 'Olá, {responsavel}! A mensalidade de {aluno} ({valor}) vence hoje ({vencimento}). Dá pra pagar por boleto ou Pix — me responde aqui que eu envio na hora. 😉' },
@@ -55,6 +57,7 @@ export function mesclarRegua(salva) {
     ativa: salva.ativa === true,
     horario: Number.isInteger(salva.horario) ? Math.min(23, Math.max(0, salva.horario)) : base.horario,
     pula_domingo: salva.pula_domingo !== false,
+    via_fila: salva.via_fila === true,
     statuses,
     passos
   };
@@ -95,10 +98,12 @@ const MAX_POR_EXECUCAO = 250; // teto de segurança por chamada (cabe no limite 
  * o índice único (unit_id, chave) é a garantia final contra duplicidade.
  * Envia fire-and-forget (o gateway humaniza). Retorna o relatório.
  */
-async function processarGrupos(unitId, gruposMap, origem) {
+async function processarGrupos(unitId, gruposMap, origem, { viaFila = false, horario = 9 } = {}) {
   const grupos = [...gruposMap.values()];
-  const resumo = { total: grupos.length, enviados: 0, pulados: 0, erros: 0, limitado: false, erros_detalhe: [] };
+  const resumo = { total: grupos.length, enviados: 0, pulados: 0, erros: 0, limitado: false, via_fila: !!viaFila, erros_detalhe: [] };
   if (!grupos.length) return resumo;
+  const filaItens = [];
+  const agendado = agendadoParaHoje(horario);
 
   // Pré-carrega já-enviados (por chave) e boletos ativos (por cod_par)
   const chaves = grupos.map((g) => g.chave);
@@ -130,15 +135,27 @@ async function processarGrupos(unitId, gruposMap, origem) {
     const texto = preencher(g.passo.texto, {
       responsavel: primeiroNome(g.responsavel) || 'tudo bem', aluno: alunosTxt, valor: reais(g.valor), vencimento: dataBr(g.vencimento)
     });
-    const env = await enviarWhatsapp(unitId, g.telefone, texto, { conversaId: null, aguardarEntrega: false });
-    if (env.ok || env.status === 'simulado') {
+    if (viaFila) {
+      // Enfileira: o gateway envia no horário da unidade, grava a hora REAL e dispara a ocorrência.
+      filaItens.push({
+        telefone: g.telefone, texto, origem: 'regua_cobranca', categoria: `cob${g.passo.offset}`,
+        prioridade: 5, agendado_para: agendado, chave: `cob|${g.chave}`,
+        cod_alu: g.cod_alu, alunos: alunosTxt, metadata: { matricula: g.matricula || '', offset: g.passo.offset }
+      });
       resumo.enviados++;
-      registros.push({ ...baseReg, status: env.status === 'simulado' ? 'simulado' : 'enviado' });
+      registros.push({ ...baseReg, status: 'enfileirado' });
     } else {
-      resumo.erros++;
-      if (resumo.erros_detalhe.length < 50) resumo.erros_detalhe.push({ telefone: digitos(g.telefone), aluno: alunosTxt, erro: env.erro || 'falha no envio' });
+      const env = await enviarWhatsapp(unitId, g.telefone, texto, { conversaId: null, aguardarEntrega: false });
+      if (env.ok || env.status === 'simulado') {
+        resumo.enviados++;
+        registros.push({ ...baseReg, status: env.status === 'simulado' ? 'simulado' : 'enviado' });
+      } else {
+        resumo.erros++;
+        if (resumo.erros_detalhe.length < 50) resumo.erros_detalhe.push({ telefone: digitos(g.telefone), aluno: alunosTxt, erro: env.erro || 'falha no envio' });
+      }
     }
   }
+  if (viaFila && filaItens.length) await enfileirar(unitId, filaItens);
   if (registros.length) {
     await supabase.from('regua_envios').upsert(registros, { onConflict: 'unit_id,chave', ignoreDuplicates: true }).then(() => {}, () => {});
   }
@@ -154,7 +171,7 @@ function agrupar(carteira, escolherPasso, chaveDe) {
     if (!passo) continue;
     const tel = digitos(p.telefone);
     const chave = chaveDe(passo, p, tel);
-    if (!grupos.has(chave)) grupos.set(chave, { chave, passo, telefone: p.telefone, vencimento: p.vencimento, responsavel: p.nome_responsavel || '', _alunos: [], cod_pars: [], valor: 0 });
+    if (!grupos.has(chave)) grupos.set(chave, { chave, passo, telefone: p.telefone, vencimento: p.vencimento, responsavel: p.nome_responsavel || '', _alunos: [], cod_pars: [], valor: 0, cod_alu: p.cod_alu || null, matricula: p.num_matricula || '' });
     const g = grupos.get(chave);
     g._alunos.push(p.nome_aluno); g.cod_pars.push(p.cod_par); g.valor += Number(p.valor || 0);
     if (p.vencimento && (!g.vencimento || p.vencimento < g.vencimento)) g.vencimento = p.vencimento;
@@ -181,7 +198,7 @@ export async function processarReguaUnidade(unitId, { forcar = false } = {}) {
   }
   carteira = (carteira || []).filter((p) => p.telefone && digitos(p.telefone).length >= 10);
   const grupos = agrupar(carteira, (p) => porData.get(p.vencimento), (passo, p, tel) => `${passo.offset}|${p.vencimento}|${tel}`);
-  const r = await processarGrupos(unitId, grupos, 'auto');
+  const r = await processarGrupos(unitId, grupos, 'auto', { viaFila: regua.via_fila, horario: regua.horario });
   return { unit_id: unitId, ...r };
 }
 
@@ -217,7 +234,7 @@ export async function dispararManual(unitId, { de, ate, statuses, offset, criado
     const carteira = await ponte(unitId, 'carteira', { de, ate, statuses }, { timeoutMs: 40000 });
     const lista = (carteira || []).filter((p) => p.telefone && digitos(p.telefone).length >= 10);
     const grupos = agrupar(lista, () => passo, (_passo, _p, tel) => `M|${tel}|${passo.offset}|${de}|${ate}`);
-    resumo = await processarGrupos(unitId, grupos, 'manual');
+    resumo = await processarGrupos(unitId, grupos, 'manual', { viaFila: regua.via_fila, horario: regua.horario });
   } catch (e) {
     resumo = { total: 0, enviados: 0, pulados: 0, erros: 1, limitado: false, erros_detalhe: [{ erro: e.message }] };
   }

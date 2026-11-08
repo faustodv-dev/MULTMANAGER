@@ -70,11 +70,23 @@ export default async function handler(req, res) {
   try {
     if (acao === 'obter') {
       const regua = await reguaDaUnidade(unitId);
-      const { data: ultimos } = await supabase
-        .from('regua_envios')
-        .select('offset_dias,vencimento,telefone,alunos,valor_centavos,status,enviado_em')
-        .eq('unit_id', unitId).order('enviado_em', { ascending: false }).limit(20);
-      return res.status(200).json({ ok: true, regua, padrao: REGUA_PADRAO, statuses_disponiveis: STATUS_CANONICOS, ultimos: ultimos || [] });
+      let ultimos = [];
+      if (regua.via_fila) {
+        // Via fila: a hora é a REAL do envio (enviado_em gravado pelo gateway).
+        const { data } = await supabase
+          .from('fila_mensagens')
+          .select('categoria,telefone,alunos,status,agendado_para,enviado_em,enfileirado_em,erro')
+          .eq('unit_id', unitId).eq('origem', 'regua_cobranca')
+          .order('enfileirado_em', { ascending: false }).limit(20);
+        ultimos = data || [];
+      } else {
+        const { data } = await supabase
+          .from('regua_envios')
+          .select('offset_dias,vencimento,telefone,alunos,valor_centavos,status,enviado_em')
+          .eq('unit_id', unitId).order('enviado_em', { ascending: false }).limit(20);
+        ultimos = data || [];
+      }
+      return res.status(200).json({ ok: true, regua, padrao: REGUA_PADRAO, statuses_disponiveis: STATUS_CANONICOS, ultimos });
     }
 
     if (!podeEditar) return res.status(403).json({ erro: 'sem_permissao' });
