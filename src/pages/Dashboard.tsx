@@ -3,13 +3,13 @@ import {
   ResponsiveContainer, LineChart, Line, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, Tooltip, CartesianGrid,
 } from "recharts";
-import { GraduationCap, Receipt, Send, AlertTriangle, RefreshCw, CalendarDays, ListTodo, Loader2 } from "lucide-react";
+import { GraduationCap, Receipt, Send, AlertTriangle, RefreshCw, CalendarDays, ListTodo, Loader2, Briefcase, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useAuth } from "@/lib/auth";
-import { api } from "@/lib/supabase";
+import { api, dataHora } from "@/lib/supabase";
 import { toast } from "sonner";
 
 type Dep = "pedagogico" | "financeiro" | "encaminhamento";
@@ -22,6 +22,7 @@ type Dados = {
   risco: { total: number; nivel1: number; nivel2: number; novos_periodo: number } | null;
   termometro: { quente: number; morno: number; frio: number } | null;
   fila: { na_fila: number; enviadas_periodo: number; erros: number; cobranca: number; faltantes: number } | null;
+  erros_lista: { origem: string; categoria: string | null; telefone: string | null; alunos: string | null; erro: string | null; quando: string | null }[];
   serie: { dia: string; n: number }[];
   serie_faltantes: { dia: string; n: number }[];
   por_colaborador: { nome: string; n: number }[];
@@ -66,6 +67,7 @@ export default function Dashboard() {
   const [dados, setDados] = useState<Dados | null>(null);
   const [carregando, setCarregando] = useState(true);
   const [verPend, setVerPend] = useState(false);
+  const [verErros, setVerErros] = useState(false);
 
   const carregar = useCallback(async () => {
     setCarregando(true);
@@ -89,6 +91,9 @@ export default function Dashboard() {
     [dados]
   );
   const nPend = dados?.pendencias?.length || 0;
+  const nErros = dados?.fila?.erros || 0;
+  const temEnc = dados?.deps?.includes("encaminhamento");
+  const enc = dados?.por_dep?.encaminhamento;
 
   return (
     <div className="h-full overflow-y-auto">
@@ -111,6 +116,9 @@ export default function Dashboard() {
             <div><Label className="text-xs">De</Label><Input type="date" className="w-40" value={de} max={ate} onChange={(e) => setDe(e.target.value)} /></div>
             <div><Label className="text-xs">Até</Label><Input type="date" className="w-40" value={ate} min={de} max={hojeISO()} onChange={(e) => setAte(e.target.value)} /></div>
             <Button variant="outline" onClick={carregar} disabled={carregando} title="Atualizar"><RefreshCw className={`h-4 w-4 ${carregando ? "animate-spin" : ""}`} /></Button>
+            <Button variant="outline" onClick={() => setVerErros(true)} className={nErros ? "border-red-300 text-red-600 hover:text-red-700" : ""}>
+              <XCircle className="mr-1 h-4 w-4" /> Erros{nErros ? ` (${nErros})` : ""}
+            </Button>
             <Button onClick={() => setVerPend(true)} className="bg-orange-600 hover:bg-orange-700">
               <ListTodo className="mr-1 h-4 w-4" /> Pendências do dia{nPend ? ` (${nPend})` : ""}
             </Button>
@@ -143,6 +151,18 @@ export default function Dashboard() {
                   <Kpi rotulo="Resolvidos no período" valor={fin?.resolvidos_periodo ?? 0} cor="text-emerald-600" />
                   <Kpi rotulo="Cobranças enviadas" valor={dados.fila?.cobranca ?? 0} sub="no período (fila)" />
                   <Kpi rotulo="Aguardando" valor={fin?.aguardando ?? 0} cor="text-amber-600" />
+                </div>
+              </Painel>
+            )}
+
+            {/* Encaminhamento / Agência de Emprego — espaços reservados (em breve) */}
+            {temEnc && (
+              <Painel titulo="Encaminhamento / Agência de Emprego" acao={<Briefcase className="h-4 w-4 text-violet-600" />}>
+                <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                  <Kpi rotulo="Atendimentos abertos" valor={enc?.abertos ?? 0} sub={`${enc?.alta ?? 0} de alta prioridade`} />
+                  <Kpi rotulo="Alunos encaminhados" valor="—" sub="em breve" />
+                  <Kpi rotulo="Vagas abertas" valor="—" sub="em breve" />
+                  <Kpi rotulo="Resolvidos no período" valor={enc?.resolvidos_periodo ?? 0} cor="text-emerald-600" />
                 </div>
               </Painel>
             )}
@@ -247,6 +267,29 @@ export default function Dashboard() {
                       {p.tipo === "risco_novo" ? "Novo risco de evasão" : "Aguardando aluno"} · {DEP_ROTULO[p.dep] || p.dep}{p.cod_alu ? ` · cód. ${p.cod_alu}` : ""}
                     </p>
                   </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Erros de envio */}
+      <Dialog open={verErros} onOpenChange={setVerErros}>
+        <DialogContent className="max-h-[85vh] max-w-lg overflow-y-auto">
+          <DialogHeader><DialogTitle className="flex items-center gap-2"><XCircle className="h-5 w-5 text-red-600" /> Erros de envio</DialogTitle></DialogHeader>
+          <p className="-mt-2 mb-1 text-xs text-muted-foreground">Mensagens que falharam no envio (não inclui canceladas).</p>
+          {!dados?.erros_lista?.length ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">Nenhum erro de envio no período. 🎉</p>
+          ) : (
+            <ul className="space-y-2">
+              {dados.erros_lista.map((e, i) => (
+                <li key={i} className="rounded-lg border border-red-200 p-2.5 text-sm">
+                  <p className="font-medium">{e.alunos || e.telefone || "—"}</p>
+                  <p className="text-xs text-red-600">{e.erro || "falha no envio"}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {e.origem === "regua_cobranca" ? "Cobrança" : "Faltantes"}{e.quando ? ` · ${dataHora(e.quando)}` : ""}
+                  </p>
                 </li>
               ))}
             </ul>
