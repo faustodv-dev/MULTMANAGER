@@ -38,3 +38,8 @@ Separado. Só serviu de **inspiração**. **Nunca** deployar mudança do pedagó
 3. Gateways são **free tier**: um gateway always-on por sistema (vários estouram as 750h). Keep-awake externo mantém de pé; após deploy, a instância reconecta as sessões sozinha a partir do Supabase.
 4. Régua financeira segue por envio direto (Vercel→gateway HTTP) até migrarmos para a fila com o fix do log de hora real.
 5. No fim de tudo: rotacionar o segredo exposto (ponte + `PONTE_SEGREDO`) e a senha do banco escolar (`neto_ponte`).
+
+## Pendências conhecidas
+- **4d — frequência vs reposição do MULT (cosmético, não afeta risco).** O % de frequência usa `(presenças + reposições de s_cad_reposicao) ÷ qtd_tot_aul da turma atual`, somando as turmas **dentro da mesma matrícula** (1 matrícula = 1 curso; nunca somar cursos diferentes). Às vezes o número fica **acima do MULT** (ex.: aluno 13847 deu 172% vs 131% no MULT) — provável **contagem de reposição a mais**: a `s_cad_reposicao` deve ter mais linhas que o "Quantd. Reposição" do MULT (talvez 1 linha por sessão, ou inclui agendadas/canceladas). Para cravar: inspecionar as colunas de `s_cad_reposicao` (tem status/data? granularidade?) e ajustar a contagem. Cálculo em `ponte/lib/Escola.php::faltantesDoDia`. A classificação de risco não depende disso (sinal forte = **faltas seguidas**).
+- **Régua financeira (cobrança) na fila.** `via_fila` testado e aprovado, mas **padrão DESLIGADO** (`api/_lib/regua.js`, `REGUA_PADRAO.via_fila=false`). Ligar dá hora real + ocorrência por envio, igual à de faltantes. Hoje a cobrança ainda sai por envio direto (Vercel→gateway).
+- **Rotação de segredos (Regra de ouro 5).** Ainda pendente — fazer no fim: `PONTE_SEGREDO`/ponte e a senha `neto_ponte`.
