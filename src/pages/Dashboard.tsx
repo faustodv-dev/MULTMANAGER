@@ -23,6 +23,7 @@ type Dados = {
   termometro: { quente: number; morno: number; frio: number } | null;
   fila: { na_fila: number; enviadas_periodo: number; erros: number; cobranca: number; faltantes: number } | null;
   serie: { dia: string; n: number }[];
+  serie_faltantes: { dia: string; n: number }[];
   por_colaborador: { nome: string; n: number }[];
   pendencias: Pendencia[];
 };
@@ -153,6 +154,23 @@ export default function Dashboard() {
                 <Kpi rotulo="Enviadas no período" valor={dados.fila.enviadas_periodo} sub={`${dados.fila.faltantes} faltantes · ${dados.fila.cobranca} cobrança`} cor="text-emerald-600" />
                 <Kpi rotulo="Erros" valor={dados.fila.erros} cor={dados.fila.erros ? "text-red-600" : ""} />
               </div>
+            )}
+
+            {/* Faltantes por dia — acompanhar a curva caindo */}
+            {temPed && (
+              <Painel titulo="Faltantes por dia">
+                {dados.serie_faltantes.length ? (
+                  <ResponsiveContainer width="100%" height={200}>
+                    <LineChart data={dados.serie_faltantes} margin={{ left: -20, right: 8, top: 4 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                      <XAxis dataKey="dia" tickFormatter={diaBr} tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
+                      <YAxis allowDecimals={false} tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
+                      <Tooltip labelFormatter={(v) => diaBr(String(v))} contentStyle={{ fontSize: 12, borderRadius: 8 }} />
+                      <Line type="monotone" dataKey="n" name="Faltantes" stroke="#f59e0b" strokeWidth={2} dot={{ r: 2 }} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                ) : <p className="py-10 text-center text-sm text-muted-foreground">Sem faltantes no período.</p>}
+              </Painel>
             )}
 
             {/* Gráficos */}
