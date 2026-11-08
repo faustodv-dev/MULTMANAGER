@@ -17,6 +17,7 @@ import Pops from "@/pages/Pops";
 import Regua from "@/pages/Regua";
 import Faltantes from "@/pages/Faltantes";
 import Dashboard from "@/pages/Dashboard";
+import Agencia from "@/pages/Agencia";
 import type { Modulo } from "@/lib/supabase";
 
 function Protegida({ modulo, children }: { modulo?: Modulo; children: JSX.Element }) {
@@ -55,6 +56,7 @@ export default function App() {
             <Route path="/financeiro" element={<Protegida modulo="financeiro"><Financeiro /></Protegida>} />
             <Route path="/pedagogico" element={<Protegida modulo="pedagogico"><Pedagogico /></Protegida>} />
             <Route path="/encaminhamento" element={<Protegida modulo="encaminhamento"><Encaminhamento /></Protegida>} />
+            <Route path="/agencia" element={<Protegida modulo="encaminhamento"><Agencia /></Protegida>} />
             <Route path="/regua" element={<Protegida modulo="financeiro"><Regua /></Protegida>} />
             <Route path="/faltantes" element={<Protegida modulo="pedagogico"><Faltantes /></Protegida>} />
             <Route path="/pops" element={<Protegida><Pops /></Protegida>} />
