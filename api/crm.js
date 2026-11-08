@@ -111,6 +111,14 @@ export default async function handler(req, res) {
     catch (e) { return res.status(500).json({ erro: 'erro', mensagem: e.message }); }
   }
 
+  // Agência de Emprego: empresas parceiras + vagas (por unidade). Acesso: encaminhamento/admin/master.
+  if (acao.startsWith('agencia_')) {
+    const podeAg = eu.papel === 'master' || eu.papel === 'admin' || (eu.modulos || []).includes('encaminhamento');
+    if (!podeAg) return res.status(403).json({ erro: 'sem_permissao' });
+    try { return await agencia(res, acao, unitId, b); }
+    catch (e) { return res.status(500).json({ erro: 'erro', mensagem: e.message }); }
+  }
+
   const dep = String(b.departamento || 'financeiro');
   if (!DEPARTAMENTOS.includes(dep)) return res.status(400).json({ erro: 'departamento_invalido' });
   if (!podeModulo(eu, unitId, dep)) return res.status(403).json({ erro: 'sem_permissao' });
@@ -503,6 +511,65 @@ async function dashboard(res, eu, unitId, b) {
     ok: true, periodo: { de, ate }, deps, por_dep, risco, termometro, fila, erros_lista, serie, serie_faltantes, por_colaborador,
     pendencias: pendencias.slice(0, 80)
   });
+}
+
+/**
+ * Agência de Emprego (fase 1B) — CRUD de empresas parceiras e vagas, por unidade.
+ * Só Supabase. Encaminhamentos/ocorrência/totais ficam para a 1C.
+ */
+async function agencia(res, acao, unitId, b) {
+  if (acao === 'agencia_inicial') {
+    const [emp, vag] = await Promise.all([
+      supabase.from('empresas_parceiras').select('*').eq('unit_id', unitId).order('nome'),
+      supabase.from('vagas').select('*, empresa:empresas_parceiras(nome)').eq('unit_id', unitId).order('created_at', { ascending: false })
+    ]);
+    return res.status(200).json({ ok: true, empresas: emp.data || [], vagas: vag.data || [] });
+  }
+
+  if (acao === 'agencia_empresa_salvar') {
+    const campos = {};
+    for (const k of ['nome', 'razao_social', 'cnpj', 'endereco', 'bairro', 'cidade', 'uf', 'telefone', 'contato_rh', 'telefone_rh', 'email', 'status', 'observacoes']) {
+      if (k in b) campos[k] = (b[k] === '' ? null : b[k]);
+    }
+    if (!campos.nome) return res.status(400).json({ erro: 'nome_obrigatorio' });
+    if (b.id) {
+      campos.updated_at = new Date().toISOString();
+      const { data, error } = await supabase.from('empresas_parceiras').update(campos).eq('id', b.id).eq('unit_id', unitId).select('*').single();
+      if (error) return res.status(400).json({ erro: 'falha', mensagem: error.message });
+      return res.status(200).json({ ok: true, empresa: data });
+    }
+    campos.unit_id = unitId;
+    campos.origem = 'manual';
+    if (!campos.status) campos.status = 'ativa';
+    const { data, error } = await supabase.from('empresas_parceiras').insert(campos).select('*').single();
+    if (error) return res.status(400).json({ erro: 'falha', mensagem: error.message });
+    return res.status(200).json({ ok: true, empresa: data });
+  }
+
+  if (acao === 'agencia_vaga_salvar') {
+    const campos = {};
+    for (const k of ['empresa_id', 'cargo', 'descricao', 'sexo', 'curso_alvo', 'requisitos', 'horario', 'beneficios', 'remuneracao', 'status']) {
+      if (k in b) campos[k] = (b[k] === '' ? null : b[k]);
+    }
+    for (const n of ['qtd', 'qtd_disponivel', 'idade_min', 'idade_max']) {
+      if (n in b) campos[n] = (b[n] === '' || b[n] == null ? null : Number(b[n]) || null);
+    }
+    if ('experiencia' in b) campos.experiencia = !!b.experiencia;
+    if (!campos.cargo) return res.status(400).json({ erro: 'cargo_obrigatorio' });
+    if (b.id) {
+      campos.updated_at = new Date().toISOString();
+      const { data, error } = await supabase.from('vagas').update(campos).eq('id', b.id).eq('unit_id', unitId).select('*, empresa:empresas_parceiras(nome)').single();
+      if (error) return res.status(400).json({ erro: 'falha', mensagem: error.message });
+      return res.status(200).json({ ok: true, vaga: data });
+    }
+    campos.unit_id = unitId;
+    if (!campos.status) campos.status = 'aberta';
+    const { data, error } = await supabase.from('vagas').insert(campos).select('*, empresa:empresas_parceiras(nome)').single();
+    if (error) return res.status(400).json({ erro: 'falha', mensagem: error.message });
+    return res.status(200).json({ ok: true, vaga: data });
+  }
+
+  return res.status(400).json({ erro: 'acao_invalida' });
 }
 
 function rotuloStatus(s) {
