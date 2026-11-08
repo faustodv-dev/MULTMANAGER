@@ -445,7 +445,7 @@ async function dashboard(res, eu, unitId, b) {
   const fila = {
     na_fila: fl.filter((m) => m.status === 'enfileirado' || m.status === 'agendado').length,
     enviadas_periodo: fl.filter((m) => enviada(m)).length,
-    erros: fl.filter((m) => m.status === 'erro' || (m.erro && m.status !== 'enviado')).length,
+    erros: fl.filter((m) => m.status === 'erro').length, // falha real de envio (cancelado guarda nota em 'erro', não conta)
     cobranca: fl.filter((m) => enviada(m, 'regua_cobranca')).length,
     faltantes: fl.filter((m) => enviada(m, 'regua_faltantes')).length
   };
