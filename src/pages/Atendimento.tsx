@@ -40,11 +40,16 @@ export default function Atendimento() {
   const [filtro, setFiltro] = useState<Filtro>("todas");
   const [tipo, setTipo] = useState<"avulsas" | "grupos">("avulsas");
   const [busca, setBusca] = useState("");
+  const [de, setDe] = useState("");
+  const [ate, setAte] = useState("");
   const [atual, setAtual] = useState<string | null>(null);
   const [temps, setTemps] = useState<Record<string, Temp>>({});
 
   const carregar = async () => {
-    const { data } = await supabase.from("conversas").select("*").eq("canal", "whatsapp").eq("unit_id", unidade).order("ultimo_contato", { ascending: false }).limit(300);
+    let q = supabase.from("conversas").select("*").eq("canal", "whatsapp").eq("unit_id", unidade);
+    if (de) q = q.gte("ultimo_contato", `${de}T00:00:00-03:00`);
+    if (ate) q = q.lte("ultimo_contato", `${ate}T23:59:59-03:00`);
+    const { data } = await q.order("ultimo_contato", { ascending: false }).limit(300);
     const convs = (data as Conversa[]) ?? [];
     setConversas(convs);
     const codAlus = [...new Set(convs.map((c) => codAluConversa(c)).filter(Boolean))] as string[];
@@ -64,7 +69,7 @@ export default function Atendimento() {
       .subscribe();
     return () => { supabase.removeChannel(canal); };
     /* eslint-disable-next-line */
-  }, [unidade]);
+  }, [unidade, de, ate]);
 
   const lista = useMemo(() => {
     const t = busca.trim().toLowerCase();
@@ -94,6 +99,12 @@ export default function Atendimento() {
             <button onClick={() => setTipo("grupos")} className={cn("flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors", tipo === "grupos" ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground")}>Grupos{totalGrupos ? ` (${totalGrupos})` : ""}</button>
           </div>
           <Input placeholder="Buscar nome ou telefone" value={busca} onChange={(e) => setBusca(e.target.value)} />
+          <div className="flex items-center gap-1">
+            <Input type="date" className="h-9 flex-1 text-xs" value={de} max={ate || undefined} onChange={(e) => setDe(e.target.value)} title="Último contato — de" />
+            <span className="text-xs text-muted-foreground">até</span>
+            <Input type="date" className="h-9 flex-1 text-xs" value={ate} min={de || undefined} onChange={(e) => setAte(e.target.value)} title="Último contato — até" />
+            {(de || ate) && <Button size="sm" variant="ghost" className="h-9 px-2" onClick={() => { setDe(""); setAte(""); }} title="Limpar período">×</Button>}
+          </div>
           <div className="flex flex-wrap gap-1">
             {([
               ["todas", "Todas"],
