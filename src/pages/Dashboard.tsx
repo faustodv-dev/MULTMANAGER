@@ -21,6 +21,7 @@ type Dados = {
   por_dep: Record<string, KPI>;
   risco: { total: number; nivel1: number; nivel2: number; novos_periodo: number } | null;
   termometro: { quente: number; morno: number; frio: number } | null;
+  agencia_kpi: { encaminhados_periodo: number; contratados_periodo: number; vagas_abertas: number } | null;
   fila: { na_fila: number; enviadas_periodo: number; erros: number; cobranca: number; faltantes: number } | null;
   erros_lista: { origem: string; categoria: string | null; telefone: string | null; alunos: string | null; erro: string | null; quando: string | null }[];
   serie: { dia: string; n: number }[];
@@ -159,9 +160,9 @@ export default function Dashboard() {
             {temEnc && (
               <Painel titulo="Encaminhamento / Agência de Emprego" acao={<Briefcase className="h-4 w-4 text-violet-600" />}>
                 <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                  <Kpi rotulo="Alunos encaminhados" valor={dados.agencia_kpi?.encaminhados_periodo ?? 0} sub={`${dados.agencia_kpi?.contratados_periodo ?? 0} contratado(s) no período`} />
+                  <Kpi rotulo="Vagas abertas" valor={dados.agencia_kpi?.vagas_abertas ?? 0} cor="text-violet-600" />
                   <Kpi rotulo="Atendimentos abertos" valor={enc?.abertos ?? 0} sub={`${enc?.alta ?? 0} de alta prioridade`} />
-                  <Kpi rotulo="Alunos encaminhados" valor="—" sub="em breve" />
-                  <Kpi rotulo="Vagas abertas" valor="—" sub="em breve" />
                   <Kpi rotulo="Resolvidos no período" valor={enc?.resolvidos_periodo ?? 0} cor="text-emerald-600" />
                 </div>
               </Painel>

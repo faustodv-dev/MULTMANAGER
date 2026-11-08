@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Briefcase, Building2, Plus, Search, Pencil, Loader2, RefreshCw } from "lucide-react";
+import { Briefcase, Building2, Plus, Search, Pencil, Loader2, RefreshCw, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -21,7 +21,13 @@ type Vaga = {
   qtd: number | null; qtd_disponivel: number | null; idade_min: number | null; idade_max: number | null;
   sexo: string | null; curso_alvo: string | null; requisitos: string | null; experiencia: boolean | null;
   horario: string | null; beneficios: string | null; remuneracao: string | null; status: string;
+  created_at?: string;
   empresa?: { nome: string } | null;
+};
+type Enc = {
+  id: string; vaga_id: string | null; cod_alu: string | null; nome_aluno: string | null;
+  telefone: string | null; status: string; feedback_empresa: string | null; created_at: string;
+  vaga?: { cargo: string } | null; empresa?: { nome: string } | null;
 };
 
 const ST_EMP: Record<string, { rot: string; cor: string }> = {
@@ -35,6 +41,12 @@ const ST_VAGA: Record<string, { rot: string; cor: string }> = {
   processo: { rot: "Em Processo Seletivo", cor: "bg-violet-100 text-violet-700" },
   preenchida: { rot: "Preenchida", cor: "bg-muted text-muted-foreground" },
   cancelada: { rot: "Cancelada", cor: "bg-red-100 text-red-700" },
+};
+const ST_ENC: Record<string, { rot: string; cor: string }> = {
+  encaminhado: { rot: "Encaminhado", cor: "bg-sky-100 text-sky-700" },
+  contratado: { rot: "Contratado", cor: "bg-emerald-100 text-emerald-700" },
+  nao_contratado: { rot: "Não contratado", cor: "bg-red-100 text-red-700" },
+  nao_compareceu: { rot: "Não compareceu", cor: "bg-amber-100 text-amber-700" },
 };
 const Badge = ({ m, s }: { m: Record<string, { rot: string; cor: string }>; s: string }) => (
   <span className={cn("rounded-md px-2 py-0.5 text-xs font-medium", m[s]?.cor || "bg-muted")}>{m[s]?.rot || s}</span>
@@ -50,16 +62,23 @@ export default function Agencia() {
   const [vagas, setVagas] = useState<Vaga[]>([]);
   const [busca, setBusca] = useState("");
   const [carregando, setCarregando] = useState(true);
+  const [encaminhamentos, setEncaminhamentos] = useState<Enc[]>([]);
+  const [fStatus, setFStatus] = useState("");
+  const [fDe, setFDe] = useState("");
+  const [fAte, setFAte] = useState("");
   const [formEmp, setFormEmp] = useState<Partial<Empresa> | null>(null);
   const [formVaga, setFormVaga] = useState<Partial<Vaga> | null>(null);
+  const [formEnc, setFormEnc] = useState<{ vaga: Vaga; cod_alu?: string; nome_aluno?: string; telefone?: string } | null>(null);
+  const [verEnc, setVerEnc] = useState<Vaga | null>(null);
   const [salvando, setSalvando] = useState(false);
 
   const carregar = useCallback(async () => {
     setCarregando(true);
     try {
-      const r = await api<{ empresas: Empresa[]; vagas: Vaga[] }>("crm", { acao: "agencia_inicial", unidade });
+      const r = await api<{ empresas: Empresa[]; vagas: Vaga[]; encaminhamentos: Enc[] }>("crm", { acao: "agencia_inicial", unidade });
       setEmpresas(r.empresas || []);
       setVagas(r.vagas || []);
+      setEncaminhamentos(r.encaminhamentos || []);
     } catch (e: any) { toast.error(e.message || "Falha ao carregar."); }
     setCarregando(false);
   }, [unidade]);
@@ -72,10 +91,17 @@ export default function Agencia() {
   }, [empresas, busca]);
   const vagasFiltradas = useMemo(() => {
     const t = busca.trim().toLowerCase();
-    if (!t) return vagas;
-    return vagas.filter((v) => [v.cargo, v.empresa?.nome, v.status].some((x) => String(x || "").toLowerCase().includes(t)));
-  }, [vagas, busca]);
+    return vagas.filter((v) => {
+      if (fStatus && v.status !== fStatus) return false;
+      const d = (v.created_at || "").slice(0, 10);
+      if (fDe && d && d < fDe) return false;
+      if (fAte && d && d > fAte) return false;
+      if (t && ![v.cargo, v.empresa?.nome, v.status].some((x) => String(x || "").toLowerCase().includes(t))) return false;
+      return true;
+    });
+  }, [vagas, busca, fStatus, fDe, fAte]);
   const nomeEmpresa = (id: string | null | undefined) => empresas.find((e) => e.id === id)?.nome || "—";
+  const encsDaVaga = (vagaId: string) => encaminhamentos.filter((e) => e.vaga_id === vagaId);
 
   const salvarEmpresa = async () => {
     if (!formEmp?.nome?.trim()) { toast.error("Informe o nome da empresa."); return; }
@@ -94,6 +120,23 @@ export default function Agencia() {
       toast.success("Vaga salva."); setFormVaga(null); carregar();
     } catch (e: any) { toast.error(e.message); }
     setSalvando(false);
+  };
+  const encaminhar = async () => {
+    if (!formEnc) return;
+    if (!formEnc.cod_alu?.trim() && !formEnc.nome_aluno?.trim()) { toast.error("Informe o código ou o nome do aluno."); return; }
+    setSalvando(true);
+    try {
+      await api("crm", { acao: "agencia_encaminhar", unidade, vaga_id: formEnc.vaga.id, cod_alu: formEnc.cod_alu, nome_aluno: formEnc.nome_aluno, telefone: formEnc.telefone });
+      toast.success("Aluno encaminhado — ocorrência registrada no cadastro.");
+      setFormEnc(null); carregar();
+    } catch (e: any) { toast.error(e.message); }
+    setSalvando(false);
+  };
+  const mudarEnc = async (id: string, status: string) => {
+    try {
+      await api("crm", { acao: "agencia_enc_status", unidade, id, status });
+      toast.success("Devolutiva registrada."); carregar();
+    } catch (e: any) { toast.error(e.message); }
   };
 
   return (
@@ -131,6 +174,20 @@ export default function Agencia() {
             : <Button onClick={() => setFormVaga({ status: "aberta", qtd: 1 })}><Plus className="mr-1 h-4 w-4" /> Nova vaga</Button>}
         </div>
 
+        {aba === "vagas" && (
+          <div className="flex flex-wrap items-end gap-2">
+            <div><Label className="text-xs">Status</Label>
+              <select className="h-9 w-44 rounded-md border bg-background px-2 text-sm" value={fStatus} onChange={(e) => setFStatus(e.target.value)}>
+                <option value="">Todos os status</option>
+                {Object.entries(ST_VAGA).map(([k, v]) => <option key={k} value={k}>{v.rot}</option>)}
+              </select>
+            </div>
+            <div><Label className="text-xs">Cadastro de</Label><Input type="date" className="h-9 w-40" value={fDe} max={fAte || undefined} onChange={(e) => setFDe(e.target.value)} /></div>
+            <div><Label className="text-xs">até</Label><Input type="date" className="h-9 w-40" value={fAte} min={fDe || undefined} onChange={(e) => setFAte(e.target.value)} /></div>
+            {(fStatus || fDe || fAte) && <Button variant="ghost" size="sm" className="h-9" onClick={() => { setFStatus(""); setFDe(""); setFAte(""); }}>Limpar</Button>}
+          </div>
+        )}
+
         {carregando ? (
           <div className="flex items-center gap-2 p-8 text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Carregando…</div>
         ) : aba === "empresas" ? (
@@ -158,7 +215,13 @@ export default function Agencia() {
                     {v.empresa?.nome || nomeEmpresa(v.empresa_id)}{v.qtd ? ` · ${v.qtd} vaga(s)` : ""}{v.remuneracao ? ` · ${v.remuneracao}` : ""}
                   </p>
                 </div>
-                <Button variant="ghost" size="sm" onClick={() => setFormVaga(v)}><Pencil className="h-4 w-4" /></Button>
+                <div className="flex shrink-0 items-center gap-1">
+                  {encsDaVaga(v.id).length > 0 && (
+                    <Button variant="ghost" size="sm" className="text-xs" onClick={() => setVerEnc(v)}>{encsDaVaga(v.id).length} encam.</Button>
+                  )}
+                  <Button variant="outline" size="sm" onClick={() => setFormEnc({ vaga: v })}><UserPlus className="mr-1 h-4 w-4" /> Encaminhar</Button>
+                  <Button variant="ghost" size="sm" onClick={() => setFormVaga(v)}><Pencil className="h-4 w-4" /></Button>
+                </div>
               </div>
             ))}
             {!vagasFiltradas.length && <p className="p-6 text-center text-sm text-muted-foreground">Nenhuma vaga.</p>}
@@ -236,6 +299,49 @@ export default function Agencia() {
             <Button variant="outline" onClick={() => setFormVaga(null)}>Cancelar</Button>
             <Button onClick={salvarVaga} disabled={salvando} className="bg-emerald-600 hover:bg-emerald-700">{salvando && <Loader2 className="mr-1 h-4 w-4 animate-spin" />} Salvar</Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Encaminhar aluno */}
+      <Dialog open={!!formEnc} onOpenChange={(o) => !o && setFormEnc(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>Encaminhar aluno</DialogTitle></DialogHeader>
+          {formEnc && (
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">Vaga: <b>{formEnc.vaga.cargo}</b>{formEnc.vaga.empresa?.nome ? ` · ${formEnc.vaga.empresa.nome}` : ""}</p>
+              <div><Label className="text-xs">Código do aluno</Label><Input value={formEnc.cod_alu || ""} onChange={(e) => setFormEnc({ ...formEnc, cod_alu: e.target.value })} placeholder="ex.: 13847" /></div>
+              <div><Label className="text-xs">Nome do aluno</Label><Input value={formEnc.nome_aluno || ""} onChange={(e) => setFormEnc({ ...formEnc, nome_aluno: e.target.value })} /></div>
+              <div><Label className="text-xs">Telefone</Label><Input value={formEnc.telefone || ""} onChange={(e) => setFormEnc({ ...formEnc, telefone: e.target.value })} /></div>
+              <p className="text-xs text-muted-foreground">Com o código informado, uma ocorrência informativa é registrada no cadastro do aluno.</p>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setFormEnc(null)}>Cancelar</Button>
+            <Button onClick={encaminhar} disabled={salvando} className="bg-violet-600 hover:bg-violet-700">{salvando && <Loader2 className="mr-1 h-4 w-4 animate-spin" />} Encaminhar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Encaminhamentos da vaga + devolutiva */}
+      <Dialog open={!!verEnc} onOpenChange={(o) => !o && setVerEnc(null)}>
+        <DialogContent className="max-h-[85vh] max-w-lg overflow-y-auto">
+          <DialogHeader><DialogTitle>Encaminhamentos — {verEnc?.cargo}</DialogTitle></DialogHeader>
+          <ul className="space-y-2">
+            {verEnc && encsDaVaga(verEnc.id).map((e) => (
+              <li key={e.id} className="rounded-lg border p-2.5 text-sm">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="font-medium">{e.nome_aluno || "—"}{e.cod_alu ? ` (${e.cod_alu})` : ""}</p>
+                  <Badge m={ST_ENC} s={e.status} />
+                </div>
+                <div className="mt-2 flex flex-wrap gap-1">
+                  <Button variant="outline" size="sm" className="text-emerald-700" onClick={() => mudarEnc(e.id, "contratado")}>Contratado</Button>
+                  <Button variant="outline" size="sm" className="text-red-700" onClick={() => mudarEnc(e.id, "nao_contratado")}>Não contratado</Button>
+                  <Button variant="outline" size="sm" className="text-amber-700" onClick={() => mudarEnc(e.id, "nao_compareceu")}>Não compareceu</Button>
+                </div>
+              </li>
+            ))}
+            {verEnc && !encsDaVaga(verEnc.id).length && <p className="py-4 text-center text-sm text-muted-foreground">Nenhum encaminhamento nesta vaga.</p>}
+          </ul>
         </DialogContent>
       </Dialog>
     </div>
