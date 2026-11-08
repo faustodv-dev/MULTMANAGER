@@ -1239,10 +1239,19 @@ async function drainFila() {
         if (!Array.isArray(claimed) || !claimed.length) continue; // já foi pego
         const digits = String(msg.telefone || '').replace(/\D/g, '');
         if (digits.length < 10) { await patchFila(msg.id, { status: 'erro', erro: 'telefone_invalido' }); continue; }
-        const targetJid = `${digits}@s.whatsapp.net`;
         enqueueUnitSend(unitId, async () => {
           try {
-            await sendHumanizedMessage(unitId, targetJid, null, String(msg.texto || ''), null);
+            const sock = sessions[unitId]?.sock;
+            if (!sock || sessions[unitId]?.status !== 'connected') throw new Error('unidade_desconectada');
+            // Resolve o JID como no envio normal: variantes (55 + 9º dígito) verificadas no WhatsApp.
+            const candidates = getPhoneVariants(digits);
+            let mappedLid = null;
+            for (const num of candidates) { if (phoneToLidMap.has(num)) { mappedLid = phoneToLidMap.get(num); break; } }
+            let targetJid = `${digits}@s.whatsapp.net`;
+            for (const num of candidates) {
+              try { const [r] = await sock.onWhatsApp(num); if (r && r.exists && r.jid) { targetJid = r.jid; break; } } catch {}
+            }
+            await sendHumanizedMessage(unitId, targetJid, mappedLid, String(msg.texto || ''), null);
             await patchFila(msg.id, { status: 'enviado', enviado_em: new Date().toISOString(), erro: null });
           } catch (e) {
             const tent = (msg.tentativas || 0) + 1;
@@ -1257,6 +1266,27 @@ async function drainFila() {
   }
 }
 if (FILA_ENABLED) setInterval(drainFila, FILA_INTERVAL_MS);
+
+// Flush das ocorrências: cutuca o próprio WEBHOOK_URL (que o gateway já alcança) com o
+// header x-ocorrencias-flush, a cada ~60s. O Vercel grava a ocorrência informativa com a
+// hora real do envio. Sem rota nova (Vercel Hobby limita a 12 funções).
+async function pingOcorrencias() {
+  if (!FILA_ENABLED || shuttingDown || !WEBHOOK_URL || !WEBHOOK_SHARED_SECRET) return;
+  try {
+    await fetch(WEBHOOK_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-webhook-secret': WEBHOOK_SHARED_SECRET,
+        Authorization: `Bearer ${WEBHOOK_SHARED_SECRET}`,
+        'x-ocorrencias-flush': '1'
+      },
+      body: '{}',
+      signal: AbortSignal.timeout(30000)
+    });
+  } catch {}
+}
+if (FILA_ENABLED) setInterval(pingOcorrencias, 60000);
 
 async function sendHumanizedMessage(unitId, targetJid, mappedLid, messageText, document = null) {
   messageText = String(messageText ?? '');
