@@ -104,6 +104,13 @@ export default async function handler(req, res) {
   const b = await lerCorpo(req);
   const acao = String(b.acao || '');
   const unitId = unidadeDe(eu, b);
+
+  // Dashboard (tela inicial): agrega só dados do CRM (Supabase), nos módulos que o usuário tem.
+  if (acao === 'dashboard') {
+    try { return await dashboard(res, eu, unitId, b); }
+    catch (e) { return res.status(500).json({ erro: 'erro', mensagem: e.message }); }
+  }
+
   const dep = String(b.departamento || 'financeiro');
   if (!DEPARTAMENTOS.includes(dep)) return res.status(400).json({ erro: 'departamento_invalido' });
   if (!podeModulo(eu, unitId, dep)) return res.status(403).json({ erro: 'sem_permissao' });
@@ -374,6 +381,110 @@ export default async function handler(req, res) {
   } catch (e) {
     return res.status(500).json({ erro: e.codigo || 'erro', mensagem: e.message, detalhes: e.detalhes });
   }
+}
+
+/**
+ * Dashboard da tela inicial. Só dados do CRM (Supabase) — nunca importa do banco escolar.
+ * Escopo pelos módulos que o usuário tem (cada um vê do seu nível). Pedagógico em 1º lugar.
+ * Filtro por período (de/ate, ISO). Pensado para carga única e leve.
+ */
+async function dashboard(res, eu, unitId, b) {
+  const deps = DEPARTAMENTOS.filter((d) => podeModulo(eu, unitId, d));
+  const hoje = hojeSP();
+  const ate = (typeof b.ate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(b.ate)) ? b.ate : hoje;
+  const de = (typeof b.de === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(b.de)) ? b.de : `${hoje.slice(0, 8)}01`;
+  const dentro = (iso) => !!iso && iso.slice(0, 10) >= de && iso.slice(0, 10) <= ate;
+
+  if (!deps.length) {
+    return res.status(200).json({ ok: true, periodo: { de, ate }, deps: [], por_dep: {}, risco: null, termometro: null, fila: null, serie: [], por_colaborador: [], pendencias: [] });
+  }
+
+  const [cardsR, colabs] = await Promise.all([
+    supabase.from('cards')
+      .select('departamento,status,prioridade,resolvido_em,created_at,responsavel_id,cod_alu,nome_aluno,nome_responsavel,titulo')
+      .eq('unit_id', unitId).in('departamento', deps),
+    listarColaboradores(unitId)
+  ]);
+  const todos = cardsR.data || [];
+  const nomeDe = new Map(colabs.map((c) => [c.id, c.nome || c.email]));
+
+  // KPIs por departamento (abertos, alta, resolvidos no período, aguardando)
+  const por_dep = {};
+  for (const d of deps) {
+    const cs = todos.filter((c) => c.departamento === d);
+    por_dep[d] = {
+      abertos: cs.filter((c) => c.status !== 'resolvido').length,
+      alta: cs.filter((c) => c.status !== 'resolvido' && c.prioridade === 'alta').length,
+      resolvidos_periodo: cs.filter((c) => c.status === 'resolvido' && dentro(c.resolvido_em)).length,
+      aguardando: cs.filter((c) => c.status === 'aguardando').length
+    };
+  }
+
+  // Risco de evasão + termômetro (só pedagógico)
+  let risco = null, termometro = null;
+  if (deps.includes('pedagogico')) {
+    const rc = todos.filter((c) => c.departamento === 'pedagogico' && (c.status === 'risco_evasao_1' || c.status === 'risco_evasao_2'));
+    risco = {
+      total: rc.length,
+      nivel1: rc.filter((c) => c.status === 'risco_evasao_1').length,
+      nivel2: rc.filter((c) => c.status === 'risco_evasao_2').length,
+      novos_periodo: rc.filter((c) => dentro(c.created_at)).length
+    };
+    const { data: temps } = await supabase.from('aluno_termometro').select('faixa').eq('unit_id', unitId);
+    const t = { quente: 0, morno: 0, frio: 0 };
+    for (const x of (temps || [])) if (t[x.faixa] != null) t[x.faixa]++;
+    termometro = t;
+  }
+
+  // Fila de mensagens no período (cobrança + faltantes)
+  const { data: filaR } = await supabase.from('fila_mensagens')
+    .select('origem,status,enviado_em,erro')
+    .eq('unit_id', unitId).gte('enfileirado_em', `${de}T00:00:00-03:00`);
+  const fl = filaR || [];
+  const enviada = (m, origem) => m.status === 'enviado' && dentro(m.enviado_em) && (!origem || m.origem === origem);
+  const fila = {
+    na_fila: fl.filter((m) => m.status === 'enfileirado' || m.status === 'agendado').length,
+    enviadas_periodo: fl.filter((m) => enviada(m)).length,
+    erros: fl.filter((m) => m.status === 'erro' || (m.erro && m.status !== 'enviado')).length,
+    cobranca: fl.filter((m) => enviada(m, 'regua_cobranca')).length,
+    faltantes: fl.filter((m) => enviada(m, 'regua_faltantes')).length
+  };
+
+  // Série: resolvidos por dia (todos os deps do usuário)
+  const serieMap = {};
+  for (const c of todos) {
+    if (c.status === 'resolvido' && dentro(c.resolvido_em)) {
+      const d = c.resolvido_em.slice(0, 10);
+      serieMap[d] = (serieMap[d] || 0) + 1;
+    }
+  }
+  const serie = Object.entries(serieMap).map(([dia, n]) => ({ dia, n })).sort((a, b) => a.dia.localeCompare(b.dia));
+
+  // Produtividade por colaborador (resolvidos no período)
+  const colabMap = {};
+  for (const c of todos) {
+    if (c.status === 'resolvido' && dentro(c.resolvido_em) && c.responsavel_id) {
+      colabMap[c.responsavel_id] = (colabMap[c.responsavel_id] || 0) + 1;
+    }
+  }
+  const por_colaborador = Object.entries(colabMap)
+    .map(([id, n]) => ({ nome: nomeDe.get(id) || '—', n }))
+    .sort((a, b) => b.n - a.n).slice(0, 10);
+
+  // Pendências do dia (acionáveis agora): aguardando aluno + risco nascido hoje
+  const pendencias = [];
+  for (const c of todos) {
+    if (c.status === 'aguardando') {
+      pendencias.push({ tipo: 'aguardando', dep: c.departamento, titulo: c.titulo, nome: c.nome_aluno || c.nome_responsavel || null, cod_alu: c.cod_alu || null });
+    } else if (c.departamento === 'pedagogico' && (c.status === 'risco_evasao_1' || c.status === 'risco_evasao_2') && (c.created_at || '').slice(0, 10) === hoje) {
+      pendencias.push({ tipo: 'risco_novo', dep: 'pedagogico', titulo: c.titulo, nome: c.nome_aluno || null, cod_alu: c.cod_alu || null });
+    }
+  }
+
+  return res.status(200).json({
+    ok: true, periodo: { de, ate }, deps, por_dep, risco, termometro, fila, serie, por_colaborador,
+    pendencias: pendencias.slice(0, 80)
+  });
 }
 
 function rotuloStatus(s) {

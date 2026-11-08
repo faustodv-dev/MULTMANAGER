@@ -16,6 +16,7 @@ import Encaminhamento from "@/pages/Encaminhamento";
 import Pops from "@/pages/Pops";
 import Regua from "@/pages/Regua";
 import Faltantes from "@/pages/Faltantes";
+import Dashboard from "@/pages/Dashboard";
 import type { Modulo } from "@/lib/supabase";
 
 function Protegida({ modulo, children }: { modulo?: Modulo; children: JSX.Element }) {
@@ -35,10 +36,7 @@ function Protegida({ modulo, children }: { modulo?: Modulo; children: JSX.Elemen
 }
 
 function Inicio() {
-  const { pode } = useAuth();
-  if (pode("atendimento")) return <Navigate to="/atendimento" replace />;
-  if (pode("comprovantes")) return <Navigate to="/comprovantes" replace />;
-  return <div className="p-8 text-muted-foreground">Nenhuma tela liberada para o seu usuário.</div>;
+  return <Dashboard />;
 }
 
 export default function App() {
