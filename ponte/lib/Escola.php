@@ -522,6 +522,9 @@ final class Escola
         $codAlus = array_values(array_unique(array_map(fn($r) => (string)$r['COD_ALU'], $faltas)));
         $hist = [];
         $just = [];
+        $repo = [];   // reposições recentes por aluno (4d termômetro)
+        $notas = [];  // média das notas por aluno (4d termômetro)
+        $limiteRepo = date('Y-m-d', strtotime($data . ' -120 days'));
         for ($i = 0; $i < count($codAlus); $i += 200) {
             $slice = array_slice($codAlus, $i, 200);
             $ph = implode(',', array_fill(0, count($slice), '?'));
@@ -534,6 +537,14 @@ final class Escola
             }
             foreach ($this->db->todos("SELECT COD_ALU, DAT_OCO FROM s_cad_ocorrencia WHERE STATUS_OCO = 'Justificativa de falta' AND COD_ALU IN ($ph)", $slice) as $r) {
                 $just[(string)$r['COD_ALU']][] = Texto::dataIso($r['DAT_OCO']);
+            }
+            // 4d: reposições recentes (comportamento de aluno engajado)
+            foreach ($this->db->todos("SELECT COD_ALU, COUNT(*) n FROM s_cad_ocorrencia WHERE STATUS_OCO = 'Reposição' AND DAT_OCO >= ? AND COD_ALU IN ($ph) GROUP BY COD_ALU", array_merge([$limiteRepo], $slice)) as $r) {
+                $repo[(string)$r['COD_ALU']] = (int)$r['n'];
+            }
+            // 4d: média das notas (s_cad_nota)
+            foreach ($this->db->todos("SELECT COD_ALU, AVG(VALOR) media FROM s_cad_nota WHERE COD_ALU IN ($ph) GROUP BY COD_ALU", $slice) as $r) {
+                $notas[(string)$r['COD_ALU']] = $r['media'] !== null ? round((float)$r['media'], 1) : null;
             }
         }
 
@@ -578,6 +589,8 @@ final class Escola
                 'faltas_seguidas' => $seguidas,
                 'percentual_presenca' => $total ? round($pres * 100 / $total, 1) : null,
                 'tem_justificativa' => $temJust,
+                'reposicoes' => $repo[$codAlu] ?? 0,
+                'media_notas' => $notas[$codAlu] ?? null,
             ];
         }
         return $out;
