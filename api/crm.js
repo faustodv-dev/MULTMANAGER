@@ -389,7 +389,9 @@ export default async function handler(req, res) {
  * Filtro por período (de/ate, ISO). Pensado para carga única e leve.
  */
 async function dashboard(res, eu, unitId, b) {
-  const deps = DEPARTAMENTOS.filter((d) => podeModulo(eu, unitId, d));
+  // Painel da unidade: visível a TODOS da unidade (gera responsabilidade de equipe).
+  // Não filtra por módulo do usuário — mostra o quadro inteiro (pedagógico + financeiro + encaminhamento).
+  const deps = DEPARTAMENTOS;
   const hoje = hojeSP();
   const ate = (typeof b.ate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(b.ate)) ? b.ate : hoje;
   const de = (typeof b.de === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(b.de)) ? b.de : `${hoje.slice(0, 8)}01`;
@@ -438,7 +440,7 @@ async function dashboard(res, eu, unitId, b) {
 
   // Fila de mensagens no período (cobrança + faltantes)
   const { data: filaR } = await supabase.from('fila_mensagens')
-    .select('origem,status,enviado_em,enfileirado_em,erro')
+    .select('origem,status,enviado_em,enfileirado_em,erro,telefone,alunos,categoria')
     .eq('unit_id', unitId).gte('enfileirado_em', `${de}T00:00:00-03:00`);
   const fl = filaR || [];
   const enviada = (m, origem) => m.status === 'enviado' && dentro(m.enviado_em) && (!origem || m.origem === origem);
@@ -449,6 +451,11 @@ async function dashboard(res, eu, unitId, b) {
     cobranca: fl.filter((m) => enviada(m, 'regua_cobranca')).length,
     faltantes: fl.filter((m) => enviada(m, 'regua_faltantes')).length
   };
+
+  // Lista dos erros reais (status='erro') para o botão "Erros" do painel.
+  const erros_lista = fl.filter((m) => m.status === 'erro')
+    .map((m) => ({ origem: m.origem, categoria: m.categoria || null, telefone: m.telefone || null, alunos: m.alunos || null, erro: m.erro || null, quando: m.enfileirado_em || null }))
+    .slice(0, 100);
 
   // Série: faltantes identificados por dia (fila da régua de faltantes, exceto cancelados).
   // Serve pra acompanhar a curva de faltantes caindo ao longo do período.
@@ -493,7 +500,7 @@ async function dashboard(res, eu, unitId, b) {
   }
 
   return res.status(200).json({
-    ok: true, periodo: { de, ate }, deps, por_dep, risco, termometro, fila, serie, serie_faltantes, por_colaborador,
+    ok: true, periodo: { de, ate }, deps, por_dep, risco, termometro, fila, erros_lista, serie, serie_faltantes, por_colaborador,
     pendencias: pendencias.slice(0, 80)
   });
 }
