@@ -80,6 +80,10 @@ export async function abrirCardRiscoEvasao(unitId, { cod_alu, nome, telefone, ni
   if (aberto) {
     if (aberto.status !== status) {
       await supabase.from('cards').update({ status, updated_at: new Date().toISOString() }).eq('id', aberto.id).then(() => {}, () => {});
+      await supabase.from('card_eventos').insert({
+        card_id: aberto.id, unit_id: unitId, departamento: 'pedagogico', tipo: 'sistema',
+        descricao: `Termômetro reclassificou para ${status === 'risco_evasao_2' ? 'Risco de Evasão 2' : 'Risco de Evasão 1'}. ${String(descricao || '').slice(0, 400)}`
+      }).then(() => {}, () => {});
     }
     return aberto.id;
   }
@@ -92,7 +96,7 @@ export async function abrirCardRiscoEvasao(unitId, { cod_alu, nome, telefone, ni
   }).select('id').single();
   if (data) await supabase.from('card_eventos').insert({
     card_id: data.id, unit_id: unitId, departamento: 'pedagogico', tipo: 'sistema',
-    descricao: 'Card aberto pelo termômetro (risco de evasão)'
+    descricao: `Termômetro abriu este card. Por quê: ${String(descricao || '').slice(0, 400)}`
   }).then(() => {}, () => {});
   return data?.id || null;
 }
