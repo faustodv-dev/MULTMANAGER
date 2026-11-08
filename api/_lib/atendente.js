@@ -77,7 +77,7 @@ ${asaasAtivo
   se faltar frequência, diga quantas reposições faltam.
 - MATERIAL/APOSTILA: consulte com consultar_entrega_apostila.
 - QUER TRANCAR/CANCELAR: tente reverter com carinho (remanejar horário, trocar de curso, transferir a matrícula a um familiar, ou trancar por até 6 meses).
-  Registre com registrar_pedagogico(tipo="alerta_evasao") e chame chamar_humano "pedagógico - retenção" (o coordenador formaliza). Nunca deixe o aluno desamparado.
+  Registre com registrar_pedagogico(tipo="alerta_evasao", nivel=2) (quer trancar/cancelar ou 3+ faltas seguidas = nível 2; 2 faltas seguidas = nível 1) e chame chamar_humano "pedagógico - retenção" (o coordenador formaliza). Nunca deixe o aluno desamparado.
 - Numa conversa de falta não trate de finanças, salvo se houver 2+ faltas E parcela vencida — aí ofereça renegociação condicionada à frequência e encaminhe ao financeiro.
 
 == ENCAMINHAMENTO ==
@@ -396,8 +396,8 @@ export async function atender({ conversa, unidade, segredos }) {
     {
       nome: 'registrar_pedagogico',
       descricao: 'Registra um pedido pedagógico (ocorrência no sistema) e abre o card no Pedagógico para a secretaria executar. tipo: justificativa_falta, reposicao, troca_turma, alerta_evasao.',
-      parametros: { type: 'object', properties: { cod_alu: { type: 'string' }, tipo: { type: 'string', enum: ['justificativa_falta', 'reposicao', 'troca_turma', 'alerta_evasao'] }, detalhe: { type: 'string', description: 'resumo do pedido (motivo, data da aula, turma desejada, etc.)' } }, required: ['cod_alu', 'tipo', 'detalhe'] },
-      executar: async ({ cod_alu, tipo, detalhe }) => {
+      parametros: { type: 'object', properties: { cod_alu: { type: 'string' }, tipo: { type: 'string', enum: ['justificativa_falta', 'reposicao', 'troca_turma', 'alerta_evasao'] }, detalhe: { type: 'string', description: 'resumo do pedido (motivo, data da aula, turma desejada, etc.)' }, nivel: { type: 'number', enum: [1, 2], description: 'só para alerta_evasao: 1 = risco inicial (ex.: 2 faltas seguidas); 2 = risco alto (3+ faltas seguidas, ou quer trancar/cancelar). Padrão 1.' } }, required: ['cod_alu', 'tipo', 'detalhe'] },
+      executar: async ({ cod_alu, tipo, detalhe, nivel }) => {
         const bloq = exigirIdentidade(); if (bloq) return bloq;
         const aluno = alunoDoGrupo(cod_alu); if (!aluno) return { erro: 'aluno_fora_do_grupo' };
         const prefixo = {
@@ -408,7 +408,9 @@ export async function atender({ conversa, unidade, segredos }) {
         }[tipo] || 'PEDIDO PEDAGÓGICO';
         await ponte(conversa.unit_id, 'registrar_ocorrencia', { cod_alu: String(cod_alu), texto: `${prefixo} (via WhatsApp): ${String(detalhe || '').slice(0, 800)}`, chave: `oco-ped-${conversa.id}-${tipo}-${Date.now()}` }, { conversaId: conversa.id }).catch(() => null);
         conversa = await atualizarConversa(conversa.id, { departamento: 'pedagogico' });
-        await garantirCardWhatsapp(conversa, { departamento: 'pedagogico', titulo: `${prefixo} - ${primeiroNome(aluno.nome)}`, status: 'andamento', prioridade: tipo === 'alerta_evasao' ? 'alta' : undefined }).catch(() => null);
+        // Alerta de evasão vai para as colunas dedicadas do Kanban pedagógico (Risco de Evasão 1/2).
+        const statusCard = tipo === 'alerta_evasao' ? (Number(nivel) === 2 ? 'risco_evasao_2' : 'risco_evasao_1') : 'andamento';
+        await garantirCardWhatsapp(conversa, { departamento: 'pedagogico', titulo: `${prefixo} - ${primeiroNome(aluno.nome)}`, status: statusCard, prioridade: tipo === 'alerta_evasao' ? 'alta' : undefined }).catch(() => null);
         return { ok: true, registrado: tipo };
       }
     },

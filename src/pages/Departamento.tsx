@@ -19,6 +19,12 @@ const COLS = [
   { id: "andamento", rotulo: "Em andamento", ponto: "bg-blue-500" },
   { id: "aguardando", rotulo: "Aguardando aluno", ponto: "bg-amber-500" },
 ];
+// Colunas extras só do Pedagógico: o agente joga os alertas de evasão aqui (card só quando precisa de humano).
+const COLS_RISCO = [
+  { id: "risco_evasao_1", rotulo: "Risco de Evasão 1", ponto: "bg-orange-500" },
+  { id: "risco_evasao_2", rotulo: "Risco de Evasão 2", ponto: "bg-red-600" },
+];
+const colsDoDep = (dep: string) => (dep === "pedagogico" ? [...COLS, ...COLS_RISCO] : COLS);
 const PRIOR: Record<string, { rotulo: string; barra: string }> = {
   alta: { rotulo: "Alta", barra: "bg-red-500" },
   normal: { rotulo: "Normal", barra: "bg-slate-300 dark:bg-slate-600" },
@@ -112,8 +118,8 @@ export default function Departamento({ departamento, titulo, Icone }: { departam
 
           <section>
             <SecHeader icone={<FileText className="h-4 w-4" />} titulo="Atendimentos" sub="Finalize um card para arquivá-lo no histórico do aluno" />
-            <div className="grid gap-3 lg:grid-cols-3">
-              {COLS.map((col) => {
+            <div className={cn("grid gap-3", DEP === "pedagogico" ? "lg:grid-cols-5" : "lg:grid-cols-3")}>
+              {colsDoDep(DEP).map((col) => {
                 const lista = cards.filter((c) => c.status === col.id);
                 return (
                   <div key={col.id} className="flex flex-col rounded-xl border bg-background">
@@ -372,7 +378,7 @@ function DossieDialog({ dep, card, unidade, colabs, aoFechar, aoMudar, mover, ab
         <div className="grid grid-cols-3 gap-2">
           <div><Label className="text-xs">Status</Label>
             <select className="h-9 w-full rounded-md border bg-background px-2 text-sm" value={card.status} onChange={(e) => mover(card, e.target.value)}>
-              {COLS.map((c) => <option key={c.id} value={c.id}>{c.rotulo}</option>)}</select></div>
+              {colsDoDep(dep).map((c) => <option key={c.id} value={c.id}>{c.rotulo}</option>)}</select></div>
           <div><Label className="text-xs">Responsável</Label>
             <select className="h-9 w-full rounded-md border bg-background px-2 text-sm" defaultValue={card.responsavel_id || ""} onChange={(e) => salvarCampo({ responsavel_id: e.target.value || null })}>
               <option value="">—</option>{colabs.map((c: Colab) => <option key={c.id} value={c.id}>{c.nome}</option>)}</select></div>
