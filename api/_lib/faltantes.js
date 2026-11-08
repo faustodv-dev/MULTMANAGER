@@ -1,6 +1,7 @@
 import { supabase, hojeSP, digitos, registrar } from './base.js';
 import { ponte } from './ponte.js';
 import { enfileirar, agendadoParaHoje } from './fila.js';
+import { avaliarFaltante } from './termometro.js';
 
 /**
  * Régua de faltantes (pedagógica). Lê os faltantes do dia pela ponte, escolhe a etapa
@@ -92,6 +93,13 @@ export async function processarFaltantesUnidade(unitId, { dataIso = null, forcar
   }
   faltantes = (faltantes || []).filter((f) => f.telefone && digitos(f.telefone).length >= 10);
   resumo.faltantes = faltantes.length;
+
+  // Termômetro (4d): avalia cada faltante (reusa este lote), grava a temperatura e,
+  // se FRIO, abre/escala o card de Risco de Evasão. Em paralelo; não trava o envio.
+  try {
+    const faixas = await Promise.all(faltantes.map((f) => avaliarFaltante(unitId, f).catch(() => null)));
+    resumo.frios = faixas.filter((x) => x === 'frio').length;
+  } catch { /* termômetro é best-effort, não impede a régua */ }
 
   const agendado = agendadoParaHoje(cfg.horario);
   const itens = [];

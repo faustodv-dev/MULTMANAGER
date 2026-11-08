@@ -4,7 +4,7 @@ import {
   Plus, Search, Clock, CheckCircle2, Circle, Loader2, CalendarDays, Flag,
   FileText, AlertTriangle, TrendingUp, Flame, History, CheckCheck, Building2,
 } from "lucide-react";
-import { api, reais, dataBr, dataHora } from "@/lib/supabase";
+import { api, supabase, reais, dataBr, dataHora } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,6 +25,18 @@ const COLS_RISCO = [
   { id: "risco_evasao_2", rotulo: "Risco de Evasão 2", ponto: "bg-red-600" },
 ];
 const colsDoDep = (dep: string) => (dep === "pedagogico" ? [...COLS, ...COLS_RISCO] : COLS);
+// Termômetro do aluno (4d): selo de temperatura.
+type Temp = { faixa: string; score: number; motivos: string[] };
+const SELO: Record<string, { e: string; cls: string; r: string }> = {
+  quente: { e: "🔥", cls: "text-orange-600", r: "Quente" },
+  morno: { e: "🙂", cls: "text-amber-600", r: "Morno" },
+  frio: { e: "🧊", cls: "text-sky-600", r: "Frio" },
+};
+function SeloTemp({ t }: { t?: Temp }) {
+  if (!t || !SELO[t.faixa]) return null;
+  const s = SELO[t.faixa];
+  return <span className={cn("shrink-0 text-xs", s.cls)} title={`${s.r} (${t.score}/100)${t.motivos?.length ? " — " + t.motivos.join(", ") : ""}`}>{s.e}</span>;
+}
 const PRIOR: Record<string, { rotulo: string; barra: string }> = {
   alta: { rotulo: "Alta", barra: "bg-red-500" },
   normal: { rotulo: "Normal", barra: "bg-slate-300 dark:bg-slate-600" },
@@ -56,6 +68,7 @@ export default function Departamento({ departamento, titulo, Icone }: { departam
   const { perfil, unidades } = useAuth();
   const [unidade, setUnidade] = useState(perfil?.papel === "master" ? "rio_verde" : (perfil?.unit_id || "rio_verde"));
   const [cards, setCards] = useState<Card[]>([]);
+  const [temps, setTemps] = useState<Record<string, Temp>>({});
   const [colabs, setColabs] = useState<Colab[]>([]);
   const [execs, setExecs] = useState<Exec[]>([]);
   const [resumo, setResumo] = useState<any>(null);
@@ -72,6 +85,13 @@ export default function Departamento({ departamento, titulo, Icone }: { departam
     try {
       const r = await api<any>("crm", { acao: "crm_inicial", ...base });
       setCards(r.cards); setColabs(r.colaboradores); setExecs(r.execucoes); setResumo(r.resumo);
+      const codAlus = [...new Set((r.cards || []).map((c: Card) => c.cod_alu).filter(Boolean))] as string[];
+      if (codAlus.length) {
+        const { data: ts } = await supabase.from("aluno_termometro").select("cod_alu,faixa,score,motivos").eq("unit_id", unidade).in("cod_alu", codAlus);
+        const map: Record<string, Temp> = {};
+        (ts || []).forEach((t: any) => { map[t.cod_alu] = { faixa: t.faixa, score: t.score, motivos: t.motivos || [] }; });
+        setTemps(map);
+      } else setTemps({});
     } catch (e: any) { toast.error(e.message); }
     finally { setCarregando(false); }
   };
@@ -136,7 +156,7 @@ export default function Departamento({ departamento, titulo, Icone }: { departam
                             className="group flex w-full gap-2.5 overflow-hidden rounded-lg border bg-card p-2.5 text-left shadow-sm transition-colors hover:border-primary">
                             <span className={cn("w-1 shrink-0 self-stretch rounded-full", PRIOR[card.prioridade]?.barra)} />
                             <span className="min-w-0 flex-1">
-                              <span className="block truncate text-sm font-medium">{card.nome_aluno || card.nome_responsavel || "Avulso"}</span>
+                              <span className="flex items-center gap-1"><span className="truncate text-sm font-medium">{card.nome_aluno || card.nome_responsavel || "Avulso"}</span>{card.cod_alu && <SeloTemp t={temps[card.cod_alu]} />}</span>
                               <span className="mt-0.5 block line-clamp-2 text-xs text-muted-foreground">{card.titulo}</span>
                               <span className="mt-1.5 flex items-center gap-2 text-[11px] text-muted-foreground">
                                 {nomeColab(card.responsavel_id) && (

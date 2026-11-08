@@ -17,6 +17,20 @@ const STATUS: Record<Conversa["status"], { rotulo: string; cor: string }> = {
 };
 
 type Filtro = "todas" | "aguardando_humano" | "humano" | "ia";
+
+// Termômetro do aluno (4d): selo de temperatura.
+type Temp = { faixa: string; score: number; motivos: string[] };
+const SELO: Record<string, { e: string; cls: string; r: string }> = {
+  quente: { e: "🔥", cls: "text-orange-600", r: "Quente" },
+  morno: { e: "🙂", cls: "text-amber-600", r: "Morno" },
+  frio: { e: "🧊", cls: "text-sky-600", r: "Frio" },
+};
+function SeloTemp({ t }: { t?: Temp }) {
+  if (!t || !SELO[t.faixa]) return null;
+  const s = SELO[t.faixa];
+  return <span className={cn("shrink-0 text-xs", s.cls)} title={`${s.r} (${t.score}/100)${t.motivos?.length ? " — " + t.motivos.join(", ") : ""}`}>{s.e}</span>;
+}
+const codAluConversa = (c: any): string | null => c?.contexto?.grupo?.alunos?.[0]?.cod_alu || null;
 const ehGrupo = (c: any) => String(c?.remote_jid || "").includes("@g.us");
 
 export default function Atendimento() {
@@ -27,10 +41,19 @@ export default function Atendimento() {
   const [tipo, setTipo] = useState<"avulsas" | "grupos">("avulsas");
   const [busca, setBusca] = useState("");
   const [atual, setAtual] = useState<string | null>(null);
+  const [temps, setTemps] = useState<Record<string, Temp>>({});
 
   const carregar = async () => {
     const { data } = await supabase.from("conversas").select("*").eq("canal", "whatsapp").eq("unit_id", unidade).order("ultimo_contato", { ascending: false }).limit(300);
-    setConversas((data as Conversa[]) ?? []);
+    const convs = (data as Conversa[]) ?? [];
+    setConversas(convs);
+    const codAlus = [...new Set(convs.map((c) => codAluConversa(c)).filter(Boolean))] as string[];
+    if (codAlus.length) {
+      const { data: ts } = await supabase.from("aluno_termometro").select("cod_alu,faixa,score,motivos").eq("unit_id", unidade).in("cod_alu", codAlus);
+      const map: Record<string, Temp> = {};
+      (ts || []).forEach((t: any) => { map[t.cod_alu] = { faixa: t.faixa, score: t.score, motivos: t.motivos || [] }; });
+      setTemps(map);
+    } else setTemps({});
   };
 
   useEffect(() => {
@@ -90,7 +113,10 @@ export default function Atendimento() {
               className={cn("block w-full border-b px-4 py-3 text-left hover:bg-muted", atual === c.id && "bg-muted")}
             >
               <div className="flex items-center justify-between gap-2">
-                <span className="truncate font-medium">{c.nome_responsavel || c.nome_contato || telefoneBonito(c.telefone)}</span>
+                <span className="flex min-w-0 items-center gap-1">
+                  <span className="truncate font-medium">{c.nome_responsavel || c.nome_contato || telefoneBonito(c.telefone)}</span>
+                  <SeloTemp t={temps[codAluConversa(c) || ""]} />
+                </span>
                 <span className="shrink-0 text-xs text-muted-foreground">{dataHora(c.ultimo_contato)}</span>
               </div>
               <div className="mt-1 flex items-center gap-2">
