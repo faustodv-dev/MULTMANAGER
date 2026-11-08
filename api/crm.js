@@ -446,6 +446,21 @@ async function dashboard(res, eu, unitId, b) {
     termometro = t;
   }
 
+  // Agência de Emprego — totais (encaminhados/contratados no período, vagas abertas)
+  let agencia_kpi = null;
+  if (deps.includes('encaminhamento')) {
+    const [{ data: encR }, { data: vagasR }] = await Promise.all([
+      supabase.from('encaminhamentos').select('status,created_at').eq('unit_id', unitId),
+      supabase.from('vagas').select('status').eq('unit_id', unitId)
+    ]);
+    const enc = encR || [];
+    agencia_kpi = {
+      encaminhados_periodo: enc.filter((e) => dentro(e.created_at)).length,
+      contratados_periodo: enc.filter((e) => e.status === 'contratado' && dentro(e.created_at)).length,
+      vagas_abertas: (vagasR || []).filter((v) => ['aberta', 'triagem', 'processo'].includes(v.status)).length
+    };
+  }
+
   // Fila de mensagens no período (cobrança + faltantes)
   const { data: filaR } = await supabase.from('fila_mensagens')
     .select('origem,status,enviado_em,enfileirado_em,erro,telefone,alunos,categoria')
@@ -508,7 +523,7 @@ async function dashboard(res, eu, unitId, b) {
   }
 
   return res.status(200).json({
-    ok: true, periodo: { de, ate }, deps, por_dep, risco, termometro, fila, erros_lista, serie, serie_faltantes, por_colaborador,
+    ok: true, periodo: { de, ate }, deps, por_dep, risco, termometro, agencia_kpi, fila, erros_lista, serie, serie_faltantes, por_colaborador,
     pendencias: pendencias.slice(0, 80)
   });
 }
@@ -519,11 +534,43 @@ async function dashboard(res, eu, unitId, b) {
  */
 async function agencia(res, acao, unitId, b) {
   if (acao === 'agencia_inicial') {
-    const [emp, vag] = await Promise.all([
+    const [emp, vag, enc] = await Promise.all([
       supabase.from('empresas_parceiras').select('*').eq('unit_id', unitId).order('nome'),
-      supabase.from('vagas').select('*, empresa:empresas_parceiras(nome)').eq('unit_id', unitId).order('created_at', { ascending: false })
+      supabase.from('vagas').select('*, empresa:empresas_parceiras(nome)').eq('unit_id', unitId).order('created_at', { ascending: false }),
+      supabase.from('encaminhamentos').select('*, vaga:vagas(cargo), empresa:empresas_parceiras(nome)').eq('unit_id', unitId).order('created_at', { ascending: false }).limit(300)
     ]);
-    return res.status(200).json({ ok: true, empresas: emp.data || [], vagas: vag.data || [] });
+    return res.status(200).json({ ok: true, empresas: emp.data || [], vagas: vag.data || [], encaminhamentos: enc.data || [] });
+  }
+
+  if (acao === 'agencia_encaminhar') {
+    if (!b.vaga_id) return res.status(400).json({ erro: 'sem_vaga' });
+    const { data: vaga } = await supabase.from('vagas').select('id,cargo,empresa_id, empresa:empresas_parceiras(nome)').eq('id', b.vaga_id).eq('unit_id', unitId).maybeSingle();
+    if (!vaga) return res.status(404).json({ erro: 'vaga_nao_encontrada' });
+    const cod = b.cod_alu ? String(b.cod_alu) : null;
+    const { data: enc, error } = await supabase.from('encaminhamentos').insert({
+      unit_id: unitId, vaga_id: vaga.id, empresa_id: vaga.empresa_id,
+      cod_alu: cod, nome_aluno: b.nome_aluno || null, telefone: b.telefone || null, status: 'encaminhado'
+    }).select('*').single();
+    if (error) return res.status(400).json({ erro: 'falha', mensagem: error.message });
+    if (cod) {
+      await informativo(unitId, cod, `[Agência] Encaminhado para a vaga de ${vaga.cargo}${vaga.empresa?.nome ? ' na ' + vaga.empresa.nome : ''}.`);
+      await supabase.from('encaminhamentos').update({ ocorrencia_em: new Date().toISOString() }).eq('id', enc.id).then(() => {}, () => {});
+    }
+    return res.status(200).json({ ok: true, encaminhamento: enc });
+  }
+
+  if (acao === 'agencia_enc_status') {
+    const status = String(b.status || '');
+    if (!['encaminhado', 'contratado', 'nao_contratado', 'nao_compareceu'].includes(status)) return res.status(400).json({ erro: 'status_invalido' });
+    const patch = { status, updated_at: new Date().toISOString() };
+    if ('feedback_empresa' in b) patch.feedback_empresa = b.feedback_empresa || null;
+    const { data, error } = await supabase.from('encaminhamentos').update(patch).eq('id', b.id).eq('unit_id', unitId).select('*').single();
+    if (error) return res.status(400).json({ erro: 'falha', mensagem: error.message });
+    if (status === 'contratado' && data?.vaga_id) {
+      await supabase.from('vagas').update({ status: 'preenchida', updated_at: new Date().toISOString() }).eq('id', data.vaga_id).then(() => {}, () => {});
+      if (data.cod_alu) await informativo(unitId, data.cod_alu, `[Agência] Contratado(a) na vaga encaminhada. 🎉`);
+    }
+    return res.status(200).json({ ok: true, encaminhamento: data });
   }
 
   if (acao === 'agencia_empresa_salvar') {
