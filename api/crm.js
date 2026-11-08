@@ -438,7 +438,7 @@ async function dashboard(res, eu, unitId, b) {
 
   // Fila de mensagens no período (cobrança + faltantes)
   const { data: filaR } = await supabase.from('fila_mensagens')
-    .select('origem,status,enviado_em,erro')
+    .select('origem,status,enviado_em,enfileirado_em,erro')
     .eq('unit_id', unitId).gte('enfileirado_em', `${de}T00:00:00-03:00`);
   const fl = filaR || [];
   const enviada = (m, origem) => m.status === 'enviado' && dentro(m.enviado_em) && (!origem || m.origem === origem);
@@ -449,6 +449,17 @@ async function dashboard(res, eu, unitId, b) {
     cobranca: fl.filter((m) => enviada(m, 'regua_cobranca')).length,
     faltantes: fl.filter((m) => enviada(m, 'regua_faltantes')).length
   };
+
+  // Série: faltantes identificados por dia (fila da régua de faltantes, exceto cancelados).
+  // Serve pra acompanhar a curva de faltantes caindo ao longo do período.
+  const faltMap = {};
+  for (const m of fl) {
+    if (m.origem === 'regua_faltantes' && m.status !== 'cancelado' && m.enfileirado_em) {
+      const d = m.enfileirado_em.slice(0, 10);
+      if (d >= de && d <= ate) faltMap[d] = (faltMap[d] || 0) + 1;
+    }
+  }
+  const serie_faltantes = Object.entries(faltMap).map(([dia, n]) => ({ dia, n })).sort((a, b) => a.dia.localeCompare(b.dia));
 
   // Série: resolvidos por dia (todos os deps do usuário)
   const serieMap = {};
@@ -482,7 +493,7 @@ async function dashboard(res, eu, unitId, b) {
   }
 
   return res.status(200).json({
-    ok: true, periodo: { de, ate }, deps, por_dep, risco, termometro, fila, serie, por_colaborador,
+    ok: true, periodo: { de, ate }, deps, por_dep, risco, termometro, fila, serie, serie_faltantes, por_colaborador,
     pendencias: pendencias.slice(0, 80)
   });
 }
