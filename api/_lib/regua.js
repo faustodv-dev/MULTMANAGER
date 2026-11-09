@@ -140,7 +140,7 @@ async function processarGrupos(unitId, gruposMap, origem, { viaFila = false, hor
       filaItens.push({
         telefone: g.telefone, texto, origem: 'regua_cobranca', categoria: `cob${g.passo.offset}`,
         prioridade: 5, agendado_para: agendado, chave: `cob|${g.chave}`,
-        cod_alu: g.cod_alu, alunos: alunosTxt, metadata: { matricula: g.matricula || '', offset: g.passo.offset }
+        cod_alu: g.cod_alu, alunos: alunosTxt, metadata: { matricula: g.matricula || '', offset: g.passo.offset, valor: g.valor, vencimento: g.vencimento || null }
       });
       resumo.enviados++;
       registros.push({ ...baseReg, status: 'enfileirado' });
