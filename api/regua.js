@@ -70,23 +70,53 @@ export default async function handler(req, res) {
   try {
     if (acao === 'obter') {
       const regua = await reguaDaUnidade(unitId);
+      const pagina = Math.max(0, Number(b.log_pagina) || 0);
+      const ini = pagina * 25;
       let ultimos = [];
+      let temMais = false;
       if (regua.via_fila) {
-        // Via fila: a hora é a REAL do envio (enviado_em gravado pelo gateway).
+        // Via fila: hora REAL do envio. Valor/vencimento não vivem na fila — cruzamos com
+        // regua_envios pela chave (fila.chave = "cob|" + regua_envios.chave) para recuperá-los.
         const { data } = await supabase
           .from('fila_mensagens')
-          .select('categoria,telefone,alunos,status,agendado_para,enviado_em,enfileirado_em,erro')
+          .select('chave,categoria,telefone,alunos,status,agendado_para,enviado_em,enfileirado_em,erro,texto,metadata')
           .eq('unit_id', unitId).eq('origem', 'regua_cobranca')
-          .order('enfileirado_em', { ascending: false }).limit(20);
-        ultimos = data || [];
+          .order('enfileirado_em', { ascending: false }).range(ini, ini + 25);
+        const linhas = data || [];
+        temMais = linhas.length > 25;
+        const pag = linhas.slice(0, 25);
+        const semPrefixo = (c) => String(c || '').replace(/^cob\|/, '');
+        const chaves = [...new Set(pag.map((r) => semPrefixo(r.chave)).filter(Boolean))];
+        const mapa = {};
+        if (chaves.length) {
+          const { data: envs } = await supabase.from('regua_envios')
+            .select('chave,valor_centavos,vencimento,offset_dias').eq('unit_id', unitId).in('chave', chaves);
+          for (const e of (envs || [])) mapa[e.chave] = e;
+        }
+        ultimos = pag.map((r) => {
+          const md = r.metadata || {};
+          const env = mapa[semPrefixo(r.chave)] || {};
+          const mCat = String(r.categoria || '').match(/-?\d+/);
+          const off = md.offset != null ? md.offset : (env.offset_dias != null ? env.offset_dias : (mCat ? Number(mCat[0]) : null));
+          return {
+            telefone: r.telefone, alunos: r.alunos, status: r.status,
+            enviado_em: r.enviado_em, agendado_para: r.agendado_para, erro: r.erro || null,
+            offset_dias: off,
+            valor_centavos: md.valor != null ? md.valor : (env.valor_centavos ?? null),
+            vencimento: md.vencimento || env.vencimento || null,
+            texto: r.texto || null
+          };
+        });
       } else {
         const { data } = await supabase
           .from('regua_envios')
           .select('offset_dias,vencimento,telefone,alunos,valor_centavos,status,enviado_em')
-          .eq('unit_id', unitId).order('enviado_em', { ascending: false }).limit(20);
-        ultimos = data || [];
+          .eq('unit_id', unitId).order('enviado_em', { ascending: false }).range(ini, ini + 25);
+        const linhas = data || [];
+        temMais = linhas.length > 25;
+        ultimos = linhas.slice(0, 25);
       }
-      return res.status(200).json({ ok: true, regua, padrao: REGUA_PADRAO, statuses_disponiveis: STATUS_CANONICOS, ultimos });
+      return res.status(200).json({ ok: true, regua, padrao: REGUA_PADRAO, statuses_disponiveis: STATUS_CANONICOS, ultimos, pagina, tem_mais: temMais });
     }
 
     if (!podeEditar) return res.status(403).json({ erro: 'sem_permissao' });

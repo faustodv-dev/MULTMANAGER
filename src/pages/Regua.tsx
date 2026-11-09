@@ -17,7 +17,7 @@ import { BellRing, Send, Save, CalendarOff, Loader2, Clock, RefreshCw, Users, Me
 
 type Passo = { offset: number; ativo: boolean; texto: string };
 type Regua = { ativa: boolean; horario: number; pula_domingo: boolean; via_fila: boolean; statuses: string[]; passos: Passo[] };
-type Envio = { offset_dias?: number | null; vencimento?: string | null; telefone: string | null; alunos: string | null; valor_centavos?: number | null; status: string; enviado_em: string | null; categoria?: string | null };
+type Envio = { offset_dias?: number | null; vencimento?: string | null; telefone: string | null; alunos: string | null; valor_centavos?: number | null; status: string; enviado_em: string | null; categoria?: string | null; texto?: string | null; agendado_para?: string | null };
 type Previa = { responsaveis: number; parcelas: number; sem_telefone: number; valor_total: number };
 
 const STATUS_FALLBACK = ["Ativo", "Desistente", "Rescindido", "Trancado", "Formado"];
@@ -60,6 +60,8 @@ export default function Regua() {
   const [regua, setRegua] = useState<Regua | null>(null);
   const [statusOpcoes, setStatusOpcoes] = useState<string[]>(STATUS_FALLBACK);
   const [ultimos, setUltimos] = useState<Envio[]>([]);
+  const [logPag, setLogPag] = useState(0);
+  const [temMais, setTemMais] = useState(false);
   const [carregando, setCarregando] = useState(true);
   const [salvando, setSalvando] = useState(false);
   const [telTeste, setTelTeste] = useState("");
@@ -78,18 +80,20 @@ export default function Regua() {
 
   const podeEditar = perfil?.papel === "master" || perfil?.papel === "admin";
 
-  const carregar = async () => {
+  const carregar = async (pag = 0) => {
     setCarregando(true);
     try {
-      const r = await api<{ regua: Regua; statuses_disponiveis: string[]; ultimos: Envio[] }>("regua", { acao: "obter", unit_id: unidade });
+      const r = await api<{ regua: Regua; statuses_disponiveis: string[]; ultimos: Envio[]; tem_mais?: boolean }>("regua", { acao: "obter", unit_id: unidade, log_pagina: pag });
       setRegua(r.regua);
       setStatusOpcoes(r.statuses_disponiveis?.length ? r.statuses_disponiveis : STATUS_FALLBACK);
       setUltimos(r.ultimos || []);
-      if (r.regua.passos[0]) setOffsetTeste(r.regua.passos[0].offset);
+      setTemMais(!!r.tem_mais);
+      setLogPag(pag);
+      if (pag === 0 && r.regua.passos[0]) setOffsetTeste(r.regua.passos[0].offset);
     } catch (e: any) { toast.error(e.message); }
     setCarregando(false);
   };
-  useEffect(() => { if (unidade) carregar(); /* eslint-disable-next-line */ }, [unidade]);
+  useEffect(() => { if (unidade) carregar(0); /* eslint-disable-next-line */ }, [unidade]);
 
   const setPasso = (i: number, patch: Partial<Passo>) =>
     setRegua((r) => (r ? { ...r, passos: r.passos.map((p, j) => (j === i ? { ...p, ...patch } : p)) } : r));
@@ -254,7 +258,7 @@ export default function Regua() {
                         {ultimos.map((e, i) => (
                           <tr key={i} className="border-t">
                             <td className="py-1 pr-3 whitespace-nowrap">{e.enviado_em ? dataHora(e.enviado_em) : "na fila"}</td>
-                            <td className="pr-3 whitespace-nowrap">{e.offset_dias != null ? rotulo(e.offset_dias) : "—"}</td>
+                            <td className={cn("pr-3 whitespace-nowrap", e.texto && "cursor-help underline decoration-dotted")} title={e.texto || undefined}>{e.offset_dias != null ? rotulo(e.offset_dias) : "—"}</td>
                             <td className="pr-3">{e.alunos || "—"}</td>
                             <td className="pr-3 whitespace-nowrap">{e.valor_centavos != null ? reais(e.valor_centavos) : "—"}</td>
                             <td className="whitespace-nowrap"><span className={e.status === "enviado" ? "text-emerald-600" : e.status === "erro" ? "text-rose-600" : "text-muted-foreground"}>{statusRotulo[e.status] || e.status}</span></td>
@@ -262,6 +266,13 @@ export default function Regua() {
                         ))}
                       </tbody>
                     </table>
+                  </div>
+                  <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
+                    <span>Página {logPag + 1} · passe o mouse na etapa p/ ver a mensagem</span>
+                    <div className="flex gap-1">
+                      <Button variant="outline" size="sm" disabled={logPag === 0 || carregando} onClick={() => carregar(logPag - 1)}>Anterior</Button>
+                      <Button variant="outline" size="sm" disabled={!temMais || carregando} onClick={() => carregar(logPag + 1)}>Próxima</Button>
+                    </div>
                   </div>
                 </div>
               )}
