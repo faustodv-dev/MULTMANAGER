@@ -56,7 +56,14 @@ function somaDias(iso, d) {
   x.setDate(x.getDate() + d);
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date(x));
 }
-export const ontemSP = () => somaDias(hojeSP(), -1);
+// "Ontem" pulando domingo: se o dia anterior cair num domingo (sem aula), volta
+// para o sábado. Assim a segunda-feira processa as faltas de sábado, e não o
+// domingo vazio. (O domingo já não dispara pela régua por causa do pula_domingo.)
+const ehDomingoISO = (iso) => new Date(`${iso}T12:00:00-03:00`).getUTCDay() === 0;
+export const ontemSP = () => {
+  const ontem = somaDias(hojeSP(), -1);
+  return ehDomingoISO(ontem) ? somaDias(hojeSP(), -2) : ontem;
+};
 
 const primeiroNome = (n) => String(n || '').trim().split(/\s+/)[0]?.toLowerCase().replace(/^./, (c) => c.toUpperCase()) || '';
 
