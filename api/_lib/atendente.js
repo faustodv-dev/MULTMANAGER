@@ -396,7 +396,7 @@ export async function atender({ conversa, unidade, segredos }) {
     {
       nome: 'registrar_pedagogico',
       descricao: 'Registra um pedido pedagógico (ocorrência no sistema) e abre o card no Pedagógico para a secretaria executar. tipo: justificativa_falta, reposicao, troca_turma, alerta_evasao.',
-      parametros: { type: 'object', properties: { cod_alu: { type: 'string' }, tipo: { type: 'string', enum: ['justificativa_falta', 'reposicao', 'troca_turma', 'alerta_evasao'] }, detalhe: { type: 'string', description: 'resumo do pedido (motivo, data da aula, turma desejada, etc.)' }, nivel: { type: 'number', enum: [1, 2], description: 'só para alerta_evasao: 1 = risco inicial (ex.: 2 faltas seguidas); 2 = risco alto (3+ faltas seguidas, ou quer trancar/cancelar). Padrão 1.' } }, required: ['cod_alu', 'tipo', 'detalhe'] },
+      parametros: { type: 'object', properties: { cod_alu: { type: 'string' }, tipo: { type: 'string', enum: ['justificativa_falta', 'reposicao', 'troca_turma', 'alerta_evasao'] }, detalhe: { type: 'string', description: 'resumo do pedido (motivo, data da aula, turma desejada, etc.)' }, nivel: { type: 'number', description: 'só para alerta_evasao, valores 1 ou 2: 1 = risco inicial (ex.: 2 faltas seguidas); 2 = risco alto (3+ faltas seguidas, ou quer trancar/cancelar). Padrão 1.' } }, required: ['cod_alu', 'tipo', 'detalhe'] },
       executar: async ({ cod_alu, tipo, detalhe, nivel }) => {
         const bloq = exigirIdentidade(); if (bloq) return bloq;
         const aluno = alunoDoGrupo(cod_alu); if (!aluno) return { erro: 'aluno_fora_do_grupo' };

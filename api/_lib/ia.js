@@ -3,6 +3,23 @@ import { CFG, registrar } from './base.js';
 const GEMINI = 'https://generativelanguage.googleapis.com/v1beta/models';
 const GROQ = 'https://api.groq.com/openai/v1/chat/completions';
 
+/**
+ * O Gemini só aceita `enum` em campos `type:'string'`. Um enum numérico (ex.: nivel:[1,2])
+ * faz o Gemini rejeitar a requisição INTEIRA (400), derrubando o agente em silêncio.
+ * Isto limpa o schema de cada ferramenta antes de montar as tools: remove `enum` de qualquer
+ * campo não-string, recursivamente. (O Groq/OpenAI tolera, então só mexemos no caminho Gemini.)
+ */
+function limparEsquemaGemini(no) {
+  if (!no || typeof no !== 'object') return no;
+  if (Array.isArray(no)) return no.map(limparEsquemaGemini);
+  const out = {};
+  for (const [k, v] of Object.entries(no)) {
+    if (k === 'enum' && String(no.type || '').toLowerCase() !== 'string') continue;
+    out[k] = limparEsquemaGemini(v);
+  }
+  return out;
+}
+
 // Modelo sobrecarregado (503/429) ou lento fica de lado por 2 min nesta instância
 const esfriando = new Map();
 const disponivel = (m) => (esfriando.get(m) || 0) < Date.now();
@@ -95,7 +112,7 @@ export async function agente({ sistema, historico, ferramentas, chaves = {}, uni
     try {
       const contents = historico.map((h) => ({ role: h.papel === 'assistente' ? 'model' : 'user', parts: [{ text: h.texto }] }));
       const tools = [{
-        functionDeclarations: ferramentas.map((f) => ({ name: f.nome, description: f.descricao, parameters: f.parametros }))
+        functionDeclarations: ferramentas.map((f) => ({ name: f.nome, description: f.descricao, parameters: limparEsquemaGemini(f.parametros) }))
       }];
       for (let passo = 0; passo < maxPassos; passo++) {
         const restante = prazoMs - (Date.now() - inicio);
