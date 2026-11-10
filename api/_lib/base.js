@@ -17,7 +17,9 @@ export const CFG = {
   geminiModelos: String(process.env.GEMINI_MODELS || 'gemini-flash-latest,gemini-flash-lite-latest')
     .split(',').map((s) => s.trim()).filter(Boolean),
   groqKey: limpar(process.env.GROQ_API_KEY),
-  groqModelos: String(process.env.GROQ_MODELS || 'llama-3.3-70b-versatile').split(',').map((s) => s.trim()).filter(Boolean),
+  // llama-3.3-70b-versatile foi aposentado pela Groq em 16/08/2026. Padrão agora em modelos
+  // GA com function-calling; a lista é tentada em ordem (ver ia.js), então vão dois de reserva.
+  groqModelos: String(process.env.GROQ_MODELS || 'openai/gpt-oss-120b,llama-3.1-8b-instant').split(',').map((s) => s.trim()).filter(Boolean),
   asaasSandbox: String(process.env.ASAAS_SANDBOX || '').toLowerCase() === 'true',
   asaasWebhookToken: limpar(process.env.ASAAS_WEBHOOK_TOKEN),
   cronSecret: limpar(process.env.CRON_SECRET),
