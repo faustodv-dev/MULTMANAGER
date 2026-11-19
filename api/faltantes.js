@@ -1,4 +1,5 @@
-import { supabase, usuarioDaRequisicao, lerCorpo, registrar } from './_lib/base.js';
+import { supabase, usuarioDaRequisicao, lerCorpo, registrar, digitos } from './_lib/base.js';
+import { enfileirar } from './_lib/fila.js';
 import { faltantesDaUnidade, mesclarFaltantes, processarFaltantesUnidade, previaFaltantes, reavaliarFaltantes, FALTANTES_PADRAO } from './_lib/faltantes.js';
 import { avisoDaUnidade, mesclarAviso, previaAviso, processarAvisoUnidade, AVISO_PADRAO } from './_lib/avisos.js';
 import { STATUS_CANONICOS } from './_lib/regua.js';
@@ -37,7 +38,11 @@ export default async function handler(req, res) {
     // ===== Régua de AVISOS (lembrete de aula) — passo 1: config + prévia (sem envio) =====
     if (acao === 'aviso_obter') {
       const aviso = await avisoDaUnidade(unitId);
-      return res.status(200).json({ ok: true, aviso, padrao: AVISO_PADRAO, pode_todos: eu.papel === 'master' });
+      const { data: ultimos } = await supabase.from('fila_mensagens')
+        .select('categoria,telefone,alunos,status,agendado_para,enviado_em,enfileirado_em,erro')
+        .eq('unit_id', unitId).eq('origem', 'regua_aviso')
+        .order('enfileirado_em', { ascending: false }).limit(25);
+      return res.status(200).json({ ok: true, aviso, padrao: AVISO_PADRAO, pode_todos: eu.papel === 'master', ultimos: ultimos || [] });
     }
 
     if (acao === 'aviso_previa') {
@@ -63,6 +68,37 @@ export default async function handler(req, res) {
       // Enfileira de verdade (para teste). forcar ignora o liga/desliga; respeita o alvo.
       const r = await processarAvisoUnidade(unitId, { dataIso: b.data || null, forcar: true });
       return res.status(200).json({ ok: true, resumo: r });
+    }
+
+    // Disparo por LISTA (palestra/aviso geral): envia a mensagem para uma lista de nome+telefone.
+    // Não consulta o sistema escolar — só dispara. Variável do texto: {nome}.
+    if (acao === 'aviso_broadcast') {
+      const texto = String(b.texto || '').trim();
+      const lista = Array.isArray(b.lista) ? b.lista : [];
+      if (!texto) return res.status(400).json({ erro: 'texto_obrigatorio' });
+      const LIMITE = 300; // teto por disparo (protege o gateway/cota)
+      const vistos = new Set();
+      const itens = [];
+      for (const it of lista) {
+        if (itens.length >= LIMITE) break;
+        const tel = digitos(String(it?.telefone || ''));
+        if (tel.length < 10 || vistos.has(tel)) continue;
+        vistos.add(tel);
+        const nome = String(it?.nome || '').trim();
+        const primeiro = nome ? nome.split(/\s+/)[0] : '';
+        itens.push({
+          telefone: String(it.telefone),
+          texto: texto.replace(/\{nome\}/g, primeiro),
+          origem: 'regua_aviso', categoria: 'broadcast', prioridade: 5,
+          agendado_para: new Date().toISOString(),
+          chave: `bcast|${Date.now()}|${tel}`,
+          alunos: primeiro || null
+        });
+      }
+      if (!itens.length) return res.status(400).json({ erro: 'lista_vazia', mensagem: 'Nenhum telefone válido na lista.' });
+      const n = await enfileirar(unitId, itens);
+      await registrar('avisos', 'broadcast', true, { unitId, detalhe: { por: eu.id, total: itens.length } });
+      return res.status(200).json({ ok: true, enfileiradas: n, descartados: lista.length - itens.length });
     }
 
     if (acao === 'salvar') {
