@@ -652,7 +652,75 @@ async function agencia(res, acao, unitId, b) {
     return res.status(200).json({ ok: true, candidato: data });
   }
 
+  // Match candidato × vaga (Etapa 2): ranking por coincidência de critérios.
+  // Roda 100% no Supabase pedagógico — não toca a escola/ponte.
+  if (acao === 'agencia_match') {
+    if (!b.vaga_id) return res.status(400).json({ erro: 'sem_vaga' });
+    const { data: vaga } = await supabase.from('vagas').select('*, empresa:empresas_parceiras(nome)').eq('id', b.vaga_id).eq('unit_id', unitId).maybeSingle();
+    if (!vaga) return res.status(404).json({ erro: 'vaga_nao_encontrada' });
+    const { data: cands } = await supabase.from('candidatos').select('*').eq('unit_id', unitId).neq('status', 'inativo');
+    const ranking = (cands || [])
+      .map((c) => ({ candidato: c, ...pontuarCandidato(vaga, c) }))
+      .sort((a, b2) => (b2.score - a.score) || String(a.candidato.nome).localeCompare(String(b2.candidato.nome)));
+    return res.status(200).json({ ok: true, vaga, max: maxPossivelVaga(vaga), ranking });
+  }
+
   return res.status(400).json({ erro: 'acao_invalida' });
+}
+
+// ---- Match: dicionário e pontuação (mesma lógica do "quem bate mais sobe") ----
+const ORDEM_ESCOLARIDADE = ['Fundamental', 'Médio incompleto', 'Médio completo', 'Técnico', 'Superior incompleto', 'Superior completo'];
+function idadeDeNascimento(nasc) {
+  if (!nasc) return null;
+  const d = new Date(String(nasc) + 'T12:00:00'); if (isNaN(+d)) return null;
+  const h = new Date(); let a = h.getFullYear() - d.getFullYear();
+  const m = h.getMonth() - d.getMonth();
+  if (m < 0 || (m === 0 && h.getDate() < d.getDate())) a--;
+  return a;
+}
+// Soma máxima possível: só conta os critérios que a VAGA de fato definiu.
+function maxPossivelVaga(v) {
+  let m = 0;
+  if (v.area) m += 3;
+  if (Array.isArray(v.turnos) && v.turnos.length) m += 3;
+  if (v.curso_alvo) m += 3;
+  if (v.escolaridade_min) m += 2;
+  if (v.experiencia) m += 2;
+  if (v.cnh_exigida && v.cnh_exigida !== 'Não tem') m += 2;
+  if (v.idade_min || v.idade_max) m += 1;
+  if (v.sexo && v.sexo !== 'A') m += 1;
+  return m;
+}
+function pontuarCandidato(v, c) {
+  let score = 0; const ok = []; const alertas = [];
+  if (v.area && c.area && v.area === c.area) { score += 3; ok.push('Área'); }
+  const vt = Array.isArray(v.turnos) ? v.turnos : [];
+  const ct = Array.isArray(c.turnos) ? c.turnos : [];
+  if (vt.length && ct.length && vt.some((t) => ct.includes(t))) { score += 3; ok.push('Turno'); }
+  if (v.curso_alvo && c.cursos_mult && String(c.cursos_mult).toLowerCase().includes(String(v.curso_alvo).toLowerCase())) { score += 3; ok.push('Curso MULT'); }
+  if (v.escolaridade_min) {
+    const rv = ORDEM_ESCOLARIDADE.indexOf(v.escolaridade_min);
+    const rc = c.escolaridade ? ORDEM_ESCOLARIDADE.indexOf(c.escolaridade) : -1;
+    if (rc >= 0 && rv >= 0 && rc >= rv) { score += 2; ok.push('Escolaridade'); }
+    else if (rc >= 0 && rv >= 0) alertas.push('Escolaridade abaixo');
+    else alertas.push('Escolaridade não informada');
+  }
+  if (v.experiencia) { if (c.experiencia) { score += 2; ok.push('Experiência'); } else alertas.push('Sem experiência'); }
+  if (v.cnh_exigida && v.cnh_exigida !== 'Não tem') {
+    const req = String(v.cnh_exigida); const cc = String(c.cnh || '');
+    if (cc && cc !== 'Não tem' && cc.includes(req)) { score += 2; ok.push('CNH'); }
+    else alertas.push('CNH ' + req + ' exigida');
+  }
+  const idade = idadeDeNascimento(c.nascimento);
+  if (v.idade_min || v.idade_max) {
+    if (idade != null) {
+      const okMin = v.idade_min ? idade >= v.idade_min : true;
+      const okMax = v.idade_max ? idade <= v.idade_max : true;
+      if (okMin && okMax) { score += 1; ok.push('Idade'); } else alertas.push('Fora da faixa etária');
+    } else alertas.push('Idade não informada');
+  }
+  if (v.sexo && v.sexo !== 'A' && c.sexo) { if (v.sexo === c.sexo) { score += 1; ok.push('Sexo'); } else alertas.push('Perfil de sexo diferente'); }
+  return { score, ok, alertas, idade };
 }
 
 function rotuloStatus(s) {
