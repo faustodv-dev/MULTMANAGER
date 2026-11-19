@@ -1,5 +1,6 @@
 import { supabase, usuarioDaRequisicao, lerCorpo, registrar } from './_lib/base.js';
 import { faltantesDaUnidade, mesclarFaltantes, processarFaltantesUnidade, previaFaltantes, reavaliarFaltantes, FALTANTES_PADRAO } from './_lib/faltantes.js';
+import { avisoDaUnidade, mesclarAviso, previaAviso, AVISO_PADRAO } from './_lib/avisos.js';
 import { STATUS_CANONICOS } from './_lib/regua.js';
 
 export const config = { maxDuration: 60 };
@@ -33,7 +34,30 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true, previa: r });
     }
 
+    // ===== Régua de AVISOS (lembrete de aula) — passo 1: config + prévia (sem envio) =====
+    if (acao === 'aviso_obter') {
+      const aviso = await avisoDaUnidade(unitId);
+      return res.status(200).json({ ok: true, aviso, padrao: AVISO_PADRAO, pode_todos: eu.papel === 'master' });
+    }
+
+    if (acao === 'aviso_previa') {
+      const r = await previaAviso(unitId, { dataIso: b.data || null });
+      return res.status(200).json({ ok: true, previa: r });
+    }
+
     if (!podeEditar) return res.status(403).json({ erro: 'sem_permissao' });
+
+    if (acao === 'aviso_salvar') {
+      const aviso = mesclarAviso(b.aviso);
+      // Trava: o alvo "todos" só o master liga, em qualquer unidade (evita estourar cota/gateway).
+      if (aviso.alvo === 'todos' && eu.papel !== 'master') {
+        return res.status(403).json({ erro: 'todos_apenas_master', mensagem: 'A opção "Todos" só pode ser ligada pelo administrador master.' });
+      }
+      const { error } = await supabase.from('units').update({ regua_aviso: aviso }).eq('id', unitId);
+      if (error) return res.status(400).json({ erro: 'falha_salvar', mensagem: error.message });
+      await registrar('avisos', 'salvar', true, { unitId, detalhe: { por: eu.id, ativa: aviso.ativa, alvo: aviso.alvo } });
+      return res.status(200).json({ ok: true, aviso });
+    }
 
     if (acao === 'salvar') {
       const regua = mesclarFaltantes(b.regua);
