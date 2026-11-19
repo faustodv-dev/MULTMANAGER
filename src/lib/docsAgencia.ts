@@ -45,7 +45,25 @@ function assinatura(rotulo = "Assinatura do Aluno"): string {
   return `<div class="ass"><div class="linha"></div>${esc(rotulo)}<br><span class="sub">MULT Profissões — Unidade Rio Verde-GO</span></div>`;
 }
 
-function shell(titulo: string, corpo: string): string {
+type Uni = Record<string, any>;
+const origem = () => { try { return window.location.origin; } catch { return ""; } };
+
+function cabecalho(): string {
+  return `<div class="cabecalho"><img src="${origem()}/mult-logo.png" alt="MULT Profissões"></div>`;
+}
+function rodape(u?: Uni): string {
+  if (!u) return "";
+  const endParts = [u.endereco, u.numero ? `nº ${u.numero}` : "", u.bairro].filter(Boolean).join(", ");
+  const temAlgo = endParts || u.instagram || u.telefone_fixo || u.site || u.email;
+  if (!temAlgo) return "";
+  const nome = u.razao_social || `MULT Profissões${u.name ? ` — ${u.name}` : ""}`;
+  const l2 = [endParts, u.instagram ? `Instagram: ${u.instagram}` : "", u.telefone_fixo].filter(Boolean).join(" · ");
+  const l3 = [u.site, u.email].filter(Boolean).join(" · ");
+  const linhas = [`<b>${esc(nome)}</b>`, l2 ? esc(l2) : "", l3 ? esc(l3) : ""].filter(Boolean);
+  return `<div class="rodape">${linhas.map((x) => `<div>${x}</div>`).join("")}</div>`;
+}
+
+function shell(titulo: string, corpo: string, u?: Uni): string {
   return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(titulo)}</title>
 <style>
   @page { size: A4; margin: 2cm; }
@@ -67,12 +85,15 @@ function shell(titulo: string, corpo: string): string {
   .ass .linha { border-top:1px solid #111; width:70%; margin:0 auto 4px; height:0; }
   .ass .sub { color:#555; font-size:10pt; }
   .duplaass { display:flex; gap:24px; margin-top:52px; } .duplaass > div { flex:1; text-align:center; } .duplaass .linha { border-top:1px solid #111; margin-bottom:4px; }
-  @media print { body { background:#fff; } .barra { display:none; } .folha { box-shadow:none; margin:0; max-width:none; padding:0; } }
+  .cabecalho { text-align:center; margin-bottom:20px; }
+  .cabecalho img { max-width:100%; height:auto; max-height:64px; }
+  .rodape { text-align:center; font-style:italic; font-size:9.5pt; color:#444; border-top:1px solid #bbb; padding-top:6px; margin-top:32px; line-height:1.35; }
+  @media print { body { background:#fff; } .barra { display:none; } .folha { box-shadow:none; margin:0; max-width:none; padding:0 0 2.6cm; } .rodape { position:fixed; left:0; right:0; bottom:0; margin:0; background:#fff; } }
 </style></head>
 <body>
   <div class="barra"><button class="b-print" onclick="window.print()">Imprimir / Salvar PDF</button><button class="b-close" onclick="window.close()">Fechar</button></div>
-  <div class="folha">${corpo}</div>
-  <script>window.onload=function(){setTimeout(function(){try{window.print()}catch(e){}},500)}</script>
+  <div class="folha">${cabecalho()}${corpo}${rodape(u)}</div>
+  <script>window.onload=function(){setTimeout(function(){try{window.print()}catch(e){}},700)}</script>
 </body></html>`;
 }
 
@@ -203,7 +224,7 @@ function formatarData(iso: string): string {
   return m ? `${m[3]}/${m[2]}/${m[1]}` : String(iso);
 }
 
-export function gerarDocumentoHTML(tipo: string, c: Cand, x: DocExtras = {}): string {
+export function gerarDocumentoHTML(tipo: string, c: Cand, x: DocExtras = {}, u?: Uni): string {
   let corpo = "";
   switch (tipo) {
     case "solicitacao": corpo = docSolicitacao(c); break;
@@ -218,5 +239,5 @@ export function gerarDocumentoHTML(tipo: string, c: Cand, x: DocExtras = {}): st
     default: corpo = `<p>Documento não encontrado.</p>`;
   }
   const rot = DOCS.find((d) => d.id === tipo)?.rot || "Documento";
-  return shell(`${rot} — ${c.nome || ""}`, corpo);
+  return shell(`${rot} — ${c.nome || ""}`, corpo, u);
 }
