@@ -70,7 +70,9 @@ ${asaasAtivo
 - FALTA: acolha, pergunte o motivo e registre com registrar_pedagogico(tipo="justificativa_falta"). Explique conforme o método do curso:
   rotativo = a aula começa e termina no dia, o conteúdo é reposto/revisto no ciclo; individual = ele retoma de onde parou, não perde matéria;
   sequencial = reforce a assiduidade e ofereça reposição. Problema de pagamento não é motivo para faltar.
-- REPOSIÇÃO: ofereça e registre com registrar_pedagogico(tipo="reposicao"). VOCÊ NÃO AGENDA: nunca confirme nem prometa dia, horário ou turma de reposição, mesmo que o aluno sugira um ("pode ser quinta às 18h") — você não tem a agenda das turmas. Anote a preferência dele no detalhe, diga que a SECRETARIA vai verificar a turma e o horário disponíveis e confirmar com ele, e chame chamar_humano "pedagógico - reposição" para a secretaria fechar. Não diga "já agendei"/"está marcado".
+- REPOSIÇÃO (depende do curso):
+  • INFORMÁTICA: você PODE agendar. 1) chame consultar_reposicao_informatica(cod_alu); 2) se automatizado=true, ofereça SOMENTE as turmas/horários retornados (NUNCA invente nem confirme horário fora dessa lista); 3) quando o aluno escolher, chame agendar_reposicao_informatica(cod_alu, turma, data) — ela reconfere a vaga e registra a ocorrência. Só diga "agendado" DEPOIS que a ferramenta retornar ok (traz turma, dia e horário). Se retornar turma_sem_vaga, ofereça outra da lista atual.
+  • DEMAIS CURSOS (ou se a ferramenta retornar automatizado=false / curso_nao_automatizado): VOCÊ NÃO AGENDA. Nunca confirme nem prometa dia/horário/turma, mesmo que o aluno sugira. Registre com registrar_pedagogico(tipo="reposicao"), diga que a SECRETARIA vai verificar e confirmar, e chame chamar_humano "pedagógico - reposição". Não diga "já agendei"/"está marcado".
 - TROCA DE TURMA/HORÁRIO: mostre as vagas (consultar_vagas_turmas) e registre com registrar_pedagogico(tipo="troca_turma").
 - DIFICULDADE / foi mal na prova: explique a Garantia de Aprendizado (quem tem frequência pode refazer o módulo sem custo) e registre uma reposição/reforço.
 - CERTIFICADO: consulte com consultar_status_certificado. Critérios: presença ≥ 80% e média 7,0. Se elegível e ainda não solicitado, use solicitar_certificado;
@@ -412,6 +414,43 @@ export async function atender({ conversa, unidade, segredos }) {
         const statusCard = tipo === 'alerta_evasao' ? (Number(nivel) === 2 ? 'risco_evasao_2' : 'risco_evasao_1') : 'andamento';
         await garantirCardWhatsapp(conversa, { departamento: 'pedagogico', titulo: `${prefixo} - ${primeiroNome(aluno.nome)}`, status: statusCard, prioridade: tipo === 'alerta_evasao' ? 'alta' : undefined }).catch(() => null);
         return { ok: true, registrado: tipo };
+      }
+    },
+    {
+      nome: 'consultar_reposicao_informatica',
+      descricao: 'REPOSIÇÃO: lista as turmas do MESMO curso com vaga REAL (dia/horário) — só quando o curso é INFORMÁTICA. Chame ANTES de oferecer qualquer horário de reposição. Se automatizado=false, NÃO ofereça horários: registre com registrar_pedagogico(tipo="reposicao") e chame chamar_humano.',
+      parametros: { type: 'object', properties: { cod_alu: { type: 'string' } }, required: ['cod_alu'] },
+      executar: async ({ cod_alu }) => {
+        const bloq = exigirIdentidade(); if (bloq) return bloq;
+        if (!alunoDoGrupo(cod_alu)) return { erro: 'aluno_fora_do_grupo' };
+        const crono = await ponte(conversa.unit_id, 'cronograma_turma', { cod_alu: String(cod_alu) }, { conversaId: conversa.id }).catch(() => null);
+        const curso = String(crono?.curso || '');
+        if (!/inform[aá]tic/i.test(curso)) return { automatizado: false, curso, motivo: 'Reposição automática só para Informática. Registre e encaminhe à secretaria.' };
+        const turmas = await ponte(conversa.unit_id, 'vagas_turmas', { cod_alu: String(cod_alu) }, { conversaId: conversa.id }).catch(() => []);
+        return { automatizado: true, curso, turmas: Array.isArray(turmas) ? turmas : [] };
+      }
+    },
+    {
+      nome: 'agendar_reposicao_informatica',
+      descricao: 'Agenda a reposição numa turma de vaga REAL (curso Informática). Reconfere a vaga antes de registrar a ocorrência "REPOSIÇÃO DE AULA" com turma e data. Use só depois que o aluno escolher um horário vindo de consultar_reposicao_informatica. NUNCA passe uma turma fora daquela lista.',
+      parametros: { type: 'object', properties: { cod_alu: { type: 'string' }, turma: { type: 'string', description: 'nome EXATO da turma escolhida, vindo de consultar_reposicao_informatica' }, data: { type: 'string', description: 'data combinada da reposição (opcional), formato AAAA-MM-DD' } }, required: ['cod_alu', 'turma'] },
+      executar: async ({ cod_alu, turma, data }) => {
+        const bloq = exigirIdentidade(); if (bloq) return bloq;
+        const aluno = alunoDoGrupo(cod_alu); if (!aluno) return { erro: 'aluno_fora_do_grupo' };
+        const crono = await ponte(conversa.unit_id, 'cronograma_turma', { cod_alu: String(cod_alu) }, { conversaId: conversa.id }).catch(() => null);
+        const curso = String(crono?.curso || '');
+        if (!/inform[aá]tic/i.test(curso)) return { erro: 'curso_nao_automatizado', mensagem: 'Reposição automática só para Informática. Registre com registrar_pedagogico(tipo="reposicao") e chame chamar_humano.' };
+        const turmas = await ponte(conversa.unit_id, 'vagas_turmas', { cod_alu: String(cod_alu) }, { conversaId: conversa.id }).catch(() => []);
+        const alvo = (Array.isArray(turmas) ? turmas : []).find((t) => String(t.turma || '').trim().toLowerCase() === String(turma || '').trim().toLowerCase() && Number(t.vagas || 0) > 0);
+        // Trava de segurança: nunca registra um horário que não foi conferido como vaga real agora.
+        if (!alvo) return { erro: 'turma_sem_vaga', mensagem: 'Essa turma não está com vaga agora. Ofereça uma das turmas atuais da lista.', turmas_disponiveis: Array.isArray(turmas) ? turmas : [] };
+        const dataOk = /^\d{4}-\d{2}-\d{2}$/.test(String(data || ''));
+        const quando = dataOk ? ` em ${String(data).slice(0, 10).split('-').reverse().join('/')}` : '';
+        const detalhe = `Turma ${alvo.turma} (${alvo.dia_semana} ${alvo.horario})${quando}. Curso: ${curso}.`;
+        await ponte(conversa.unit_id, 'registrar_ocorrencia', { cod_alu: String(cod_alu), texto: `REPOSIÇÃO DE AULA agendada via WhatsApp — ${detalhe}`, chave: `oco-repo-${conversa.id}-${cod_alu}-${Date.now()}` }, { conversaId: conversa.id }).catch(() => null);
+        conversa = await atualizarConversa(conversa.id, { departamento: 'pedagogico' });
+        await garantirCardWhatsapp(conversa, { departamento: 'pedagogico', titulo: `Reposição agendada - ${primeiroNome(aluno.nome)}`, status: 'andamento' }).catch(() => null);
+        return { ok: true, agendado: { turma: alvo.turma, dia_semana: alvo.dia_semana, horario: alvo.horario, data: dataOk ? data : null } };
       }
     },
     {
