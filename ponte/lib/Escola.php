@@ -457,22 +457,45 @@ final class Escola
             $sql .= " AND $colStatus = 'Ativo'";
         }
         $rows = $this->db->todos($sql, $params);
-        $out = [];
+        // Candidatas (exclui a turma do próprio aluno).
+        $cands = [];
         foreach ($rows as $r) {
-            if ((string)$r['COD_TUR'] === $turmaCod) {
+            $cod = (string)($r['COD_TUR'] ?? '');
+            if ($cod === '' || $cod === $turmaCod) {
                 continue;
             }
-            $vagas = (int)preg_replace('/\D/', '', (string)($r['VAG_TUR'] ?? '0'));
-            if ($vagas <= 0) {
+            $cands[$cod] = $r;
+        }
+        if (!$cands) {
+            return [];
+        }
+        // VAG_TUR é a CAPACIDADE da turma, não o saldo (ex.: 007INF Vag 16 mas MT 17 → restam 0).
+        // Vaga REAL = VAG_TUR - matriculados ativos. Conta os matriculados por turma.
+        // Fail-closed: se não der para contar, não oferece nada (evita oferecer turma lotada).
+        $matric = [];
+        $codTurs = array_keys($cands);
+        $ph = implode(',', array_fill(0, count($codTurs), '?'));
+        try {
+            foreach ($this->db->todos("SELECT COD_TUR, COUNT(*) n FROM s_cad_matricula WHERE COD_TUR IN ($ph) AND STATUS_MAT = 'Ativo' GROUP BY COD_TUR", $codTurs) as $m) {
+                $matric[(string)$m['COD_TUR']] = (int)$m['n'];
+            }
+        } catch (\Throwable $e) {
+            return [];
+        }
+        $out = [];
+        foreach ($cands as $cod => $r) {
+            $cap = (int)preg_replace('/\D/', '', (string)($r['VAG_TUR'] ?? '0'));
+            $restam = $cap - ($matric[$cod] ?? 0);
+            if ($restam <= 0) {
                 continue;
             }
             $out[] = [
-                'cod_tur' => (string)($r['COD_TUR'] ?? ''),
+                'cod_tur' => $cod,
                 'turma' => Texto::doBanco($r['NOM_TUR'] ?? ''),
                 'dia_semana' => Texto::doBanco($r['DIA_SEMANA'] ?? ''),
                 'periodo' => Texto::doBanco($r['PERIODO'] ?? ''),
                 'horario' => trim(Texto::doBanco($r['HS_INICIO'] ?? '') . ' - ' . Texto::doBanco($r['HS_FIM'] ?? ''), ' -'),
-                'vagas' => $vagas,
+                'vagas' => $restam,
             ];
         }
         return $out;
