@@ -120,7 +120,31 @@ export default function Unidades() {
             <div><Label>Nome do recebedor</Label><Input value={campo(u, "recebedor_nome") || ""} onChange={(e) => mudar(u, "recebedor_nome", e.target.value)} /></div>
             <div><Label>CNPJ do recebedor (só números)</Label><Input value={campo(u, "recebedor_documento") || ""} onChange={(e) => mudar(u, "recebedor_documento", e.target.value.replace(/\D/g, ""))} /></div>
             <div><Label>Horário/contato da secretaria (a assistente informa)</Label><Textarea rows={2} value={campo(u, "atendimento_humano") || ""} onChange={(e) => mudar(u, "atendimento_humano", e.target.value)} /></div>
-            <div className="md:col-span-2"><Label>Regras do agente de IA desta unidade</Label><Textarea rows={3} placeholder="Ex.: tom de voz, o que pode/não pode oferecer, informações próprias desta unidade…" value={campo(u, "instrucoes_agente") || ""} onChange={(e) => mudar(u, "instrucoes_agente", e.target.value)} /><p className="mt-1 text-xs text-muted-foreground">Cada unidade define suas próprias regras — a assistente as segue nesta unidade.</p></div>
+            <div className="md:col-span-2"><Label>Regras do agente de IA desta unidade (playbook)</Label><Textarea rows={3} placeholder="Ex.: tom de voz, promoções, o que pode/não pode oferecer, informações próprias desta unidade…" value={campo(u, "instrucoes_agente") || ""} onChange={(e) => mudar(u, "instrucoes_agente", e.target.value)} /><p className="mt-1 text-xs text-muted-foreground">Cada unidade define suas próprias regras — a assistente as segue nesta unidade.</p></div>
+
+            <div className="rounded-lg border bg-muted/20 p-3 md:col-span-2">
+              <p className="text-sm font-semibold">Perfil &amp; contato da unidade</p>
+              <p className="mb-3 mt-0.5 text-xs text-muted-foreground">Usado pela assistente (para responder endereço, Instagram, horário…) e no rodapé dos documentos. <b>Em branco fica em branco.</b></p>
+              <div className="grid gap-3 md:grid-cols-2">
+                <div><Label className="text-xs">Endereço (rua)</Label><Input value={campo(u, "endereco") || ""} onChange={(e) => mudar(u, "endereco", e.target.value)} /></div>
+                <div className="grid grid-cols-3 gap-2">
+                  <div><Label className="text-xs">Nº</Label><Input value={campo(u, "numero") || ""} onChange={(e) => mudar(u, "numero", e.target.value)} /></div>
+                  <div className="col-span-2"><Label className="text-xs">Bairro</Label><Input value={campo(u, "bairro") || ""} onChange={(e) => mudar(u, "bairro", e.target.value)} /></div>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="col-span-2"><Label className="text-xs">Cidade</Label><Input value={campo(u, "cidade") || ""} onChange={(e) => mudar(u, "cidade", e.target.value)} /></div>
+                  <div><Label className="text-xs">UF</Label><Input value={campo(u, "uf") || ""} onChange={(e) => mudar(u, "uf", e.target.value)} /></div>
+                </div>
+                <div><Label className="text-xs">CEP</Label><Input value={campo(u, "cep") || ""} onChange={(e) => mudar(u, "cep", e.target.value)} /></div>
+                <div><Label className="text-xs">Telefone fixo</Label><Input value={campo(u, "telefone_fixo") || ""} onChange={(e) => mudar(u, "telefone_fixo", e.target.value)} /></div>
+                <div><Label className="text-xs">Instagram</Label><Input placeholder="@multprofissoes_rioverde" value={campo(u, "instagram") || ""} onChange={(e) => mudar(u, "instagram", e.target.value)} /></div>
+                <div><Label className="text-xs">Site</Label><Input placeholder="www.multprofissoes.com.br" value={campo(u, "site") || ""} onChange={(e) => mudar(u, "site", e.target.value)} /></div>
+                <div><Label className="text-xs">E-mail</Label><Input value={campo(u, "email") || ""} onChange={(e) => mudar(u, "email", e.target.value)} /></div>
+                <div className="md:col-span-2"><Label className="text-xs">Horário de funcionamento</Label><Input placeholder="Seg a Sex 8h–18h · Sáb 8h–12h" value={campo(u, "horario") || ""} onChange={(e) => mudar(u, "horario", e.target.value)} /></div>
+                <div><Label className="text-xs">Razão social (p/ cartas)</Label><Input value={campo(u, "razao_social") || ""} onChange={(e) => mudar(u, "razao_social", e.target.value)} /></div>
+                <div><Label className="text-xs">CNPJ (p/ cartas)</Label><Input value={campo(u, "cnpj") || ""} onChange={(e) => mudar(u, "cnpj", e.target.value)} /></div>
+              </div>
+            </div>
           </div>
           <ChavesUnidade unitId={u.id} />
         </div>
