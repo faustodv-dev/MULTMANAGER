@@ -55,6 +55,7 @@ interface Card {
   id: string; cod_alu: string | null; nome_aluno: string | null; nome_responsavel: string | null;
   telefone: string | null; titulo: string; descricao: string | null; status: string; prioridade: string;
   responsavel_id: string | null; prazo: string | null; canal_origem: string; updated_at: string;
+  created_at?: string; resolvido_em?: string | null;
   turmas?: { turma: string; curso?: string; status?: string }[] | null;
 }
 interface Colab { id: string; nome: string; email: string; papel: string }
@@ -77,6 +78,12 @@ export default function Departamento({ departamento, titulo, Icone }: { departam
   const [novo, setNovo] = useState(false);
   const [dossie, setDossie] = useState<Card | null>(null);
   const [execAtiva, setExecAtiva] = useState<Exec | null>(null);
+  // Filtro por data + status (em aberto / encerrado / todos). Datas vazias = sem filtro de data.
+  const [filtro, setFiltro] = useState<"abertos" | "encerrados" | "todos">("abertos");
+  const [fDe, setFDe] = useState("");
+  const [fAte, setFAte] = useState("");
+  const [encerrados, setEncerrados] = useState<Card[]>([]);
+  const [carregandoEnc, setCarregandoEnc] = useState(false);
 
   const nomeColab = (id: string | null) => colabs.find((c) => c.id === id)?.nome || null;
   const base = { departamento: DEP, unidade };
@@ -100,9 +107,28 @@ export default function Departamento({ departamento, titulo, Icone }: { departam
 
   const mover = async (card: Card, status: string) => {
     setCards((cs) => (status === "resolvido" ? cs.filter((x) => x.id !== card.id) : cs.map((x) => (x.id === card.id ? { ...x, status } : x))));
-    try { await api("crm", { acao: "card_mover", card_id: card.id, status, ...base }); carregar(); }
+    try { await api("crm", { acao: "card_mover", card_id: card.id, status, ...base }); carregar(); if (filtro !== "abertos") carregarEncerrados(); }
     catch (e: any) { toast.error(e.message); carregar(); }
   };
+
+  const carregarEncerrados = async () => {
+    setCarregandoEnc(true);
+    try {
+      const r = await api<any>("crm", { acao: "cards_encerrados", de: fDe || undefined, ate: fAte || undefined, ...base });
+      setEncerrados(r.cards || []);
+    } catch (e: any) { toast.error(e.message); }
+    finally { setCarregandoEnc(false); }
+  };
+  useEffect(() => { if (filtro !== "abertos") carregarEncerrados(); /* eslint-disable-next-line */ }, [filtro, fDe, fAte, unidade, DEP]);
+
+  // Abertos filtrados por data de abertura (created_at) quando houver período definido.
+  const noPeriodo = (iso?: string | null) => {
+    if (!fDe && !fAte) return true;
+    const d = (iso || "").slice(0, 10);
+    return (!fDe || d >= fDe) && (!fAte || d <= fAte);
+  };
+  const abertosVis = filtro === "encerrados" ? [] : cards.filter((c) => noPeriodo(c.created_at));
+  const mostrarEncerrados = filtro === "encerrados" || filtro === "todos";
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-muted/20">
@@ -126,6 +152,28 @@ export default function Departamento({ departamento, titulo, Icone }: { departam
         <div className="flex flex-1 items-center justify-center text-muted-foreground"><Loader2 className="mr-2 h-5 w-5 animate-spin" />Carregando…</div>
       ) : (
         <div className="flex-1 space-y-6 overflow-y-auto p-5">
+          {/* Filtro: status (aberto/encerrado/todos) + período */}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="inline-flex rounded-lg border bg-background p-0.5 text-sm">
+              {([["abertos", "Em aberto"], ["encerrados", "Encerrados"], ["todos", "Todos"]] as const).map(([v, r]) => (
+                <button key={v} onClick={() => setFiltro(v)}
+                  className={cn("rounded-md px-3 py-1 font-medium transition-colors", filtro === v ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted")}>
+                  {r}
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center gap-1.5 text-sm">
+              <CalendarDays className="h-4 w-4 text-muted-foreground" />
+              <Input type="date" className="h-9 w-[150px]" value={fDe} onChange={(e) => setFDe(e.target.value)} title="De" />
+              <span className="text-muted-foreground">até</span>
+              <Input type="date" className="h-9 w-[150px]" value={fAte} onChange={(e) => setFAte(e.target.value)} title="Até" />
+              {(fDe || fAte) && <Button variant="ghost" size="sm" onClick={() => { setFDe(""); setFAte(""); }}>limpar</Button>}
+            </div>
+            <span className="ml-auto text-xs text-muted-foreground">
+              {filtro === "abertos" ? "abertos por data de abertura" : filtro === "encerrados" ? "encerrados por data de conclusão" : "abertos + encerrados"}
+            </span>
+          </div>
+
           {resumo && (
             <section className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
               <Kpi icone={<FileText className="h-4 w-4" />} valor={resumo.atendimentos_abertos} rotulo="Atendimentos abertos" cor="text-orange-600" chip="bg-orange-500/10" barra="bg-orange-500" />
@@ -137,11 +185,12 @@ export default function Departamento({ departamento, titulo, Icone }: { departam
             </section>
           )}
 
+          {filtro !== "encerrados" && (
           <section>
             <SecHeader icone={<FileText className="h-4 w-4" />} titulo="Atendimentos" sub="Finalize um card para arquivá-lo no histórico do aluno" />
             <div className={cn("grid gap-3", DEP === "pedagogico" ? "lg:grid-cols-5" : "lg:grid-cols-3")}>
               {colsDoDep(DEP).map((col) => {
-                const lista = cards.filter((c) => c.status === col.id);
+                const lista = abertosVis.filter((c) => c.status === col.id);
                 return (
                   <div key={col.id} className="flex flex-col rounded-xl border bg-background">
                     <div className="flex items-center gap-2 px-3 py-2.5">
@@ -177,6 +226,37 @@ export default function Departamento({ departamento, titulo, Icone }: { departam
               })}
             </div>
           </section>
+          )}
+
+          {mostrarEncerrados && (
+            <section>
+              <SecHeader icone={<CheckCheck className="h-4 w-4" />} titulo="Atendimentos encerrados" sub={fDe || fAte ? "no período selecionado (por data de conclusão)" : "mais recentes (até 300)"} />
+              {carregandoEnc ? (
+                <div className="flex items-center gap-2 py-6 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Carregando encerrados…</div>
+              ) : !encerrados.length ? (
+                <p className="rounded-xl border bg-background py-8 text-center text-sm text-muted-foreground">Nenhum atendimento encerrado{fDe || fAte ? " nesse período" : ""}.</p>
+              ) : (
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                  {encerrados.map((card) => (
+                    <button key={card.id} onClick={() => setDossie(card)}
+                      className="group flex w-full gap-2.5 overflow-hidden rounded-lg border bg-card p-2.5 text-left shadow-sm transition-colors hover:border-primary">
+                      <span className="w-1 shrink-0 self-stretch rounded-full bg-green-500" />
+                      <span className="min-w-0 flex-1">
+                        <span className="flex items-center gap-1"><CheckCheck className="h-3.5 w-3.5 shrink-0 text-green-600" /><span className="truncate text-sm font-medium">{card.nome_aluno || card.nome_responsavel || "Avulso"}</span></span>
+                        <span className="mt-0.5 block line-clamp-2 text-xs text-muted-foreground">{card.titulo}</span>
+                        <span className="mt-1.5 flex items-center gap-2 text-[11px] text-muted-foreground">
+                          {nomeColab(card.responsavel_id) && (
+                            <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary/15 text-[8px] font-bold text-primary" title={nomeColab(card.responsavel_id)!}>{iniciais(nomeColab(card.responsavel_id))}</span>
+                          )}
+                          {card.resolvido_em && <span className="flex items-center gap-0.5 text-green-700"><CheckCircle2 className="h-3 w-3" />{dataBr(card.resolvido_em.slice(0, 10))}</span>}
+                        </span>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
 
           <section>
             <SecHeader icone={<CalendarDays className="h-4 w-4" />} titulo="Agenda da rotina" sub="POPs do período — toque para agendar ou concluir" />
