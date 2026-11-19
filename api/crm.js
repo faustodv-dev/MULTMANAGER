@@ -615,6 +615,8 @@ async function agencia(res, acao, unitId, b) {
       if (n in b) campos[n] = (b[n] === '' || b[n] == null ? null : Number(b[n]) || null);
     }
     if ('turnos' in b) campos.turnos = Array.isArray(b.turnos) ? b.turnos : [];
+    if ('habilidades' in b) campos.habilidades = Array.isArray(b.habilidades) ? b.habilidades : [];
+    if ('conducao_exigida' in b) campos.conducao_exigida = !!b.conducao_exigida;
     if ('experiencia' in b) campos.experiencia = !!b.experiencia;
     if (!campos.cargo) return res.status(400).json({ erro: 'cargo_obrigatorio' });
     if (b.id) {
@@ -630,14 +632,26 @@ async function agencia(res, acao, unitId, b) {
     return res.status(200).json({ ok: true, vaga: data });
   }
 
-  // Ficha do candidato (perfil profissional). Mesmos critérios da vaga = base do match.
+  // Ficha do candidato = Solicitação de Encaminhamento digital. Parte dos campos
+  // alimenta o match (área, turnos, escolaridade, CNH, condução, exp_area, habilidades);
+  // o resto é cadastro/PDF.
   if (acao === 'agencia_candidato_salvar') {
     const campos = {};
-    for (const k of ['cod_alu', 'nome', 'telefone', 'nascimento', 'sexo', 'area', 'escolaridade', 'experiencia_area', 'cnh', 'cursos_mult', 'pretensao', 'bairro', 'observacoes', 'status']) {
-      if (k in b) campos[k] = (b[k] === '' ? null : b[k]);
-    }
+    const TXT = [
+      'cod_alu', 'nome', 'telefone', 'nascimento', 'sexo', 'area', 'escolaridade', 'experiencia_area', 'cnh', 'cursos_mult', 'pretensao', 'bairro', 'observacoes', 'status',
+      'estado_civil', 'endereco', 'numero', 'complemento', 'cidade', 'uf', 'cep', 'email', 'recado', 'falar_com', 'conducao',
+      'pai_nome', 'pai_profissao', 'mae_nome', 'mae_profissao', 'conjuge_nome', 'conjuge_profissao', 'idades_filhos',
+      'estuda_curso', 'estuda_periodo', 'estuda_serie', 'escola', 'curso_complementacao', 'curso_mult_atual', 'turma', 'periodo_mult',
+      'exp_area', 'habilidades_livre',
+      'exp1_empresa', 'exp1_cidade', 'exp1_uf', 'exp1_fone', 'exp1_entrada', 'exp1_saida', 'exp1_cargo', 'exp1_funcoes', 'exp1_motivo', 'exp1_salario',
+      'exp2_empresa', 'exp2_cidade', 'exp2_uf', 'exp2_fone', 'exp2_entrada', 'exp2_saida', 'exp2_cargo', 'exp2_funcoes', 'exp2_motivo', 'exp2_salario'
+    ];
+    for (const k of TXT) if (k in b) campos[k] = (b[k] === '' ? null : b[k]);
     if ('turnos' in b) campos.turnos = Array.isArray(b.turnos) ? b.turnos : [];
+    if ('habilidades' in b) campos.habilidades = Array.isArray(b.habilidades) ? b.habilidades : [];
     if ('experiencia' in b) campos.experiencia = !!b.experiencia;
+    if ('estuda' in b) campos.estuda = !!b.estuda;
+    if ('num_filhos' in b) campos.num_filhos = (b.num_filhos === '' || b.num_filhos == null ? null : Number(b.num_filhos) || 0);
     if (!campos.nome || !String(campos.nome).trim()) return res.status(400).json({ erro: 'nome_obrigatorio' });
     if (b.id) {
       campos.updated_at = new Date().toISOString();
@@ -687,6 +701,9 @@ function maxPossivelVaga(v) {
   if (v.escolaridade_min) m += 2;
   if (v.experiencia) m += 2;
   if (v.cnh_exigida && v.cnh_exigida !== 'Não tem') m += 2;
+  if (v.conducao_exigida) m += 2;
+  if (v.area) m += 3; // experiência NA ÁREA (sinal separado do match de área)
+  if (Array.isArray(v.habilidades) && v.habilidades.length) m += 3; // teto de habilidades
   if (v.idade_min || v.idade_max) m += 1;
   if (v.sexo && v.sexo !== 'A') m += 1;
   return m;
@@ -720,6 +737,20 @@ function pontuarCandidato(v, c) {
     } else alertas.push('Idade não informada');
   }
   if (v.sexo && v.sexo !== 'A' && c.sexo) { if (v.sexo === c.sexo) { score += 1; ok.push('Sexo'); } else alertas.push('Perfil de sexo diferente'); }
+  // Condução própria
+  if (v.conducao_exigida) {
+    const cc = String(c.conducao || '');
+    if (cc && cc !== 'nao') { score += 2; ok.push('Condução própria'); } else alertas.push('Exige condução própria');
+  }
+  // Experiência na mesma área (cargo/ramo anterior = sinal forte)
+  if (v.area && c.exp_area && v.area === c.exp_area) { score += 3; ok.push('Experiência na área'); }
+  // Habilidades em comum (1 por tag, teto 3)
+  const vh = Array.isArray(v.habilidades) ? v.habilidades : [];
+  const ch = Array.isArray(c.habilidades) ? c.habilidades : [];
+  if (vh.length && ch.length) {
+    const inter = vh.filter((h) => ch.includes(h));
+    if (inter.length) { score += Math.min(3, inter.length); ok.push('Habilidades (' + inter.length + ')'); }
+  }
   return { score, ok, alertas, idade };
 }
 
