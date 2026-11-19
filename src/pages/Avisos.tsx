@@ -9,7 +9,8 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { BellPlus, Save, Loader2, Users, Lock, Send, History, Megaphone } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { BellPlus, Save, Loader2, Users, Lock, Send, History, Megaphone, Clock } from "lucide-react";
 
 type Aviso = { ativa: boolean; horario: number; pula_domingo: boolean; alvo: string; texto: string };
 type Amostra = { aluno: string; curso: string; turma: string; dia_semana: string; horario: string; para_aluno: boolean };
@@ -137,6 +138,14 @@ export default function Avisos() {
         )}
       </header>
 
+      <Tabs defaultValue="auto">
+        <TabsList>
+          <TabsTrigger value="auto"><Clock className="mr-1 h-4 w-4" /> Automática</TabsTrigger>
+          {podeEditar && <TabsTrigger value="manual"><Megaphone className="mr-1 h-4 w-4" /> Disparo manual</TabsTrigger>}
+        </TabsList>
+
+        {/* ---------- AUTOMÁTICA: lembrete de aula na véspera ---------- */}
+        <TabsContent value="auto" className="space-y-5">
       {/* Configuração */}
       <section className="space-y-4 rounded-xl border bg-card p-4 shadow-sm">
         <div className="flex items-center justify-between">
@@ -269,9 +278,11 @@ export default function Avisos() {
           </div>
         )}
       </section>
+        </TabsContent>
 
-      {/* Disparo por lista (palestra / aviso geral) */}
-      {podeEditar && (
+        {/* ---------- DISPARO MANUAL: lista colada (palestra / aviso geral) ---------- */}
+        {podeEditar && (
+        <TabsContent value="manual" className="space-y-5">
         <section className="space-y-3 rounded-xl border bg-card p-4 shadow-sm">
           <div>
             <p className="flex items-center gap-2 font-semibold"><Megaphone className="h-4 w-4 text-violet-600" /> Disparo por lista (palestra / aviso geral)</p>
@@ -310,9 +321,11 @@ export default function Avisos() {
             <span className="text-xs text-muted-foreground">{parseLista(bcLista).length} válido(s)</span>
           </div>
         </section>
-      )}
+        </TabsContent>
+        )}
+      </Tabs>
 
-      {/* Últimos envios (persiste ao atualizar a página) */}
+      {/* Últimos envios (persiste ao atualizar a página) — comum às duas abas */}
       <section className="space-y-2 rounded-xl border bg-card p-4 shadow-sm">
         <p className="flex items-center gap-2 font-semibold"><History className="h-4 w-4 text-muted-foreground" /> Últimos envios</p>
         {ultimos.length ? (
