@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Briefcase, Building2, Plus, Search, Pencil, Loader2, RefreshCw, UserPlus } from "lucide-react";
+import { Briefcase, Building2, Plus, Search, Pencil, Loader2, RefreshCw, UserPlus, UserCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -21,6 +21,7 @@ type Vaga = {
   qtd: number | null; qtd_disponivel: number | null; idade_min: number | null; idade_max: number | null;
   sexo: string | null; curso_alvo: string | null; requisitos: string | null; experiencia: boolean | null;
   horario: string | null; beneficios: string | null; remuneracao: string | null; status: string;
+  area?: string | null; turnos?: string[] | null; escolaridade_min?: string | null; cnh_exigida?: string | null;
   created_at?: string;
   empresa?: { nome: string } | null;
 };
@@ -28,6 +29,28 @@ type Enc = {
   id: string; vaga_id: string | null; cod_alu: string | null; nome_aluno: string | null;
   telefone: string | null; status: string; feedback_empresa: string | null; created_at: string;
   vaga?: { cargo: string } | null; empresa?: { nome: string } | null;
+};
+type Candidato = {
+  id: string; cod_alu: string | null; nome: string; telefone: string | null;
+  nascimento: string | null; sexo: string | null; area: string | null; turnos: string[] | null;
+  escolaridade: string | null; experiencia: boolean | null; experiencia_area: string | null;
+  cnh: string | null; cursos_mult: string | null; pretensao: string | null; bairro: string | null;
+  observacoes: string | null; status: string;
+};
+
+// Dicionário compartilhado: a VAGA e o CANDIDATO preenchem os mesmos critérios.
+// É isso que permite o match por coincidência na Etapa 2 (roda só no Supabase, sem tocar a escola).
+const AREAS = ["Administrativo", "Vendas / Comércio", "Atendimento / Telemarketing", "Saúde", "Beleza / Estética", "Indústria / Produção", "Logística / Estoque", "Informática / TI", "Educação", "Alimentação / Gastronomia", "Construção", "Serviços Gerais", "Outros"];
+const TURNOS: { id: string; rot: string }[] = [{ id: "manha", rot: "Manhã" }, { id: "tarde", rot: "Tarde" }, { id: "noite", rot: "Noite" }, { id: "comercial", rot: "Comercial" }];
+const ESCOLARIDADE = ["Fundamental", "Médio incompleto", "Médio completo", "Técnico", "Superior incompleto", "Superior completo"];
+const CNH_OPCOES = ["Não tem", "A", "B", "AB", "C", "D", "E"];
+const rotTurnos = (ids?: string[] | null) => (ids || []).map((i) => TURNOS.find((t) => t.id === i)?.rot || i).join(", ");
+const idadeDe = (nasc?: string | null) => {
+  if (!nasc) return null;
+  const d = new Date(nasc + "T12:00:00"); if (isNaN(+d)) return null;
+  const h = new Date(); let a = h.getFullYear() - d.getFullYear();
+  if (h.getMonth() < d.getMonth() || (h.getMonth() === d.getMonth() && h.getDate() < d.getDate())) a--;
+  return a;
 };
 
 const ST_EMP: Record<string, { rot: string; cor: string }> = {
@@ -52,14 +75,28 @@ const Badge = ({ m, s }: { m: Record<string, { rot: string; cor: string }>; s: s
   <span className={cn("rounded-md px-2 py-0.5 text-xs font-medium", m[s]?.cor || "bg-muted")}>{m[s]?.rot || s}</span>
 );
 const campo = (v: string | null | undefined) => (v && v.trim() ? v : "—");
+const TurnoPicker = ({ val, onChange }: { val: string[]; onChange: (v: string[]) => void }) => (
+  <div className="mt-1 flex flex-wrap gap-1.5">
+    {TURNOS.map((t) => {
+      const on = val.includes(t.id);
+      return (
+        <button type="button" key={t.id} onClick={() => onChange(on ? val.filter((x) => x !== t.id) : [...val, t.id])}
+          className={cn("rounded-md border px-2.5 py-1 text-xs font-medium transition-colors", on ? "border-violet-500 bg-violet-50 text-violet-700" : "bg-background text-muted-foreground hover:bg-muted")}>
+          {t.rot}
+        </button>
+      );
+    })}
+  </div>
+);
 
 export default function Agencia() {
   const { perfil, unidades } = useAuth();
   const ehMaster = perfil?.papel === "master";
   const [unidade, setUnidade] = useState(perfil?.unit_id || "rio_verde");
-  const [aba, setAba] = useState<"empresas" | "vagas">("empresas");
+  const [aba, setAba] = useState<"empresas" | "vagas" | "candidatos">("empresas");
   const [empresas, setEmpresas] = useState<Empresa[]>([]);
   const [vagas, setVagas] = useState<Vaga[]>([]);
+  const [candidatos, setCandidatos] = useState<Candidato[]>([]);
   const [busca, setBusca] = useState("");
   const [carregando, setCarregando] = useState(true);
   const [encaminhamentos, setEncaminhamentos] = useState<Enc[]>([]);
@@ -68,6 +105,7 @@ export default function Agencia() {
   const [fAte, setFAte] = useState("");
   const [formEmp, setFormEmp] = useState<Partial<Empresa> | null>(null);
   const [formVaga, setFormVaga] = useState<Partial<Vaga> | null>(null);
+  const [formCand, setFormCand] = useState<Partial<Candidato> | null>(null);
   const [formEnc, setFormEnc] = useState<{ vaga: Vaga; cod_alu?: string; nome_aluno?: string; telefone?: string } | null>(null);
   const [verEnc, setVerEnc] = useState<Vaga | null>(null);
   const [salvando, setSalvando] = useState(false);
@@ -75,10 +113,11 @@ export default function Agencia() {
   const carregar = useCallback(async () => {
     setCarregando(true);
     try {
-      const r = await api<{ empresas: Empresa[]; vagas: Vaga[]; encaminhamentos: Enc[] }>("crm", { acao: "agencia_inicial", unidade });
+      const r = await api<{ empresas: Empresa[]; vagas: Vaga[]; encaminhamentos: Enc[]; candidatos: Candidato[] }>("crm", { acao: "agencia_inicial", unidade });
       setEmpresas(r.empresas || []);
       setVagas(r.vagas || []);
       setEncaminhamentos(r.encaminhamentos || []);
+      setCandidatos(r.candidatos || []);
     } catch (e: any) { toast.error(e.message || "Falha ao carregar."); }
     setCarregando(false);
   }, [unidade]);
@@ -102,6 +141,11 @@ export default function Agencia() {
   }, [vagas, busca, fStatus, fDe, fAte]);
   const nomeEmpresa = (id: string | null | undefined) => empresas.find((e) => e.id === id)?.nome || "—";
   const encsDaVaga = (vagaId: string) => encaminhamentos.filter((e) => e.vaga_id === vagaId);
+  const candFiltrados = useMemo(() => {
+    const t = busca.trim().toLowerCase();
+    if (!t) return candidatos;
+    return candidatos.filter((c) => [c.nome, c.cod_alu, c.area, c.cursos_mult, c.telefone].some((v) => String(v || "").toLowerCase().includes(t)));
+  }, [candidatos, busca]);
 
   const salvarEmpresa = async () => {
     if (!formEmp?.nome?.trim()) { toast.error("Informe o nome da empresa."); return; }
@@ -118,6 +162,15 @@ export default function Agencia() {
     try {
       await api("crm", { acao: "agencia_vaga_salvar", unidade, ...formVaga });
       toast.success("Vaga salva."); setFormVaga(null); carregar();
+    } catch (e: any) { toast.error(e.message); }
+    setSalvando(false);
+  };
+  const salvarCandidato = async () => {
+    if (!formCand?.nome?.trim()) { toast.error("Informe o nome do candidato."); return; }
+    setSalvando(true);
+    try {
+      await api("crm", { acao: "agencia_candidato_salvar", unidade, ...formCand });
+      toast.success("Candidato salvo."); setFormCand(null); carregar();
     } catch (e: any) { toast.error(e.message); }
     setSalvando(false);
   };
@@ -145,7 +198,7 @@ export default function Agencia() {
         <header className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <h1 className="flex items-center gap-2 text-xl font-bold"><Briefcase className="h-5 w-5 text-violet-600" /> Agência de Emprego</h1>
-            <p className="text-sm text-muted-foreground">Empresas parceiras e vagas da unidade. Encaminhar alunos entra na próxima fase.</p>
+            <p className="text-sm text-muted-foreground">Empresas, vagas e candidatos da unidade. O perfil do candidato usa os mesmos critérios da vaga.</p>
           </div>
           <div className="flex items-end gap-2">
             {ehMaster && unidades.length > 1 && (
@@ -159,7 +212,7 @@ export default function Agencia() {
 
         {/* Abas */}
         <div className="flex gap-1 rounded-lg border bg-muted/40 p-1">
-          {([["empresas", `Empresas (${empresas.length})`], ["vagas", `Vagas (${vagas.length})`]] as const).map(([v, r]) => (
+          {([["empresas", `Empresas (${empresas.length})`], ["vagas", `Vagas (${vagas.length})`], ["candidatos", `Candidatos (${candidatos.length})`]] as const).map(([v, r]) => (
             <button key={v} onClick={() => setAba(v)} className={cn("flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors", aba === v ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground")}>{r}</button>
           ))}
         </div>
@@ -167,11 +220,15 @@ export default function Agencia() {
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative flex-1">
             <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input className="pl-8" placeholder={aba === "empresas" ? "Buscar empresa, CNPJ, contato…" : "Buscar cargo, empresa…"} value={busca} onChange={(e) => setBusca(e.target.value)} />
+            <Input className="pl-8" placeholder={aba === "empresas" ? "Buscar empresa, CNPJ, contato…" : aba === "vagas" ? "Buscar cargo, empresa…" : "Buscar candidato, código, área…"} value={busca} onChange={(e) => setBusca(e.target.value)} />
           </div>
-          {aba === "empresas"
-            ? <Button onClick={() => setFormEmp({ status: "ativa" })}><Plus className="mr-1 h-4 w-4" /> Nova empresa</Button>
-            : <Button onClick={() => setFormVaga({ status: "aberta", qtd: 1 })}><Plus className="mr-1 h-4 w-4" /> Nova vaga</Button>}
+          {aba === "empresas" ? (
+            <Button onClick={() => setFormEmp({ status: "ativa" })}><Plus className="mr-1 h-4 w-4" /> Nova empresa</Button>
+          ) : aba === "vagas" ? (
+            <Button onClick={() => setFormVaga({ status: "aberta", qtd: 1, turnos: [] })}><Plus className="mr-1 h-4 w-4" /> Nova vaga</Button>
+          ) : (
+            <Button onClick={() => setFormCand({ status: "ativo", turnos: [] })}><Plus className="mr-1 h-4 w-4" /> Novo candidato</Button>
+          )}
         </div>
 
         {aba === "vagas" && (
@@ -205,7 +262,7 @@ export default function Agencia() {
             ))}
             {!empFiltradas.length && <p className="p-6 text-center text-sm text-muted-foreground">Nenhuma empresa.</p>}
           </div>
-        ) : (
+        ) : aba === "vagas" ? (
           <div className="space-y-2">
             {vagasFiltradas.map((v) => (
               <div key={v.id} className="flex items-start justify-between gap-3 rounded-lg border bg-card p-3">
@@ -225,6 +282,28 @@ export default function Agencia() {
               </div>
             ))}
             {!vagasFiltradas.length && <p className="p-6 text-center text-sm text-muted-foreground">Nenhuma vaga.</p>}
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {candFiltrados.map((c) => {
+              const id = idadeDe(c.nascimento);
+              return (
+                <div key={c.id} className="flex items-start justify-between gap-3 rounded-lg border bg-card p-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <UserCircle className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      <p className="truncate font-medium">{c.nome}{c.cod_alu ? ` (${c.cod_alu})` : ""}</p>
+                      {c.status !== "ativo" && <span className="rounded-md bg-muted px-2 py-0.5 text-xs text-muted-foreground">{c.status}</span>}
+                    </div>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      {campo(c.area)}{c.turnos?.length ? ` · ${rotTurnos(c.turnos)}` : ""}{id != null ? ` · ${id} anos` : ""}{c.cursos_mult ? ` · ${c.cursos_mult}` : ""}{c.telefone ? ` · ${c.telefone}` : ""}
+                    </p>
+                  </div>
+                  <Button variant="ghost" size="sm" onClick={() => setFormCand(c)}><Pencil className="h-4 w-4" /></Button>
+                </div>
+              );
+            })}
+            {!candFiltrados.length && <p className="p-6 text-center text-sm text-muted-foreground">Nenhum candidato. Clique em “Novo candidato” para cadastrar o perfil.</p>}
           </div>
         )}
       </div>
@@ -279,6 +358,22 @@ export default function Agencia() {
                 </select>
               </div>
               <div><Label className="text-xs">Curso alvo (MULT)</Label><Input value={formVaga.curso_alvo || ""} onChange={(e) => setFormVaga({ ...formVaga, curso_alvo: e.target.value })} /></div>
+              <div><Label className="text-xs">Área</Label>
+                <select className="h-10 w-full rounded-md border bg-background px-2 text-sm" value={formVaga.area || ""} onChange={(e) => setFormVaga({ ...formVaga, area: e.target.value || null })}>
+                  <option value="">—</option>{AREAS.map((a) => <option key={a} value={a}>{a}</option>)}
+                </select>
+              </div>
+              <div><Label className="text-xs">Escolaridade mínima</Label>
+                <select className="h-10 w-full rounded-md border bg-background px-2 text-sm" value={formVaga.escolaridade_min || ""} onChange={(e) => setFormVaga({ ...formVaga, escolaridade_min: e.target.value || null })}>
+                  <option value="">—</option>{ESCOLARIDADE.map((x) => <option key={x} value={x}>{x}</option>)}
+                </select>
+              </div>
+              <div><Label className="text-xs">CNH exigida</Label>
+                <select className="h-10 w-full rounded-md border bg-background px-2 text-sm" value={formVaga.cnh_exigida || ""} onChange={(e) => setFormVaga({ ...formVaga, cnh_exigida: e.target.value || null })}>
+                  <option value="">—</option>{CNH_OPCOES.map((x) => <option key={x} value={x}>{x}</option>)}
+                </select>
+              </div>
+              <div className="col-span-2"><Label className="text-xs">Turnos aceitos</Label><TurnoPicker val={formVaga.turnos || []} onChange={(v) => setFormVaga({ ...formVaga, turnos: v })} /></div>
               <div><Label className="text-xs">Qtd. vagas</Label><Input type="number" value={formVaga.qtd ?? ""} onChange={(e) => setFormVaga({ ...formVaga, qtd: e.target.value === "" ? null : Number(e.target.value) })} /></div>
               <div><Label className="text-xs">Sexo</Label>
                 <select className="h-10 w-full rounded-md border bg-background px-2 text-sm" value={formVaga.sexo || "A"} onChange={(e) => setFormVaga({ ...formVaga, sexo: e.target.value })}>
@@ -298,6 +393,57 @@ export default function Agencia() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setFormVaga(null)}>Cancelar</Button>
             <Button onClick={salvarVaga} disabled={salvando} className="bg-emerald-600 hover:bg-emerald-700">{salvando && <Loader2 className="mr-1 h-4 w-4 animate-spin" />} Salvar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Form Candidato (perfil profissional) */}
+      <Dialog open={!!formCand} onOpenChange={(o) => !o && setFormCand(null)}>
+        <DialogContent className="max-h-[90vh] max-w-xl overflow-y-auto">
+          <DialogHeader><DialogTitle>{formCand?.id ? "Editar candidato" : "Novo candidato"}</DialogTitle></DialogHeader>
+          {formCand && (
+            <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2"><Label className="text-xs">Nome *</Label><Input value={formCand.nome || ""} onChange={(e) => setFormCand({ ...formCand, nome: e.target.value })} /></div>
+              <div><Label className="text-xs">Código do aluno (MULT)</Label><Input value={formCand.cod_alu || ""} onChange={(e) => setFormCand({ ...formCand, cod_alu: e.target.value })} placeholder="ex.: 13847" /></div>
+              <div><Label className="text-xs">Telefone</Label><Input value={formCand.telefone || ""} onChange={(e) => setFormCand({ ...formCand, telefone: e.target.value })} /></div>
+              <div><Label className="text-xs">Nascimento</Label><Input type="date" value={formCand.nascimento || ""} onChange={(e) => setFormCand({ ...formCand, nascimento: e.target.value })} /></div>
+              <div><Label className="text-xs">Sexo</Label>
+                <select className="h-10 w-full rounded-md border bg-background px-2 text-sm" value={formCand.sexo || ""} onChange={(e) => setFormCand({ ...formCand, sexo: e.target.value || null })}>
+                  <option value="">—</option><option value="M">Masculino</option><option value="F">Feminino</option>
+                </select>
+              </div>
+              <div><Label className="text-xs">Área desejada</Label>
+                <select className="h-10 w-full rounded-md border bg-background px-2 text-sm" value={formCand.area || ""} onChange={(e) => setFormCand({ ...formCand, area: e.target.value || null })}>
+                  <option value="">—</option>{AREAS.map((a) => <option key={a} value={a}>{a}</option>)}
+                </select>
+              </div>
+              <div><Label className="text-xs">Escolaridade</Label>
+                <select className="h-10 w-full rounded-md border bg-background px-2 text-sm" value={formCand.escolaridade || ""} onChange={(e) => setFormCand({ ...formCand, escolaridade: e.target.value || null })}>
+                  <option value="">—</option>{ESCOLARIDADE.map((x) => <option key={x} value={x}>{x}</option>)}
+                </select>
+              </div>
+              <div><Label className="text-xs">CNH</Label>
+                <select className="h-10 w-full rounded-md border bg-background px-2 text-sm" value={formCand.cnh || ""} onChange={(e) => setFormCand({ ...formCand, cnh: e.target.value || null })}>
+                  <option value="">—</option>{CNH_OPCOES.map((x) => <option key={x} value={x}>{x}</option>)}
+                </select>
+              </div>
+              <div className="col-span-2"><Label className="text-xs">Disponibilidade de turno</Label><TurnoPicker val={formCand.turnos || []} onChange={(v) => setFormCand({ ...formCand, turnos: v })} /></div>
+              <label className="col-span-2 flex items-center gap-2 text-sm"><input type="checkbox" checked={!!formCand.experiencia} onChange={(e) => setFormCand({ ...formCand, experiencia: e.target.checked })} /> Tem experiência anterior</label>
+              {formCand.experiencia && <div className="col-span-2"><Label className="text-xs">Em quê (área/cargo da experiência)</Label><Input value={formCand.experiencia_area || ""} onChange={(e) => setFormCand({ ...formCand, experiencia_area: e.target.value })} /></div>}
+              <div><Label className="text-xs">Curso(s) MULT</Label><Input value={formCand.cursos_mult || ""} onChange={(e) => setFormCand({ ...formCand, cursos_mult: e.target.value })} placeholder="ex.: Informática, AAS" /></div>
+              <div><Label className="text-xs">Pretensão salarial</Label><Input value={formCand.pretensao || ""} onChange={(e) => setFormCand({ ...formCand, pretensao: e.target.value })} /></div>
+              <div><Label className="text-xs">Bairro</Label><Input value={formCand.bairro || ""} onChange={(e) => setFormCand({ ...formCand, bairro: e.target.value })} /></div>
+              <div><Label className="text-xs">Status</Label>
+                <select className="h-10 w-full rounded-md border bg-background px-2 text-sm" value={formCand.status || "ativo"} onChange={(e) => setFormCand({ ...formCand, status: e.target.value })}>
+                  <option value="ativo">Ativo</option><option value="inativo">Inativo</option><option value="encaminhado">Encaminhado</option>
+                </select>
+              </div>
+              <div className="col-span-2"><Label className="text-xs">Observações</Label><Textarea className="min-h-[60px]" value={formCand.observacoes || ""} onChange={(e) => setFormCand({ ...formCand, observacoes: e.target.value })} /></div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setFormCand(null)}>Cancelar</Button>
+            <Button onClick={salvarCandidato} disabled={salvando} className="bg-emerald-600 hover:bg-emerald-700">{salvando && <Loader2 className="mr-1 h-4 w-4 animate-spin" />} Salvar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
