@@ -77,6 +77,7 @@ export default function Avisos() {
   }
 
   return (
+    <div className="h-full overflow-y-auto">
     <div className="mx-auto max-w-3xl space-y-5 p-5">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div className="flex items-center gap-3">
@@ -203,6 +204,7 @@ export default function Avisos() {
           </div>
         )}
       </section>
+    </div>
     </div>
   );
 }
