@@ -6,10 +6,10 @@ import { garantirCardWhatsapp } from './crmcards.js';
 import { reprocessarPendentes } from './comprovante.js';
 import { prepararCobranca, emitirCobranca } from './cobranca.js';
 
-// Reposição automática (Informática): só reativar DEPOIS que a ponte (vagasTurmas) passar a
-// filtrar turmas ATIVAS. Enquanto false, o agente encaminha à secretaria (modo seguro) para
-// não agendar em turma inativa (ex.: 028INF — vaga disponível, mas turma inativa).
-const REPOSICAO_AUTO = false;
+// Reposição automática (Informática): ativa. A ponte (vagasTurmas) já filtra turmas ATIVAS
+// (STATUS_TUR='Ativo'), então não oferece turma inativa. Se precisar desligar por qualquer
+// motivo, basta voltar para false (o agente cai no modo seguro = encaminha à secretaria).
+const REPOSICAO_AUTO = true;
 
 const primeiroNome = (n) => String(n || '').trim().split(/\s+/)[0]?.toLowerCase().replace(/^./, (c) => c.toUpperCase()) || '';
 const nomeBonito = (n) => String(n || '').toLowerCase().replace(/(^|\s)\S/g, (c) => c.toUpperCase());
