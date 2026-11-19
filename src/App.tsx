@@ -16,6 +16,7 @@ import Encaminhamento from "@/pages/Encaminhamento";
 import Pops from "@/pages/Pops";
 import Regua from "@/pages/Regua";
 import Faltantes from "@/pages/Faltantes";
+import Avisos from "@/pages/Avisos";
 import Dashboard from "@/pages/Dashboard";
 import Agencia from "@/pages/Agencia";
 import type { Modulo } from "@/lib/supabase";
@@ -59,6 +60,7 @@ export default function App() {
             <Route path="/agencia" element={<Protegida modulo="encaminhamento"><Agencia /></Protegida>} />
             <Route path="/regua" element={<Protegida modulo="financeiro"><Regua /></Protegida>} />
             <Route path="/faltantes" element={<Protegida modulo="pedagogico"><Faltantes /></Protegida>} />
+            <Route path="/avisos" element={<Protegida modulo="pedagogico"><Avisos /></Protegida>} />
             <Route path="/pops" element={<Protegida><Pops /></Protegida>} />
             <Route path="/boleto-teste" element={<Protegida><BoletoTeste /></Protegida>} />
             <Route path="/unidades" element={<Protegida modulo="configuracoes"><Unidades /></Protegida>} />

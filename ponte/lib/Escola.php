@@ -501,6 +501,91 @@ final class Escola
         return $out;
     }
 
+    /**
+     * Alunos que TÊM aula numa data (para o lembrete de aula / régua de avisos, na véspera).
+     * Cruza turmas ATIVAS cujo dia da semana bate com a data × matrículas ativas × cadastro.
+     * Retorna o telefone do ALUNO (e o do responsável como fallback), turma, dia e horário.
+     */
+    public function alunosComAula(string $data): array
+    {
+        $dataIso = Texto::dataIso($data);
+        if ($dataIso === '') {
+            return [];
+        }
+        $norm = function ($s) {
+            $s = mb_strtolower(trim((string)$s), 'UTF-8');
+            $s = strtr($s, ['á' => 'a', 'à' => 'a', 'â' => 'a', 'ã' => 'a', 'é' => 'e', 'ê' => 'e', 'í' => 'i', 'ó' => 'o', 'ô' => 'o', 'õ' => 'o', 'ú' => 'u', 'ü' => 'u', 'ç' => 'c']);
+            return preg_replace('/[^a-z]/', '', $s);
+        };
+        $dias = [0 => 'Domingo', 1 => 'Segunda-Feira', 2 => 'Terça-Feira', 3 => 'Quarta-Feira', 4 => 'Quinta-Feira', 5 => 'Sexta-Feira', 6 => 'Sábado'];
+        $alvo = $norm($dias[(int)date('w', strtotime($dataIso . ' 12:00:00'))]);
+
+        // Turmas ativas cujo dia da semana bate com a data (comparação sem acento, resistente a schema).
+        $colStatus = $this->colunaReal('s_cad_turma', ['STATUS_TUR', 'SIT_TUR', 'STATUS']);
+        $sql = 'SELECT COD_TUR, NOM_TUR, COD_CUR, DIA_SEMANA, HS_INICIO, HS_FIM FROM s_cad_turma';
+        if ($colStatus !== '') {
+            $sql .= " WHERE $colStatus = 'Ativo'";
+        }
+        $turmas = [];
+        foreach ($this->db->todos($sql) as $t) {
+            if ($norm(Texto::doBanco($t['DIA_SEMANA'] ?? '')) === $alvo) {
+                $turmas[(string)$t['COD_TUR']] = $t;
+            }
+        }
+        if (!$turmas) {
+            return [];
+        }
+        // Matrículas ATIVAS nessas turmas.
+        $codTurs = array_keys($turmas);
+        $ph = implode(',', array_fill(0, count($codTurs), '?'));
+        $mats = $this->db->todos(
+            "SELECT COD_ALU, COD_TUR, NOM_CUR, COD_MATRICULA FROM s_cad_matricula WHERE STATUS_MAT = 'Ativo' AND COD_TUR IN ($ph)",
+            $codTurs
+        );
+        if (!$mats) {
+            return [];
+        }
+        // Cadastro dos alunos (telefones + nome).
+        $codAlus = array_values(array_unique(array_map(fn($m) => (string)$m['COD_ALU'], $mats)));
+        $alunos = [];
+        foreach (array_chunk($codAlus, 500) as $chunk) {
+            $inA = implode(',', array_fill(0, count($chunk), '?'));
+            foreach ($this->db->todos(
+                "SELECT COD_ALU, NOM_ALU, NOM_PAI_ALU, WHATS, CEL_ALU, FON_ALU, TEL_RESP, FON_PAI_ALU
+                 FROM s_cad_aluno WHERE COD_ALU IN ($inA)",
+                $chunk
+            ) as $a) {
+                $alunos[(string)$a['COD_ALU']] = $a;
+            }
+        }
+        $out = [];
+        foreach ($mats as $m) {
+            $t = $turmas[(string)$m['COD_TUR']] ?? null;
+            $a = $alunos[(string)$m['COD_ALU']] ?? null;
+            if (!$t || !$a) {
+                continue;
+            }
+            $telAluno = Texto::telefoneWhatsapp($a['WHATS'] ?? '')
+                ?: Texto::telefoneWhatsapp($a['CEL_ALU'] ?? '')
+                ?: Texto::telefoneWhatsapp($a['FON_ALU'] ?? '');
+            $telResp = Texto::telefoneWhatsapp($a['TEL_RESP'] ?? '')
+                ?: Texto::telefoneWhatsapp($a['FON_PAI_ALU'] ?? '');
+            $out[] = [
+                'cod_alu' => (string)$m['COD_ALU'],
+                'nome_aluno' => trim(Texto::doBanco($a['NOM_ALU'] ?? '')),
+                'nome_responsavel' => trim(Texto::doBanco($a['NOM_PAI_ALU'] ?? '')),
+                'telefone_aluno' => $telAluno,
+                'telefone_responsavel' => $telResp,
+                'turma' => Texto::doBanco($t['NOM_TUR'] ?? ''),
+                'dia_semana' => Texto::doBanco($t['DIA_SEMANA'] ?? ''),
+                'horario' => trim(Texto::doBanco($t['HS_INICIO'] ?? '') . ' - ' . Texto::doBanco($t['HS_FIM'] ?? ''), ' -'),
+                'curso' => trim(Texto::doBanco($m['NOM_CUR'] ?? '')),
+                'matricula' => (string)($m['COD_MATRICULA'] ?? ''),
+            ];
+        }
+        return $out;
+    }
+
     /** Histórico de entrega de material/apostila do aluno. */
     public function entregaApostila(string $codAlu): array
     {
