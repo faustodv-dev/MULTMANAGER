@@ -627,9 +627,13 @@ final class Escola
         $colTurKey = $this->colunaReal('s_cad_turma', ['COD_TUR', 'COD_TURMA', 'TURMA']);
         $colTurQtd = $this->colunaReal('s_cad_turma', ['qtd_tot_aul']);
         if ($colTurKey !== '' && $colTurQtd !== '') {
+            // Denominador = TODAS as turmas (módulos) de cada matrícula, não só a atual. Assim o
+            // total de aulas bate com o curso inteiro (ex.: Informática = 3 módulos de 32 = 96;
+            // AAS = 40 num módulo só), consistente com o numerador (presenças+reposições de todos
+            // os módulos). Antes usava só a turma atual (ex.: 32) e a frequência estourava (>100%).
             $turmasDenom = [];
-            foreach ($turmaAtual as $t) {
-                if (($t['turma'] ?? '') !== '') { $turmasDenom[$t['turma']] = true; }
+            foreach ($turmasDaMat as $set) {
+                foreach (array_keys($set) as $tt) { $turmasDenom[$tt] = true; }
             }
             $turmasDenom = array_keys($turmasDenom);
             for ($j = 0; $j < count($turmasDenom); $j += 500) {
@@ -689,9 +693,13 @@ final class Escola
                 // Só por aluno: aplica apenas quando o aluno tem 1 matrícula (senão não separa por curso).
                 $reposicoes = (count($matInfo[$codAlu] ?? []) <= 1) ? ($repoAlu[$codAlu] ?? 0) : 0;
             }
-            // FREQUÊNCIA (modelo MULT) = (presenças + reposições) ÷ aulas previstas da turma.
+            // FREQUÊNCIA (modelo MULT) = (presenças + reposições) ÷ aulas previstas do CURSO.
+            // Soma as aulas de TODAS as turmas (módulos) da matrícula (bate com o total do curso),
+            // com fallback para a turma atual se não achar as aulas dos módulos.
             $turAtual = $turmaAtual[$km]['turma'] ?? (string)($r['COD_TUR'] ?? '');
-            $previstas = $qtdAul[$turAtual] ?? 0;
+            $previstas = 0;
+            foreach (array_keys($turmasDaMat[$km] ?? []) as $tt) { $previstas += $qtdAul[$tt] ?? 0; }
+            if ($previstas <= 0) { $previstas = $qtdAul[$turAtual] ?? 0; }
             $participacoes = $pres + $reposicoes;
             if ($previstas > 0) {
                 $percentual = round($participacoes * 100 / $previstas, 1);
