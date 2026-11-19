@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Briefcase, Building2, Plus, Search, Pencil, Loader2, RefreshCw, UserPlus, UserCircle, Target } from "lucide-react";
+import { Briefcase, Building2, Plus, Search, Pencil, Loader2, RefreshCw, UserPlus, UserCircle, Target, FileText, Printer } from "lucide-react";
+import { DOCS, gerarDocumentoHTML, type DocExtras } from "@/lib/docsAgencia";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -140,6 +141,8 @@ export default function Agencia() {
   const [matchVaga, setMatchVaga] = useState<Vaga | null>(null);
   const [matchData, setMatchData] = useState<{ max: number; ranking: MatchItem[] } | null>(null);
   const [matchLoad, setMatchLoad] = useState(false);
+  const [docCand, setDocCand] = useState<Candidato | null>(null);
+  const [docExtras, setDocExtras] = useState<DocExtras>({});
   const [formEnc, setFormEnc] = useState<{ vaga: Vaga; cod_alu?: string; nome_aluno?: string; telefone?: string } | null>(null);
   const [verEnc, setVerEnc] = useState<Vaga | null>(null);
   const [salvando, setSalvando] = useState(false);
@@ -223,6 +226,13 @@ export default function Agencia() {
       toast.success(`${String(c.nome).split(" ")[0]} encaminhado(a) — ocorrência registrada.`);
       carregar();
     } catch (e: any) { toast.error(e.message); }
+  };
+  const imprimirDoc = (tipo: string) => {
+    if (!docCand) return;
+    const html = gerarDocumentoHTML(tipo, docCand, docExtras);
+    const w = window.open("", "_blank", "width=900,height=1000");
+    if (!w) { toast.error("Permita pop-ups para gerar o documento."); return; }
+    w.document.write(html); w.document.close(); w.focus();
   };
   // Helpers da ficha em passos
   const setC = (patch: Partial<Candidato>) => setFormCand((f) => ({ ...(f || {}), ...patch }));
@@ -354,7 +364,10 @@ export default function Agencia() {
                       {campo(c.area)}{c.turnos?.length ? ` · ${rotTurnos(c.turnos)}` : ""}{id != null ? ` · ${id} anos` : ""}{c.cursos_mult ? ` · ${c.cursos_mult}` : ""}{c.telefone ? ` · ${c.telefone}` : ""}
                     </p>
                   </div>
-                  <Button variant="ghost" size="sm" onClick={() => abrirCand(c)}><Pencil className="h-4 w-4" /></Button>
+                  <div className="flex shrink-0 items-center gap-1">
+                    <Button variant="ghost" size="sm" title="Documentos (imprimir)" onClick={() => { setDocExtras({}); setDocCand(c); }}><FileText className="h-4 w-4" /></Button>
+                    <Button variant="ghost" size="sm" onClick={() => abrirCand(c)}><Pencil className="h-4 w-4" /></Button>
+                  </div>
                 </div>
               );
             })}
@@ -682,6 +695,33 @@ export default function Agencia() {
           ) : (
             <p className="py-6 text-center text-sm text-muted-foreground">Nenhum candidato cadastrado. Cadastre perfis na aba “Candidatos”.</p>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Documentos da agência (impressão / PDF, gerado no navegador) */}
+      <Dialog open={!!docCand} onOpenChange={(o) => !o && setDocCand(null)}>
+        <DialogContent className="max-h-[88vh] max-w-lg overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><FileText className="h-5 w-5 text-violet-600" /> Documentos — {docCand?.nome}</DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-muted-foreground">Já vêm preenchidos com os dados da ficha. Os campos abaixo entram nas cartas que precisam — deixe em branco para escrever à mão. Abre em nova aba para imprimir ou salvar em PDF.</p>
+          <div className="grid grid-cols-2 gap-2">
+            <div><Label className="text-xs">Empresa</Label><Input value={docExtras.empresa || ""} onChange={(e) => setDocExtras({ ...docExtras, empresa: e.target.value })} /></div>
+            <div><Label className="text-xs">Cargo</Label><Input value={docExtras.cargo || ""} onChange={(e) => setDocExtras({ ...docExtras, cargo: e.target.value })} /></div>
+            <div><Label className="text-xs">Destinatário (RH)</Label><Input value={docExtras.destinatario || ""} onChange={(e) => setDocExtras({ ...docExtras, destinatario: e.target.value })} /></div>
+            <div><Label className="text-xs">Cidade</Label><Input value={docExtras.cidade || ""} onChange={(e) => setDocExtras({ ...docExtras, cidade: e.target.value })} /></div>
+            <div><Label className="text-xs">Motivo (desistência)</Label><Input value={docExtras.motivo || ""} onChange={(e) => setDocExtras({ ...docExtras, motivo: e.target.value })} /></div>
+            <div><Label className="text-xs">Nº da desistência</Label><Input value={docExtras.vez || ""} onChange={(e) => setDocExtras({ ...docExtras, vez: e.target.value })} /></div>
+            <div className="col-span-2"><Label className="text-xs">Sites (um por linha — p/ encaminhamento virtual)</Label><Textarea className="min-h-[50px] text-xs" value={docExtras.sites || ""} onChange={(e) => setDocExtras({ ...docExtras, sites: e.target.value })} /></div>
+          </div>
+          <div className="mt-1 grid gap-1.5">
+            {DOCS.map((d) => (
+              <button key={d.id} onClick={() => imprimirDoc(d.id)} className="flex items-center justify-between rounded-lg border bg-card px-3 py-2 text-left text-sm transition-colors hover:bg-muted">
+                <span>{d.rot}{d.precisa ? <span className="ml-1 text-xs text-muted-foreground">(usa: {d.precisa})</span> : null}</span>
+                <Printer className="h-4 w-4 shrink-0 text-violet-600" />
+              </button>
+            ))}
+          </div>
         </DialogContent>
       </Dialog>
     </div>
