@@ -6,6 +6,11 @@ import { garantirCardWhatsapp } from './crmcards.js';
 import { reprocessarPendentes } from './comprovante.js';
 import { prepararCobranca, emitirCobranca } from './cobranca.js';
 
+// Reposição automática (Informática): só reativar DEPOIS que a ponte (vagasTurmas) passar a
+// filtrar turmas ATIVAS. Enquanto false, o agente encaminha à secretaria (modo seguro) para
+// não agendar em turma inativa (ex.: 028INF — vaga disponível, mas turma inativa).
+const REPOSICAO_AUTO = false;
+
 const primeiroNome = (n) => String(n || '').trim().split(/\s+/)[0]?.toLowerCase().replace(/^./, (c) => c.toUpperCase()) || '';
 const nomeBonito = (n) => String(n || '').toLowerCase().replace(/(^|\s)\S/g, (c) => c.toUpperCase());
 
@@ -423,6 +428,7 @@ export async function atender({ conversa, unidade, segredos }) {
       executar: async ({ cod_alu }) => {
         const bloq = exigirIdentidade(); if (bloq) return bloq;
         if (!alunoDoGrupo(cod_alu)) return { erro: 'aluno_fora_do_grupo' };
+        if (!REPOSICAO_AUTO) return { automatizado: false, motivo: 'Reposição automática em ajuste (validação de turma ativa). Registre com registrar_pedagogico(tipo="reposicao") e chame chamar_humano "pedagógico - reposição".' };
         const crono = await ponte(conversa.unit_id, 'cronograma_turma', { cod_alu: String(cod_alu) }, { conversaId: conversa.id }).catch(() => null);
         const curso = String(crono?.curso || '');
         if (!/inform[aá]tic/i.test(curso)) return { automatizado: false, curso, motivo: 'Reposição automática só para Informática. Registre e encaminhe à secretaria.' };
@@ -437,6 +443,7 @@ export async function atender({ conversa, unidade, segredos }) {
       executar: async ({ cod_alu, turma, data }) => {
         const bloq = exigirIdentidade(); if (bloq) return bloq;
         const aluno = alunoDoGrupo(cod_alu); if (!aluno) return { erro: 'aluno_fora_do_grupo' };
+        if (!REPOSICAO_AUTO) return { erro: 'curso_nao_automatizado', mensagem: 'Reposição automática em ajuste. Registre com registrar_pedagogico(tipo="reposicao") e chame chamar_humano "pedagógico - reposição".' };
         const crono = await ponte(conversa.unit_id, 'cronograma_turma', { cod_alu: String(cod_alu) }, { conversaId: conversa.id }).catch(() => null);
         const curso = String(crono?.curso || '');
         if (!/inform[aá]tic/i.test(curso)) return { erro: 'curso_nao_automatizado', mensagem: 'Reposição automática só para Informática. Registre com registrar_pedagogico(tipo="reposicao") e chame chamar_humano.' };
