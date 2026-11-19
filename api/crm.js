@@ -557,19 +557,42 @@ async function agencia(res, acao, unitId, b) {
 
   if (acao === 'agencia_encaminhar') {
     if (!b.vaga_id) return res.status(400).json({ erro: 'sem_vaga' });
-    const { data: vaga } = await supabase.from('vagas').select('id,cargo,empresa_id, empresa:empresas_parceiras(nome)').eq('id', b.vaga_id).eq('unit_id', unitId).maybeSingle();
+    const { data: vaga } = await supabase.from('vagas').select('id,cargo,empresa_id,status, empresa:empresas_parceiras(nome)').eq('id', b.vaga_id).eq('unit_id', unitId).maybeSingle();
     if (!vaga) return res.status(404).json({ erro: 'vaga_nao_encontrada' });
+    // Regra: só vaga ABERTA recebe candidato.
+    if (vaga.status !== 'aberta') return res.status(400).json({ erro: 'vaga_nao_aberta', mensagem: 'Só vagas abertas recebem candidatos. Reabra a vaga para encaminhar.' });
     const cod = b.cod_alu ? String(b.cod_alu) : null;
+    const candId = b.candidato_id ? String(b.candidato_id) : null;
     const { data: enc, error } = await supabase.from('encaminhamentos').insert({
-      unit_id: unitId, vaga_id: vaga.id, empresa_id: vaga.empresa_id,
+      unit_id: unitId, vaga_id: vaga.id, empresa_id: vaga.empresa_id, candidato_id: candId,
+      empresa_nome: vaga.empresa?.nome || null, cargo_nome: vaga.cargo || null,
       cod_alu: cod, nome_aluno: b.nome_aluno || null, telefone: b.telefone || null, status: 'encaminhado'
     }).select('*').single();
     if (error) return res.status(400).json({ erro: 'falha', mensagem: error.message });
+    if (candId) await supabase.from('candidatos').update({ status: 'encaminhado', updated_at: new Date().toISOString() }).eq('id', candId).eq('unit_id', unitId).then(() => {}, () => {});
     if (cod) {
       await informativo(unitId, cod, `[Agência] Encaminhado para a vaga de ${vaga.cargo}${vaga.empresa?.nome ? ' na ' + vaga.empresa.nome : ''}.`);
       await supabase.from('encaminhamentos').update({ ocorrencia_em: new Date().toISOString() }).eq('id', enc.id).then(() => {}, () => {});
     }
     return res.status(200).json({ ok: true, encaminhamento: enc });
+  }
+
+  // Lançamento manual de encaminhamento histórico (antigos do sistema MULT, sem vaga no CRM).
+  if (acao === 'agencia_enc_manual') {
+    const candId = b.candidato_id ? String(b.candidato_id) : null;
+    const empresaNome = String(b.empresa_nome || '').trim();
+    if (!candId) return res.status(400).json({ erro: 'sem_candidato' });
+    if (!empresaNome) return res.status(400).json({ erro: 'empresa_obrigatoria', mensagem: 'Informe a empresa.' });
+    const { data: cand } = await supabase.from('candidatos').select('nome,cod_alu,telefone').eq('id', candId).eq('unit_id', unitId).maybeSingle();
+    if (!cand) return res.status(404).json({ erro: 'candidato_nao_encontrado' });
+    const st = ['encaminhado', 'contratado', 'nao_contratado', 'nao_compareceu'].includes(b.status) ? b.status : 'encaminhado';
+    const { data, error } = await supabase.from('encaminhamentos').insert({
+      unit_id: unitId, candidato_id: candId, manual: true,
+      empresa_nome: empresaNome, cargo_nome: b.cargo_nome || null,
+      cod_alu: cand.cod_alu || null, nome_aluno: cand.nome || null, telefone: cand.telefone || null, status: st
+    }).select('*').single();
+    if (error) return res.status(400).json({ erro: 'falha', mensagem: error.message });
+    return res.status(200).json({ ok: true, encaminhamento: data });
   }
 
   if (acao === 'agencia_enc_status') {

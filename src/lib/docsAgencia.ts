@@ -99,7 +99,7 @@ function shell(titulo: string, corpo: string, u?: Uni): string {
 
 type Cand = Record<string, any>;
 
-function docSolicitacao(c: Cand): string {
+function docSolicitacao(c: Cand, encs: Uni[] = []): string {
   const turnos = (c.turnos || []).map((t: string) => TURNO_ROT[t] || t).join(", ");
   const habs = (c.habilidades || []).join(", ");
   return `<h1>Solicitação de Encaminhamento</h1>
@@ -138,6 +138,15 @@ function docSolicitacao(c: Cand): string {
   <div class="sec">V – Outras Informações</div>
   <div class="campo">Habilidades: ${g([habs, c.habilidades_livre].filter(Boolean).join(" · "), "420px")}</div>
   <div class="campo">Disponibilidade de turno: ${g(turnos, "260px")} &nbsp; Área desejada: ${g(c.area, "200px")}</div>
+  <div class="sec">Encaminhamentos</div>
+  ${[0, 1, 2].map((i) => {
+    const e = encs[i];
+    const alvo = e ? [e.empresa_nome, e.cargo_nome].filter(Boolean).join(" — ") : "";
+    const contr = !e ? "( ) sim ( ) não"
+      : e.status === "contratado" ? "(X) sim ( ) não"
+      : e.status === "nao_contratado" ? "( ) sim (X) não" : "( ) sim ( ) não";
+    return `<div class="campo">${i + 1}) Encaminhado para ${g(alvo, "300px")} · Contr. ${contr}</div>`;
+  }).join("")}
   <p style="margin-top:28px">${dataExtenso()}</p>
   ${assinatura("Assinatura do Candidato")}`;
 }
@@ -224,10 +233,10 @@ function formatarData(iso: string): string {
   return m ? `${m[3]}/${m[2]}/${m[1]}` : String(iso);
 }
 
-export function gerarDocumentoHTML(tipo: string, c: Cand, x: DocExtras = {}, u?: Uni): string {
+export function gerarDocumentoHTML(tipo: string, c: Cand, x: DocExtras = {}, u?: Uni, encs: Uni[] = []): string {
   let corpo = "";
   switch (tipo) {
-    case "solicitacao": corpo = docSolicitacao(c); break;
+    case "solicitacao": corpo = docSolicitacao(c, encs); break;
     case "normas": corpo = docNormas(c); break;
     case "apresentacao": corpo = docApresentacao(c, x); break;
     case "confirmacao": corpo = docConfirmacao(c, x); break;
