@@ -1,5 +1,6 @@
-import { supabase, hojeSP, digitos } from './base.js';
+import { supabase, hojeSP, digitos, registrar } from './base.js';
 import { ponte } from './ponte.js';
+import { enfileirar, agendadoParaHoje } from './fila.js';
 
 /**
  * Régua de AVISOS (lembrete de aula, preventiva). Na véspera, lembra o aluno da aula do dia
@@ -42,6 +43,13 @@ function somaDias(iso, d) {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date(x));
 }
 export const amanhaSP = () => somaDias(hojeSP(), 1);
+const ehDomingoISO = (iso) => new Date(`${iso}T12:00:00-03:00`).getUTCDay() === 0;
+// Próxima data de aula a avisar (véspera). Normalmente amanhã; se amanhã for domingo
+// (sem aula e sem cron), pula para segunda — ou seja, o SÁBADO cobre a segunda.
+export const proximaDataAula = () => {
+  const am = amanhaSP();
+  return ehDomingoISO(am) ? somaDias(hojeSP(), 2) : am;
+};
 
 const primeiroNome = (n) => String(n || '').trim().split(/\s+/)[0]?.toLowerCase().replace(/^./, (c) => c.toUpperCase()) || '';
 
@@ -110,4 +118,60 @@ export async function previaAviso(unitId, { dataIso = null } = {}) {
     total_alvo: porAluno.size,        // quantos receberiam, pelo alvo configurado
     amostra
   };
+}
+
+/**
+ * Processa a régua de avisos de uma unidade (padrão: próxima data de aula) e ENFILEIRA
+ * o lembrete — 1 mensagem por aluno (a aula mais cedo do dia), no celular do aluno
+ * (fallback responsável). O gateway envia no horário configurado. Dedup por chave.
+ */
+export async function processarAvisoUnidade(unitId, { dataIso = null, forcar = false } = {}) {
+  const cfg = await avisoDaUnidade(unitId);
+  const resumo = { unit_id: unitId, com_aula: 0, alvo: 0, enfileiradas: 0 };
+  if (!cfg.ativa && !forcar) return { ...resumo, pulou: 'inativa' };
+
+  const data = dataIso || proximaDataAula();
+  let lista;
+  try {
+    lista = await ponte(unitId, 'alunos_com_aula', { data }, { timeoutMs: 40000 });
+  } catch (e) {
+    await registrar('avisos', 'ponte_erro', false, { unitId, detalhe: { erro: e.message, data } });
+    return { ...resumo, erro: e.codigo || e.message };
+  }
+  const roster = (lista || []).filter((a) => digitos(a.telefone_aluno || a.telefone_responsavel || '').length >= 10);
+  resumo.com_aula = new Set(roster.map((r) => r.cod_alu)).size;
+
+  const comAlvo = await filtrarPorAlvo(unitId, roster, cfg.alvo);
+
+  // 1 mensagem por aluno: entre as aulas do dia, usa a mais cedo (menor horário).
+  const porAluno = new Map();
+  for (const a of comAlvo) {
+    const k = a.cod_alu || digitos(a.telefone_aluno || a.telefone_responsavel);
+    const atual = porAluno.get(k);
+    if (!atual || String(a.horario) < String(atual.horario)) porAluno.set(k, a);
+  }
+  resumo.alvo = porAluno.size;
+
+  const agendado = agendadoParaHoje(cfg.horario);
+  const itens = [];
+  for (const [k, a] of porAluno) {
+    const telAluno = digitos(a.telefone_aluno || '');
+    const paraAluno = telAluno.length >= 10;
+    const telefone = paraAluno ? a.telefone_aluno : a.telefone_responsavel;
+    itens.push({
+      telefone,
+      texto: preencherAviso(cfg.texto, a),
+      origem: 'regua_aviso',
+      categoria: 'lembrete_aula',
+      prioridade: 5,
+      agendado_para: agendado,
+      chave: `aviso|${data}|${k}`,
+      cod_alu: a.cod_alu,
+      alunos: primeiroNome(a.nome_aluno),
+      metadata: { turma: a.turma, curso: a.curso, dia_semana: a.dia_semana, horario: a.horario, para: paraAluno ? 'aluno' : 'responsavel' }
+    });
+  }
+  resumo.enfileiradas = await enfileirar(unitId, itens);
+  await registrar('avisos', 'enfileirar', true, { unitId, detalhe: { ...resumo, data } });
+  return { ...resumo, data };
 }
