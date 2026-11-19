@@ -14,7 +14,9 @@ export const CFG = {
   gatewayKey: limpar(process.env.GATEWAY_KEY),
   webhookSecret: limpar(process.env.WEBHOOK_SHARED_SECRET),
   geminiKey: limpar(process.env.GEMINI_API_KEY),
-  geminiModelos: String(process.env.GEMINI_MODELS || 'gemini-flash-latest,gemini-flash-lite-latest')
+  // flash-lite primeiro: mais rápido e menos congestionado que o flash-latest (que vinha
+  // estourando 15s e derrubando fluxos longos, ex.: reposição). flash-latest fica de reserva.
+  geminiModelos: String(process.env.GEMINI_MODELS || 'gemini-flash-lite-latest,gemini-flash-latest')
     .split(',').map((s) => s.trim()).filter(Boolean),
   groqKey: limpar(process.env.GROQ_API_KEY),
   // llama-3.3-70b-versatile foi aposentado pela Groq em 16/08/2026. Padrão agora em modelos

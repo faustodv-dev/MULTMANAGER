@@ -119,7 +119,7 @@ export async function agente({ sistema, historico, ferramentas, chaves = {}, uni
         if (restante < 4000) break;
         const conteudo = await gemini(
           { systemInstruction: { parts: [{ text: sistema }] }, contents, tools, generationConfig: { temperature: 0.4 } },
-          { chave: chaveGemini, timeoutMs: Math.min(15000, restante - 1000), unitId, conversaId, rotulo: 'agente' }
+          { chave: chaveGemini, timeoutMs: Math.min(9000, restante - 1000), unitId, conversaId, rotulo: 'agente' }
         );
         contents.push(conteudo);
         const fcs = conteudo.parts.filter((p) => p.functionCall);
