@@ -9,11 +9,25 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { BellPlus, Save, Loader2, Users, Lock, Send } from "lucide-react";
+import { BellPlus, Save, Loader2, Users, Lock, Send, History, Megaphone } from "lucide-react";
 
 type Aviso = { ativa: boolean; horario: number; pula_domingo: boolean; alvo: string; texto: string };
 type Amostra = { aluno: string; curso: string; turma: string; dia_semana: string; horario: string; para_aluno: boolean };
 type Previa = { data: string; alvo: string; total_com_aula: number; total_alvo: number; amostra: Amostra[] };
+type Fila = { categoria: string | null; telefone: string | null; alunos: string | null; status: string; agendado_para: string | null; enviado_em: string | null; enfileirado_em: string; erro: string | null };
+
+const STATUS_ROTULO: Record<string, string> = { pendente: "Na fila", enviando: "Enviando", enviado: "Enviado", erro: "Erro", cancelado: "Cancelado" };
+const STATUS_TOM: Record<string, string> = { enviado: "text-emerald-700", erro: "text-rose-700", enviando: "text-sky-700", pendente: "text-muted-foreground", cancelado: "text-muted-foreground" };
+const quando = (f: Fila) => (f.enviado_em || f.agendado_para || f.enfileirado_em || "").replace("T", " ").slice(0, 16);
+// Parseia a lista colada (uma linha por pessoa: "Nome, telefone" ou "Nome telefone").
+const parseLista = (txt: string): { nome: string; telefone: string }[] =>
+  txt.split(/\n/).map((l) => l.trim()).filter(Boolean).map((l) => {
+    const partes = l.split(/[,;\t]+/);
+    let nome = "", tel = "";
+    if (partes.length >= 2) { tel = partes[partes.length - 1].trim(); nome = partes.slice(0, -1).join(" ").trim(); }
+    else { const m = l.match(/(\d[\d\s()+-]{8,})\s*$/); tel = m ? m[1].trim() : ""; nome = m ? l.slice(0, l.length - m[1].length).trim() : l; }
+    return { nome, telefone: tel };
+  }).filter((x) => x.telefone.replace(/\D/g, "").length >= 10);
 
 const ALVOS: { id: string; rotulo: string; desc: string; master?: boolean }[] = [
   { id: "risco1", rotulo: "Risco 1", desc: "card de evasão nível 1" },
@@ -39,6 +53,10 @@ export default function Avisos() {
   const [previa, setPrevia] = useState<Previa | null>(null);
   const [calc, setCalc] = useState(false);
   const [enfileirando, setEnfileirando] = useState(false);
+  const [ultimos, setUltimos] = useState<Fila[]>([]);
+  const [bcLista, setBcLista] = useState("");
+  const [bcTexto, setBcTexto] = useState("");
+  const [bcEnviando, setBcEnviando] = useState(false);
 
   const podeEditar = perfil?.papel === "master" || perfil?.papel === "admin";
 
@@ -46,9 +64,10 @@ export default function Avisos() {
     setCarregando(true);
     setPrevia(null);
     try {
-      const r = await api<{ aviso: Aviso; pode_todos: boolean }>("faltantes", { acao: "aviso_obter", unit_id: unidade });
+      const r = await api<{ aviso: Aviso; pode_todos: boolean; ultimos: Fila[] }>("faltantes", { acao: "aviso_obter", unit_id: unidade });
       setAviso(r.aviso);
       setPodeTodos(r.pode_todos);
+      setUltimos(r.ultimos || []);
     } catch (e: any) { toast.error(e.message); }
     finally { setCarregando(false); }
   };
@@ -79,8 +98,21 @@ export default function Avisos() {
     try {
       const r = await api<{ resumo: { enfileiradas: number; data: string } }>("faltantes", { acao: "aviso_rodar", unit_id: unidade, data });
       toast.success(`${r.resumo.enfileiradas} lembrete(s) enfileirado(s) para ${diaBr(r.resumo.data)}.`);
+      carregar();
     } catch (e: any) { toast.error(e.message); }
     finally { setEnfileirando(false); }
+  };
+
+  const enviarBroadcast = async () => {
+    const lista = parseLista(bcLista);
+    setBcEnviando(true);
+    try {
+      const r = await api<{ enfileiradas: number; descartados: number }>("faltantes", { acao: "aviso_broadcast", unit_id: unidade, texto: bcTexto, lista });
+      toast.success(`${r.enfileiradas} enviado(s).${r.descartados ? ` ${r.descartados} descartado(s).` : ""}`);
+      setBcLista(""); setBcTexto("");
+      carregar();
+    } catch (e: any) { toast.error(e.message); }
+    finally { setBcEnviando(false); }
   };
 
   if (carregando || !aviso) {
@@ -235,6 +267,74 @@ export default function Avisos() {
               </AlertDialog>
             )}
           </div>
+        )}
+      </section>
+
+      {/* Disparo por lista (palestra / aviso geral) */}
+      {podeEditar && (
+        <section className="space-y-3 rounded-xl border bg-card p-4 shadow-sm">
+          <div>
+            <p className="flex items-center gap-2 font-semibold"><Megaphone className="h-4 w-4 text-violet-600" /> Disparo por lista (palestra / aviso geral)</p>
+            <p className="text-xs text-muted-foreground">Cole <b>nome, telefone</b> (um por linha) e a mensagem. <b>Não consulta o sistema</b> — só dispara pela fila. Variável: <code>{"{nome}"}</code>. Até 300 por disparo.</p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <Label className="text-xs">Lista (nome, telefone — um por linha)</Label>
+              <Textarea className="mt-1 min-h-[130px] font-mono text-xs" placeholder={"Maria Silva, (64) 99999-0000\nJoão Souza, 64988887777"} value={bcLista} onChange={(e) => setBcLista(e.target.value)} />
+            </div>
+            <div>
+              <Label className="text-xs">Mensagem</Label>
+              <Textarea className="mt-1 min-h-[130px] text-sm" maxLength={1000} placeholder={"Oi, {nome}! Convite especial: ..."} value={bcTexto} onChange={(e) => setBcTexto(e.target.value)} />
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button className="bg-violet-600 hover:bg-violet-700" disabled={bcEnviando || !bcTexto.trim() || parseLista(bcLista).length === 0}>
+                  {bcEnviando ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Megaphone className="mr-1 h-4 w-4" />} Enviar para a lista
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Disparar para a lista?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Vai enviar para <b>{parseLista(bcLista).length}</b> telefone(s) válido(s). As mensagens saem pelo WhatsApp em seguida. Confirmar?
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction onClick={enviarBroadcast}>Enviar</AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+            <span className="text-xs text-muted-foreground">{parseLista(bcLista).length} válido(s)</span>
+          </div>
+        </section>
+      )}
+
+      {/* Últimos envios (persiste ao atualizar a página) */}
+      <section className="space-y-2 rounded-xl border bg-card p-4 shadow-sm">
+        <p className="flex items-center gap-2 font-semibold"><History className="h-4 w-4 text-muted-foreground" /> Últimos envios</p>
+        {ultimos.length ? (
+          <div className="overflow-hidden rounded-lg border">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/50 text-xs text-muted-foreground">
+                <tr><th className="px-3 py-2 text-left">Para</th><th className="px-3 py-2 text-left">Tipo</th><th className="px-3 py-2 text-left">Status</th><th className="px-3 py-2 text-left">Quando</th></tr>
+              </thead>
+              <tbody>
+                {ultimos.map((u, i) => (
+                  <tr key={i} className="border-t">
+                    <td className="px-3 py-1.5">{u.alunos || u.telefone}</td>
+                    <td className="px-3 py-1.5 text-muted-foreground">{u.categoria === "broadcast" ? "lista" : "lembrete"}</td>
+                    <td className={cn("px-3 py-1.5", STATUS_TOM[u.status] || "")}>{STATUS_ROTULO[u.status] || u.status}{u.erro ? ` · ${u.erro}` : ""}</td>
+                    <td className="px-3 py-1.5 text-muted-foreground tabular-nums">{quando(u)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="rounded-lg border bg-background py-6 text-center text-sm text-muted-foreground">Nenhum envio ainda.</p>
         )}
       </section>
     </div>
