@@ -197,7 +197,27 @@ export async function processarReguaUnidade(unitId, { forcar = false } = {}) {
   if (!passos.length) return { unit_id: unitId, total: 0, enviados: 0, pulados: 0, erros: 0, pulou: 'sem_passos' };
 
   const hoje = hojeSP();
-  const porData = new Map(passos.map((p) => [somaDias(hoje, -p.offset), p]));
+  const TOL = 2;             // janela de tolerância: cobre até 2 dias de disparo perdido (cron/queda)
+  const RECORRENTE_ATE = 120; // depois dos 30 dias, repete o texto do passo 30 a cada 15 dias até aqui
+
+  // Marcos (dias em relação ao vencimento) → passo (texto) a usar. Além dos passos configurados,
+  // se o passo de 30 dias estiver ativo, cria marcos recorrentes 45, 60, … até RECORRENTE_ATE
+  // reaproveitando o MESMO texto do passo 30 (devedor não some após 30 dias — item aprovado).
+  const passo30 = passos.find((p) => Number(p.offset) === 30) || null;
+  const marcos = new Map();
+  for (const p of passos) marcos.set(Number(p.offset), p);
+  if (passo30) for (let m = 45; m <= RECORRENTE_ATE; m += 15) if (!marcos.has(m)) marcos.set(m, passo30);
+
+  // Mapa vencimento(ISO) → passo sintético { offset: marco, texto }. Cada marco aceita uma
+  // janela de TOL dias "atrasados" no disparo (vencimentos um pouco mais antigos); em sobreposição,
+  // vence o MAIOR marco (o mais atrasado). A chave de envio inclui o vencimento, então a MESMA
+  // mensagem nunca sai duas vezes para a mesma parcela, mesmo caindo em vários dias da janela (#3).
+  const porData = new Map();
+  for (const m of [...marcos.keys()].sort((a, b) => a - b)) {
+    const base = marcos.get(m);
+    for (let i = 0; i <= TOL; i++) porData.set(somaDias(hoje, -m - i), { offset: m, texto: base.texto, ativo: true });
+  }
+
   let carteira;
   try {
     carteira = await ponte(unitId, 'carteira', { datas: [...porData.keys()], statuses: regua.statuses }, { timeoutMs: 40000 });
