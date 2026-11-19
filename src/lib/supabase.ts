@@ -34,6 +34,19 @@ export interface Unidade {
   recebedor_nome: string | null;
   atendimento_humano: string | null;
   instrucoes_agente: string | null;
+  endereco: string | null;
+  numero: string | null;
+  bairro: string | null;
+  cep: string | null;
+  cidade: string | null;
+  uf: string | null;
+  instagram: string | null;
+  site: string | null;
+  email: string | null;
+  telefone_fixo: string | null;
+  horario: string | null;
+  razao_social: string | null;
+  cnpj: string | null;
 }
 
 export interface Conversa {
