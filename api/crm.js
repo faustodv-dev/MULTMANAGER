@@ -546,12 +546,13 @@ async function dashboard(res, eu, unitId, b) {
  */
 async function agencia(res, acao, unitId, b) {
   if (acao === 'agencia_inicial') {
-    const [emp, vag, enc] = await Promise.all([
+    const [emp, vag, enc, cand] = await Promise.all([
       supabase.from('empresas_parceiras').select('*').eq('unit_id', unitId).order('nome'),
       supabase.from('vagas').select('*, empresa:empresas_parceiras(nome)').eq('unit_id', unitId).order('created_at', { ascending: false }),
-      supabase.from('encaminhamentos').select('*, vaga:vagas(cargo), empresa:empresas_parceiras(nome)').eq('unit_id', unitId).order('created_at', { ascending: false }).limit(300)
+      supabase.from('encaminhamentos').select('*, vaga:vagas(cargo), empresa:empresas_parceiras(nome)').eq('unit_id', unitId).order('created_at', { ascending: false }).limit(300),
+      supabase.from('candidatos').select('*').eq('unit_id', unitId).order('nome')
     ]);
-    return res.status(200).json({ ok: true, empresas: emp.data || [], vagas: vag.data || [], encaminhamentos: enc.data || [] });
+    return res.status(200).json({ ok: true, empresas: emp.data || [], vagas: vag.data || [], encaminhamentos: enc.data || [], candidatos: cand.data || [] });
   }
 
   if (acao === 'agencia_encaminhar') {
@@ -607,12 +608,13 @@ async function agencia(res, acao, unitId, b) {
 
   if (acao === 'agencia_vaga_salvar') {
     const campos = {};
-    for (const k of ['empresa_id', 'cargo', 'descricao', 'sexo', 'curso_alvo', 'requisitos', 'horario', 'beneficios', 'remuneracao', 'status']) {
+    for (const k of ['empresa_id', 'cargo', 'descricao', 'sexo', 'curso_alvo', 'requisitos', 'horario', 'beneficios', 'remuneracao', 'status', 'area', 'escolaridade_min', 'cnh_exigida']) {
       if (k in b) campos[k] = (b[k] === '' ? null : b[k]);
     }
     for (const n of ['qtd', 'qtd_disponivel', 'idade_min', 'idade_max']) {
       if (n in b) campos[n] = (b[n] === '' || b[n] == null ? null : Number(b[n]) || null);
     }
+    if ('turnos' in b) campos.turnos = Array.isArray(b.turnos) ? b.turnos : [];
     if ('experiencia' in b) campos.experiencia = !!b.experiencia;
     if (!campos.cargo) return res.status(400).json({ erro: 'cargo_obrigatorio' });
     if (b.id) {
@@ -626,6 +628,28 @@ async function agencia(res, acao, unitId, b) {
     const { data, error } = await supabase.from('vagas').insert(campos).select('*, empresa:empresas_parceiras(nome)').single();
     if (error) return res.status(400).json({ erro: 'falha', mensagem: error.message });
     return res.status(200).json({ ok: true, vaga: data });
+  }
+
+  // Ficha do candidato (perfil profissional). Mesmos critérios da vaga = base do match.
+  if (acao === 'agencia_candidato_salvar') {
+    const campos = {};
+    for (const k of ['cod_alu', 'nome', 'telefone', 'nascimento', 'sexo', 'area', 'escolaridade', 'experiencia_area', 'cnh', 'cursos_mult', 'pretensao', 'bairro', 'observacoes', 'status']) {
+      if (k in b) campos[k] = (b[k] === '' ? null : b[k]);
+    }
+    if ('turnos' in b) campos.turnos = Array.isArray(b.turnos) ? b.turnos : [];
+    if ('experiencia' in b) campos.experiencia = !!b.experiencia;
+    if (!campos.nome || !String(campos.nome).trim()) return res.status(400).json({ erro: 'nome_obrigatorio' });
+    if (b.id) {
+      campos.updated_at = new Date().toISOString();
+      const { data, error } = await supabase.from('candidatos').update(campos).eq('id', b.id).eq('unit_id', unitId).select('*').single();
+      if (error) return res.status(400).json({ erro: 'falha', mensagem: error.message });
+      return res.status(200).json({ ok: true, candidato: data });
+    }
+    campos.unit_id = unitId;
+    if (!campos.status) campos.status = 'ativo';
+    const { data, error } = await supabase.from('candidatos').insert(campos).select('*').single();
+    if (error) return res.status(400).json({ erro: 'falha', mensagem: error.message });
+    return res.status(200).json({ ok: true, candidato: data });
   }
 
   return res.status(400).json({ erro: 'acao_invalida' });
