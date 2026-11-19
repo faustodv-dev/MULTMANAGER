@@ -30,6 +30,7 @@ type Vaga = {
 type Enc = {
   id: string; vaga_id: string | null; cod_alu: string | null; nome_aluno: string | null;
   telefone: string | null; status: string; feedback_empresa: string | null; created_at: string;
+  candidato_id?: string | null; empresa_nome?: string | null; cargo_nome?: string | null; manual?: boolean | null;
   vaga?: { cargo: string } | null; empresa?: { nome: string } | null;
 };
 type Candidato = {
@@ -143,6 +144,9 @@ export default function Agencia() {
   const [matchLoad, setMatchLoad] = useState(false);
   const [docCand, setDocCand] = useState<Candidato | null>(null);
   const [docExtras, setDocExtras] = useState<DocExtras>({});
+  const [histCand, setHistCand] = useState<Candidato | null>(null);
+  const [histForm, setHistForm] = useState<{ empresa_nome: string; cargo_nome: string; status: string }>({ empresa_nome: "", cargo_nome: "", status: "encaminhado" });
+  const [histSalvando, setHistSalvando] = useState(false);
   const [formEnc, setFormEnc] = useState<{ vaga: Vaga; cod_alu?: string; nome_aluno?: string; telefone?: string } | null>(null);
   const [verEnc, setVerEnc] = useState<Vaga | null>(null);
   const [salvando, setSalvando] = useState(false);
@@ -178,6 +182,11 @@ export default function Agencia() {
   }, [vagas, busca, fStatus, fDe, fAte]);
   const nomeEmpresa = (id: string | null | undefined) => empresas.find((e) => e.id === id)?.nome || "—";
   const encsDaVaga = (vagaId: string) => encaminhamentos.filter((e) => e.vaga_id === vagaId);
+  const encsDoCand = (c: Candidato) => encaminhamentos.filter((e) =>
+    (e.candidato_id && e.candidato_id === c.id) ||
+    (c.cod_alu && e.cod_alu === c.cod_alu) ||
+    (e.nome_aluno && e.nome_aluno === c.nome)
+  );
   const candFiltrados = useMemo(() => {
     const t = busca.trim().toLowerCase();
     if (!t) return candidatos;
@@ -222,17 +231,35 @@ export default function Agencia() {
   const encaminharDaFicha = async (c: Candidato) => {
     if (!matchVaga) return;
     try {
-      await api("crm", { acao: "agencia_encaminhar", unidade, vaga_id: matchVaga.id, cod_alu: c.cod_alu, nome_aluno: c.nome, telefone: c.telefone });
+      await api("crm", { acao: "agencia_encaminhar", unidade, vaga_id: matchVaga.id, candidato_id: c.id, cod_alu: c.cod_alu, nome_aluno: c.nome, telefone: c.telefone });
       toast.success(`${String(c.nome).split(" ")[0]} encaminhado(a) — ocorrência registrada.`);
       carregar();
     } catch (e: any) { toast.error(e.message); }
   };
-  const imprimirDoc = (tipo: string) => {
-    if (!docCand) return;
-    const html = gerarDocumentoHTML(tipo, docCand, docExtras, unidades.find((u) => u.id === unidade));
+  const unidadeAtual = () => unidades.find((u) => u.id === unidade);
+  const abrirJanela = (html: string) => {
     const w = window.open("", "_blank", "width=900,height=1000");
     if (!w) { toast.error("Permita pop-ups para gerar o documento."); return; }
     w.document.write(html); w.document.close(); w.focus();
+  };
+  const imprimirDoc = (tipo: string) => {
+    if (!docCand) return;
+    abrirJanela(gerarDocumentoHTML(tipo, docCand, docExtras, unidadeAtual(), encsDoCand(docCand)));
+  };
+  const cartaDaVaga = (c: Candidato, vaga: Vaga) => {
+    abrirJanela(gerarDocumentoHTML("apresentacao", c, { empresa: vaga.empresa?.nome || "", cargo: vaga.cargo }, unidadeAtual()));
+  };
+  const lancarManual = async () => {
+    if (!histCand) return;
+    if (!histForm.empresa_nome.trim()) { toast.error("Informe a empresa."); return; }
+    setHistSalvando(true);
+    try {
+      await api("crm", { acao: "agencia_enc_manual", unidade, candidato_id: histCand.id, empresa_nome: histForm.empresa_nome, cargo_nome: histForm.cargo_nome, status: histForm.status });
+      toast.success("Encaminhamento lançado.");
+      setHistForm({ empresa_nome: "", cargo_nome: "", status: "encaminhado" });
+      carregar();
+    } catch (e: any) { toast.error(e.message); }
+    setHistSalvando(false);
   };
   // Helpers da ficha em passos
   const setC = (patch: Partial<Candidato>) => setFormCand((f) => ({ ...(f || {}), ...patch }));
@@ -365,6 +392,9 @@ export default function Agencia() {
                     </p>
                   </div>
                   <div className="flex shrink-0 items-center gap-1">
+                    <Button variant="ghost" size="sm" title="Encaminhamentos do candidato" onClick={() => { setHistForm({ empresa_nome: "", cargo_nome: "", status: "encaminhado" }); setHistCand(c); }}>
+                      <Briefcase className="h-4 w-4" />{encsDoCand(c).length > 0 && <span className="ml-1 text-xs">{encsDoCand(c).length}</span>}
+                    </Button>
                     <Button variant="ghost" size="sm" title="Documentos (imprimir)" onClick={() => { setDocExtras({}); setDocCand(c); }}><FileText className="h-4 w-4" /></Button>
                     <Button variant="ghost" size="sm" onClick={() => abrirCand(c)}><Pencil className="h-4 w-4" /></Button>
                   </div>
@@ -662,6 +692,9 @@ export default function Agencia() {
           ) : matchData && matchData.ranking.length ? (
             <>
               <p className="text-xs text-muted-foreground">Ordenado por coincidência de critérios. Verde = bateu; âmbar = não atende um requisito da vaga (não exclui — você decide).</p>
+              {matchVaga && matchVaga.status !== "aberta" && (
+                <p className="rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">Esta vaga está <b>{ST_VAGA[matchVaga.status]?.rot || matchVaga.status}</b> — só vagas abertas recebem candidatos. Reabra a vaga para encaminhar. (Você ainda pode gerar a carta.)</p>
+              )}
               <ul className="space-y-2">
                 {matchData.ranking.map((m) => {
                   const jaEnc = matchVaga ? encsDaVaga(matchVaga.id).some((e) => (m.candidato.cod_alu && e.cod_alu === m.candidato.cod_alu) || e.nome_aluno === m.candidato.nome) : false;
@@ -681,11 +714,16 @@ export default function Agencia() {
                             {m.alertas.map((t) => <span key={`al-${t}`} className="rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-700">! {t}</span>)}
                           </div>
                         </div>
-                        {jaEnc ? (
-                          <span className="shrink-0 rounded-md bg-sky-100 px-2 py-1 text-xs font-medium text-sky-700">Encaminhado</span>
-                        ) : (
-                          <Button size="sm" className="shrink-0 bg-violet-600 hover:bg-violet-700" onClick={() => encaminharDaFicha(m.candidato)}><UserPlus className="mr-1 h-4 w-4" /> Encaminhar</Button>
-                        )}
+                        <div className="flex shrink-0 flex-col items-end gap-1">
+                          {jaEnc ? (
+                            <span className="rounded-md bg-sky-100 px-2 py-1 text-xs font-medium text-sky-700">Encaminhado</span>
+                          ) : matchVaga?.status === "aberta" ? (
+                            <Button size="sm" className="bg-violet-600 hover:bg-violet-700" onClick={() => encaminharDaFicha(m.candidato)}><UserPlus className="mr-1 h-4 w-4" /> Encaminhar</Button>
+                          ) : (
+                            <span className="rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground" title="Só vaga aberta recebe candidato">Vaga não aberta</span>
+                          )}
+                          <Button variant="ghost" size="sm" className="h-7 text-xs" title="Carta de Apresentação já preenchida" onClick={() => matchVaga && cartaDaVaga(m.candidato, matchVaga)}><FileText className="mr-1 h-3.5 w-3.5" /> Carta</Button>
+                        </div>
                       </div>
                     </li>
                   );
@@ -721,6 +759,44 @@ export default function Agencia() {
                 <Printer className="h-4 w-4 shrink-0 text-violet-600" />
               </button>
             ))}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Encaminhamentos do candidato (histórico + lançamento manual dos antigos do MULT) */}
+      <Dialog open={!!histCand} onOpenChange={(o) => !o && setHistCand(null)}>
+        <DialogContent className="max-h-[88vh] max-w-lg overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Briefcase className="h-5 w-5 text-violet-600" /> Encaminhamentos — {histCand?.nome}</DialogTitle>
+          </DialogHeader>
+          <ul className="space-y-2">
+            {histCand && encsDoCand(histCand).map((e) => (
+              <li key={e.id} className="rounded-lg border p-2.5 text-sm">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="font-medium">{e.empresa_nome || e.empresa?.nome || "—"}{(e.cargo_nome || e.vaga?.cargo) ? ` · ${e.cargo_nome || e.vaga?.cargo}` : ""}{e.manual ? <span className="ml-1 text-xs text-muted-foreground">(manual)</span> : ""}</p>
+                  <Badge m={ST_ENC} s={e.status} />
+                </div>
+                <div className="mt-2 flex flex-wrap gap-1">
+                  <Button variant="outline" size="sm" className="h-7 text-xs text-emerald-700" onClick={() => mudarEnc(e.id, "contratado")}>Contratado</Button>
+                  <Button variant="outline" size="sm" className="h-7 text-xs text-red-700" onClick={() => mudarEnc(e.id, "nao_contratado")}>Não contratado</Button>
+                  <Button variant="outline" size="sm" className="h-7 text-xs text-amber-700" onClick={() => mudarEnc(e.id, "nao_compareceu")}>Não compareceu</Button>
+                </div>
+              </li>
+            ))}
+            {histCand && !encsDoCand(histCand).length && <p className="py-3 text-center text-sm text-muted-foreground">Nenhum encaminhamento ainda.</p>}
+          </ul>
+          <div className="space-y-2 rounded-lg border bg-muted/20 p-3">
+            <p className="text-sm font-semibold">Lançar encaminhamento antigo (do sistema MULT)</p>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="col-span-2"><Label className="text-xs">Empresa *</Label><Input value={histForm.empresa_nome} onChange={(e) => setHistForm({ ...histForm, empresa_nome: e.target.value })} /></div>
+              <div><Label className="text-xs">Cargo</Label><Input value={histForm.cargo_nome} onChange={(e) => setHistForm({ ...histForm, cargo_nome: e.target.value })} /></div>
+              <div><Label className="text-xs">Resultado</Label>
+                <select className="h-10 w-full rounded-md border bg-background px-2 text-sm" value={histForm.status} onChange={(e) => setHistForm({ ...histForm, status: e.target.value })}>
+                  {Object.entries(ST_ENC).map(([k, v]) => <option key={k} value={k}>{v.rot}</option>)}
+                </select>
+              </div>
+            </div>
+            <Button size="sm" onClick={lancarManual} disabled={histSalvando || !histForm.empresa_nome.trim()}>{histSalvando && <Loader2 className="mr-1 h-4 w-4 animate-spin" />} Lançar</Button>
           </div>
         </DialogContent>
       </Dialog>
