@@ -27,6 +27,22 @@ function resumoGrupos(grupos) {
   }));
 }
 
+// Dados de contato da unidade (cadastrados em Unidades → Perfil & contato).
+// Fatos que o agente usa para responder endereço/telefone/redes/horário — e a trava anti-invenção.
+function dadosUnidade(u) {
+  const linhas = [];
+  const end = [u.endereco, u.numero ? `nº ${u.numero}` : '', u.bairro, [u.cidade, u.uf].filter(Boolean).join('-')].filter(Boolean).join(', ');
+  if (end) linhas.push(`- Endereço: ${end}${u.cep ? ` (CEP ${u.cep})` : ''}`);
+  if (u.telefone_fixo) linhas.push(`- Telefone: ${u.telefone_fixo}`);
+  if (u.instagram) linhas.push(`- Instagram: ${u.instagram}`);
+  if (u.site) linhas.push(`- Site: ${u.site}`);
+  if (u.email) linhas.push(`- E-mail: ${u.email}`);
+  if (u.horario) linhas.push(`- Horário de funcionamento: ${u.horario}`);
+  const cab = 'DADOS DA UNIDADE (use EXATAMENTE estes dados ao informar endereço, contato, redes sociais ou horário. Se algum dado NÃO estiver listado abaixo, NÃO invente — diga que confirma com a secretaria):';
+  if (!linhas.length) return `${cab}\n- (nenhum dado de contato cadastrado — se perguntarem, direcione à secretaria, nunca invente endereço/telefone/redes)`;
+  return `${cab}\n${linhas.join('\n')}`;
+}
+
 function sistema(unidade, conversa, grupos, asaasAtivo) {
   const conf = conversa.identidade_confirmada;
   const g = conversa.contexto?.grupo;
@@ -109,6 +125,8 @@ SITUAÇÃO DESTA CONVERSA:
 - Nome no WhatsApp: ${conversa.nome_contato || 'desconhecido'}
 - CADASTROS_PELO_TELEFONE: ${JSON.stringify(conf ? [] : resumoGrupos(grupos))}
 ${unidade.atendimento_humano ? `- Atendimento da secretaria: ${unidade.atendimento_humano}` : ''}
+
+${dadosUnidade(unidade)}
 ${unidade.instrucoes_agente ? `\nREGRAS DESTA UNIDADE (definidas pela própria unidade — siga-as):\n${unidade.instrucoes_agente}` : ''}`;
 }
 
