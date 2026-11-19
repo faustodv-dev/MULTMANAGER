@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Briefcase, Building2, Plus, Search, Pencil, Loader2, RefreshCw, UserPlus, UserCircle } from "lucide-react";
+import { Briefcase, Building2, Plus, Search, Pencil, Loader2, RefreshCw, UserPlus, UserCircle, Target } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -37,6 +37,7 @@ type Candidato = {
   cnh: string | null; cursos_mult: string | null; pretensao: string | null; bairro: string | null;
   observacoes: string | null; status: string;
 };
+type MatchItem = { candidato: Candidato; score: number; ok: string[]; alertas: string[]; idade: number | null };
 
 // Dicionário compartilhado: a VAGA e o CANDIDATO preenchem os mesmos critérios.
 // É isso que permite o match por coincidência na Etapa 2 (roda só no Supabase, sem tocar a escola).
@@ -106,6 +107,9 @@ export default function Agencia() {
   const [formEmp, setFormEmp] = useState<Partial<Empresa> | null>(null);
   const [formVaga, setFormVaga] = useState<Partial<Vaga> | null>(null);
   const [formCand, setFormCand] = useState<Partial<Candidato> | null>(null);
+  const [matchVaga, setMatchVaga] = useState<Vaga | null>(null);
+  const [matchData, setMatchData] = useState<{ max: number; ranking: MatchItem[] } | null>(null);
+  const [matchLoad, setMatchLoad] = useState(false);
   const [formEnc, setFormEnc] = useState<{ vaga: Vaga; cod_alu?: string; nome_aluno?: string; telefone?: string } | null>(null);
   const [verEnc, setVerEnc] = useState<Vaga | null>(null);
   const [salvando, setSalvando] = useState(false);
@@ -173,6 +177,22 @@ export default function Agencia() {
       toast.success("Candidato salvo."); setFormCand(null); carregar();
     } catch (e: any) { toast.error(e.message); }
     setSalvando(false);
+  };
+  const buscarMatch = async (v: Vaga) => {
+    setMatchVaga(v); setMatchData(null); setMatchLoad(true);
+    try {
+      const r = await api<{ max: number; ranking: MatchItem[] }>("crm", { acao: "agencia_match", unidade, vaga_id: v.id });
+      setMatchData({ max: r.max, ranking: r.ranking || [] });
+    } catch (e: any) { toast.error(e.message); setMatchVaga(null); }
+    setMatchLoad(false);
+  };
+  const encaminharDaFicha = async (c: Candidato) => {
+    if (!matchVaga) return;
+    try {
+      await api("crm", { acao: "agencia_encaminhar", unidade, vaga_id: matchVaga.id, cod_alu: c.cod_alu, nome_aluno: c.nome, telefone: c.telefone });
+      toast.success(`${String(c.nome).split(" ")[0]} encaminhado(a) — ocorrência registrada.`);
+      carregar();
+    } catch (e: any) { toast.error(e.message); }
   };
   const encaminhar = async () => {
     if (!formEnc) return;
@@ -276,7 +296,8 @@ export default function Agencia() {
                   {encsDaVaga(v.id).length > 0 && (
                     <Button variant="ghost" size="sm" className="text-xs" onClick={() => setVerEnc(v)}>{encsDaVaga(v.id).length} encam.</Button>
                   )}
-                  <Button variant="outline" size="sm" onClick={() => setFormEnc({ vaga: v })}><UserPlus className="mr-1 h-4 w-4" /> Encaminhar</Button>
+                  <Button variant="outline" size="sm" className="text-violet-700" onClick={() => buscarMatch(v)}><Target className="mr-1 h-4 w-4" /> Candidatos</Button>
+                  <Button variant="ghost" size="sm" onClick={() => setFormEnc({ vaga: v })} title="Encaminhar por código"><UserPlus className="h-4 w-4" /></Button>
                   <Button variant="ghost" size="sm" onClick={() => setFormVaga(v)}><Pencil className="h-4 w-4" /></Button>
                 </div>
               </div>
@@ -488,6 +509,55 @@ export default function Agencia() {
             ))}
             {verEnc && !encsDaVaga(verEnc.id).length && <p className="py-4 text-center text-sm text-muted-foreground">Nenhum encaminhamento nesta vaga.</p>}
           </ul>
+        </DialogContent>
+      </Dialog>
+
+      {/* Match: candidatos compatíveis com a vaga (ranking por coincidência) */}
+      <Dialog open={!!matchVaga} onOpenChange={(o) => { if (!o) { setMatchVaga(null); setMatchData(null); } }}>
+        <DialogContent className="max-h-[88vh] max-w-2xl overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Target className="h-5 w-5 text-violet-600" /> Candidatos para {matchVaga?.cargo}</DialogTitle>
+          </DialogHeader>
+          {matchLoad ? (
+            <div className="flex items-center gap-2 p-6 text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Calculando compatibilidade…</div>
+          ) : matchData && matchData.max === 0 ? (
+            <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">Essa vaga ainda não tem critérios preenchidos (área, turnos, escolaridade, CNH…). Edite a vaga para o match funcionar.</p>
+          ) : matchData && matchData.ranking.length ? (
+            <>
+              <p className="text-xs text-muted-foreground">Ordenado por coincidência de critérios. Verde = bateu; âmbar = não atende um requisito da vaga (não exclui — você decide).</p>
+              <ul className="space-y-2">
+                {matchData.ranking.map((m) => {
+                  const jaEnc = matchVaga ? encsDaVaga(matchVaga.id).some((e) => (m.candidato.cod_alu && e.cod_alu === m.candidato.cod_alu) || e.nome_aluno === m.candidato.nome) : false;
+                  const pct = matchData.max ? Math.round((m.score / matchData.max) * 100) : 0;
+                  return (
+                    <li key={m.candidato.id} className="rounded-lg border p-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium">{m.candidato.nome}{m.candidato.cod_alu ? ` (${m.candidato.cod_alu})` : ""}{m.idade != null ? ` · ${m.idade} anos` : ""}{m.candidato.telefone ? ` · ${m.candidato.telefone}` : ""}</p>
+                          <div className="mt-1 flex items-center gap-2">
+                            <div className="h-2 w-28 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-emerald-500" style={{ width: `${pct}%` }} /></div>
+                            <span className="text-xs font-semibold tabular-nums">{pct}%</span>
+                            <span className="text-xs text-muted-foreground">({m.score}/{matchData.max})</span>
+                          </div>
+                          <div className="mt-1.5 flex flex-wrap gap-1">
+                            {m.ok.map((t) => <span key={`ok-${t}`} className="rounded bg-emerald-100 px-1.5 py-0.5 text-[11px] font-medium text-emerald-700">✓ {t}</span>)}
+                            {m.alertas.map((t) => <span key={`al-${t}`} className="rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-700">! {t}</span>)}
+                          </div>
+                        </div>
+                        {jaEnc ? (
+                          <span className="shrink-0 rounded-md bg-sky-100 px-2 py-1 text-xs font-medium text-sky-700">Encaminhado</span>
+                        ) : (
+                          <Button size="sm" className="shrink-0 bg-violet-600 hover:bg-violet-700" onClick={() => encaminharDaFicha(m.candidato)}><UserPlus className="mr-1 h-4 w-4" /> Encaminhar</Button>
+                        )}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </>
+          ) : (
+            <p className="py-6 text-center text-sm text-muted-foreground">Nenhum candidato cadastrado. Cadastre perfis na aba “Candidatos”.</p>
+          )}
         </DialogContent>
       </Dialog>
     </div>
