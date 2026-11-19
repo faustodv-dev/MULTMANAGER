@@ -1,6 +1,6 @@
 import { supabase, usuarioDaRequisicao, lerCorpo, registrar } from './_lib/base.js';
 import { faltantesDaUnidade, mesclarFaltantes, processarFaltantesUnidade, previaFaltantes, reavaliarFaltantes, FALTANTES_PADRAO } from './_lib/faltantes.js';
-import { avisoDaUnidade, mesclarAviso, previaAviso, AVISO_PADRAO } from './_lib/avisos.js';
+import { avisoDaUnidade, mesclarAviso, previaAviso, processarAvisoUnidade, AVISO_PADRAO } from './_lib/avisos.js';
 import { STATUS_CANONICOS } from './_lib/regua.js';
 
 export const config = { maxDuration: 60 };
@@ -57,6 +57,12 @@ export default async function handler(req, res) {
       if (error) return res.status(400).json({ erro: 'falha_salvar', mensagem: error.message });
       await registrar('avisos', 'salvar', true, { unitId, detalhe: { por: eu.id, ativa: aviso.ativa, alvo: aviso.alvo } });
       return res.status(200).json({ ok: true, aviso });
+    }
+
+    if (acao === 'aviso_rodar') {
+      // Enfileira de verdade (para teste). forcar ignora o liga/desliga; respeita o alvo.
+      const r = await processarAvisoUnidade(unitId, { dataIso: b.data || null, forcar: true });
+      return res.status(200).json({ ok: true, resumo: r });
     }
 
     if (acao === 'salvar') {

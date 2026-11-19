@@ -8,7 +8,8 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
-import { BellPlus, Save, Loader2, Users, Lock } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { BellPlus, Save, Loader2, Users, Lock, Send } from "lucide-react";
 
 type Aviso = { ativa: boolean; horario: number; pula_domingo: boolean; alvo: string; texto: string };
 type Amostra = { aluno: string; curso: string; turma: string; dia_semana: string; horario: string; para_aluno: boolean };
@@ -37,6 +38,7 @@ export default function Avisos() {
   const [data, setData] = useState(amanhaISO());
   const [previa, setPrevia] = useState<Previa | null>(null);
   const [calc, setCalc] = useState(false);
+  const [enfileirando, setEnfileirando] = useState(false);
 
   const podeEditar = perfil?.papel === "master" || perfil?.papel === "admin";
 
@@ -70,6 +72,15 @@ export default function Avisos() {
       setPrevia(r.previa);
     } catch (e: any) { toast.error(e.message); }
     finally { setCalc(false); }
+  };
+
+  const enfileirarAgora = async () => {
+    setEnfileirando(true);
+    try {
+      const r = await api<{ resumo: { enfileiradas: number; data: string } }>("faltantes", { acao: "aviso_rodar", unit_id: unidade, data });
+      toast.success(`${r.resumo.enfileiradas} lembrete(s) enfileirado(s) para ${diaBr(r.resumo.data)}.`);
+    } catch (e: any) { toast.error(e.message); }
+    finally { setEnfileirando(false); }
   };
 
   if (carregando || !aviso) {
@@ -200,6 +211,28 @@ export default function Avisos() {
               </div>
             ) : (
               <p className="rounded-lg border bg-background py-6 text-center text-sm text-muted-foreground">Ninguém entraria com esse alvo nessa data.</p>
+            )}
+
+            {podeEditar && previa.total_alvo > 0 && (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button className="bg-emerald-600 hover:bg-emerald-700" disabled={enfileirando}>
+                    {enfileirando ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Send className="mr-1 h-4 w-4" />} Enfileirar agora (teste)
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Enviar o lembrete de verdade?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Vai enfileirar o lembrete para <b>{previa.total_alvo}</b> aluno(s) com aula em {diaBr(previa.data)} (alvo: {previa.alvo}). As mensagens saem pelo WhatsApp no horário configurado ({String(aviso.horario).padStart(2, "0")}:00) — se o horário já passou, saem em seguida. Confirmar?
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                    <AlertDialogAction onClick={enfileirarAgora}>Enfileirar</AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             )}
           </div>
         )}

@@ -2,6 +2,7 @@ import { CFG, igual, supabase, usuarioDaRequisicao, lerCorpo, registrar, digitos
 import { enviarWhatsapp } from './_lib/gateway.js';
 import { reguaDaUnidade, mesclarRegua, processarReguaUnidade, previaManual, dispararManual, preencherDemo, REGUA_PADRAO, STATUS_CANONICOS } from './_lib/regua.js';
 import { mesclarFaltantes, processarFaltantesUnidade } from './_lib/faltantes.js';
+import { mesclarAviso, processarAvisoUnidade } from './_lib/avisos.js';
 import { flushOcorrenciasEnviadas } from './_lib/ocorrencias.js';
 
 export const config = { maxDuration: 60 };
@@ -21,8 +22,8 @@ function ehDomingoSP() {
 async function rodarCron(res) {
   const hora = horaSP();
   const domingo = ehDomingoSP();
-  const { data: units } = await supabase.from('units').select('id, regua, regua_faltantes');
-  const resumo = { hora, processadas: 0, enviados: 0, pulados: 0, erros: 0, faltantes_unidades: 0, faltantes_enfileiradas: 0 };
+  const { data: units } = await supabase.from('units').select('id, regua, regua_faltantes, regua_aviso');
+  const resumo = { hora, processadas: 0, enviados: 0, pulados: 0, erros: 0, faltantes_unidades: 0, faltantes_enfileiradas: 0, avisos_unidades: 0, avisos_enfileiradas: 0 };
   for (const u of units || []) {
     // Régua financeira (envio direto — inalterada)
     const regua = mesclarRegua(u.regua);
@@ -39,6 +40,13 @@ async function rodarCron(res) {
       resumo.faltantes_unidades++;
       const rf = await processarFaltantesUnidade(u.id);
       resumo.faltantes_enfileiradas += rf.enfileiradas || 0;
+    }
+    // Régua de avisos (lembrete de aula, na véspera). Enfileira pro celular do aluno.
+    const aviso = mesclarAviso(u.regua_aviso);
+    if (aviso.ativa && !(domingo && aviso.pula_domingo)) {
+      resumo.avisos_unidades++;
+      const ra = await processarAvisoUnidade(u.id);
+      resumo.avisos_enfileiradas += ra.enfileiradas || 0;
     }
   }
   // Piso diário: grava as ocorrências informativas pendentes (o gateway também cutuca
