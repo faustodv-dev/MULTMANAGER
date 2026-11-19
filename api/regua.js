@@ -151,17 +151,21 @@ export default async function handler(req, res) {
 
     if (acao === 'disparar_manual') {
       if (!b.de || !b.ate) return res.status(400).json({ erro: 'periodo_obrigatorio' });
+      const temCustom = typeof b.texto_custom === 'string' && b.texto_custom.trim().length > 0;
       // trava anti-reenvio: mesmo disparo repetido em menos de 2 min
+      const match = temCustom
+        ? { de: String(b.de), ate: String(b.ate), custom: true }
+        : { de: String(b.de), ate: String(b.ate), offset: Number(b.offset) };
       const { data: recente } = await supabase.from('regua_jobs')
         .select('id').eq('unit_id', unitId)
-        .contains('params', { de: String(b.de), ate: String(b.ate), offset: Number(b.offset) })
+        .contains('params', match)
         .gte('created_at', new Date(Date.now() - 120000).toISOString()).limit(1);
       if (recente && recente.length) return res.status(429).json({ erro: 'reenvio_rapido', mensagem: 'Esse mesmo disparo foi feito há pouco. Aguarde ~2 minutos.' });
 
       const { job_id, resumo } = await dispararManual(unitId, {
         de: String(b.de), ate: String(b.ate),
         statuses: Array.isArray(b.statuses) ? b.statuses : [],
-        offset: Number(b.offset), criadoPor: eu.id
+        offset: Number(b.offset), textoCustom: temCustom ? String(b.texto_custom) : null, criadoPor: eu.id
       });
       return res.status(200).json({ ok: true, job_id, resumo });
     }

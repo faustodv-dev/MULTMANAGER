@@ -73,6 +73,8 @@ export default function Regua() {
   const [mAte, setMAte] = useState(hojeISO());
   const [mStatus, setMStatus] = useState<string[]>(["Ativo"]);
   const [mOffset, setMOffset] = useState<number>(7);
+  const [mCustom, setMCustom] = useState(false);
+  const [mTexto, setMTexto] = useState("");
   const [previa, setPrevia] = useState<Previa | null>(null);
   const [calcPrevia, setCalcPrevia] = useState(false);
   const [disparando, setDisparando] = useState(false);
@@ -129,7 +131,7 @@ export default function Regua() {
   const dispararManual = async () => {
     setDisparando(true);
     try {
-      const r = await api<{ resumo: any }>("regua", { acao: "disparar_manual", unit_id: unidade, de: mDe, ate: mAte, statuses: mStatus, offset: mOffset });
+      const r = await api<{ resumo: any }>("regua", { acao: "disparar_manual", unit_id: unidade, de: mDe, ate: mAte, statuses: mStatus, offset: mOffset, texto_custom: mCustom ? mTexto : undefined });
       setRelatorio(r.resumo);
       setPrevia(null);
       toast.success("Disparo concluído. Veja o relatório.");
@@ -298,12 +300,38 @@ export default function Regua() {
                   <div><Label className="text-xs">até</Label><Input type="date" className="w-40" value={mAte} onChange={(e) => { setMAte(e.target.value); setPrevia(null); setRelatorio(null); }} /></div>
                   <div>
                     <Label className="text-xs">Mensagem</Label>
-                    <select className="h-10 w-56 rounded-md border bg-background px-2 text-sm" value={mOffset} onChange={(e) => setMOffset(Number(e.target.value))}>
+                    <select
+                      className="h-10 w-56 rounded-md border bg-background px-2 text-sm"
+                      value={mCustom ? "custom" : String(mOffset)}
+                      onChange={(e) => {
+                        if (e.target.value === "custom") setMCustom(true);
+                        else { setMCustom(false); setMOffset(Number(e.target.value)); }
+                        setRelatorio(null);
+                      }}
+                    >
                       {regua.passos.map((p) => <option key={p.offset} value={p.offset}>{rotulo(p.offset)}</option>)}
+                      <option value="custom">✍️ Outra (personalizada)</option>
                     </select>
                   </div>
                   <Button variant="secondary" onClick={verPrevia} disabled={calcPrevia || !mStatus.length}>{calcPrevia ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Users className="mr-1 h-4 w-4" />} Ver prévia</Button>
                 </div>
+
+                {mCustom && (
+                  <div className="mt-3">
+                    <Label className="text-xs">Mensagem personalizada</Label>
+                    <Textarea
+                      className="mt-1 min-h-[96px] text-sm"
+                      value={mTexto}
+                      maxLength={600}
+                      disabled={!podeEditar}
+                      placeholder="Escreva a mensagem da campanha. Ex.: Olá {responsavel}! Temos uma condição especial de renegociação para a mensalidade de {aluno}…"
+                      onChange={(e) => { setMTexto(e.target.value); setRelatorio(null); }}
+                    />
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {mTexto.length}/600 · variáveis disponíveis: <code>{"{responsavel}"}</code> <code>{"{aluno}"}</code> <code>{"{valor}"}</code> <code>{"{vencimento}"}</code>
+                    </p>
+                  </div>
+                )}
 
                 {disparando && (
                   <p className="mt-3 text-sm text-muted-foreground"><Loader2 className="mr-1 inline h-4 w-4 animate-spin" /> Disparando… enfileirando as mensagens, aguarde.</p>
@@ -316,13 +344,13 @@ export default function Regua() {
                     {podeEditar && previa.responsaveis > 0 && (
                       <AlertDialog>
                         <AlertDialogTrigger asChild>
-                          <Button className="mt-3 bg-orange-600 hover:bg-orange-700"><Megaphone className="mr-1 h-4 w-4" /> Disparar para {previa.responsaveis} responsável(is)</Button>
+                          <Button className="mt-3 bg-orange-600 hover:bg-orange-700" disabled={mCustom && !mTexto.trim()}><Megaphone className="mr-1 h-4 w-4" /> Disparar para {previa.responsaveis} responsável(is)</Button>
                         </AlertDialogTrigger>
                         <AlertDialogContent>
                           <AlertDialogHeader>
                             <AlertDialogTitle>Confirmar disparo manual</AlertDialogTitle>
                             <AlertDialogDescription>
-                              Vai enviar a mensagem "{rotulo(mOffset)}" para <b>{previa.responsaveis}</b> responsável(is) com parcela entre {mDe.split("-").reverse().join("/")} e {mAte.split("-").reverse().join("/")} ({mStatus.join(", ")}). As mensagens são enviadas de verdade pelo WhatsApp, em ritmo seguro. Confirmar?
+                              Vai enviar {mCustom ? <b>a mensagem personalizada</b> : <>a mensagem "{rotulo(mOffset)}"</>} para <b>{previa.responsaveis}</b> responsável(is) com parcela entre {mDe.split("-").reverse().join("/")} e {mAte.split("-").reverse().join("/")} ({mStatus.join(", ")}). As mensagens são enviadas de verdade pelo WhatsApp, em ritmo seguro. Confirmar?
                             </AlertDialogDescription>
                           </AlertDialogHeader>
                           <AlertDialogFooter>

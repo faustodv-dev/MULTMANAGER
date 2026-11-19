@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  ResponsiveContainer, LineChart, Line, BarChart, Bar, PieChart, Pie, Cell,
+  ResponsiveContainer, AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, Tooltip, CartesianGrid,
 } from "recharts";
 import { GraduationCap, Receipt, Send, AlertTriangle, RefreshCw, CalendarDays, ListTodo, Loader2, Briefcase, XCircle } from "lucide-react";
@@ -37,21 +37,47 @@ const diaBr = (iso: string) => iso.slice(8, 10) + "/" + iso.slice(5, 7);
 const COR_FAIXA: Record<string, string> = { quente: "#ef4444", morno: "#f59e0b", frio: "#3b82f6" };
 const DEP_ROTULO: Record<string, string> = { pedagogico: "Pedagógico", financeiro: "Financeiro", encaminhamento: "Encaminhamento" };
 
-function Kpi({ rotulo, valor, sub, cor }: { rotulo: string; valor: number | string; sub?: string; cor?: string }) {
+// Paleta de acentos (tema claro, vibrante). Cada métrica ganha uma cor própria:
+// barra de gradiente no topo do tile, número colorido e leve tingido de fundo.
+type Acento = "slate" | "emerald" | "sky" | "red" | "amber" | "violet";
+const ACENTO: Record<Acento, { bar: string; num: string; soft: string; hex: string }> = {
+  slate:   { bar: "from-slate-300 to-slate-400",     num: "text-slate-700",   soft: "from-slate-50",   hex: "#64748b" },
+  emerald: { bar: "from-emerald-400 to-teal-500",    num: "text-emerald-600", soft: "from-emerald-50", hex: "#10b981" },
+  sky:     { bar: "from-sky-400 to-indigo-500",      num: "text-sky-600",     soft: "from-sky-50",     hex: "#0ea5e9" },
+  red:     { bar: "from-rose-400 to-red-500",        num: "text-red-600",     soft: "from-rose-50",    hex: "#ef4444" },
+  amber:   { bar: "from-amber-400 to-orange-500",    num: "text-amber-600",   soft: "from-amber-50",   hex: "#f59e0b" },
+  violet:  { bar: "from-violet-400 to-fuchsia-500",  num: "text-violet-600",  soft: "from-violet-50",  hex: "#8b5cf6" },
+};
+
+const TOOLTIP = { fontSize: 12, borderRadius: 12, border: "1px solid hsl(var(--border))", boxShadow: "0 8px 24px rgba(15,23,42,0.12)", background: "hsl(var(--card))" };
+
+function Kpi({ rotulo, valor, sub, accent = "slate", icon }: { rotulo: string; valor: number | string; sub?: string; accent?: Acento; icon?: React.ReactNode }) {
+  const a = ACENTO[accent];
   return (
-    <div className="rounded-xl border bg-card p-4">
-      <p className="text-xs text-muted-foreground">{rotulo}</p>
-      <p className={`mt-1 text-2xl font-bold tabular-nums ${cor || ""}`}>{valor}</p>
-      {sub && <p className="mt-0.5 text-xs text-muted-foreground">{sub}</p>}
+    <div className="group relative overflow-hidden rounded-xl border bg-card p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
+      <div className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${a.bar}`} />
+      <div className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${a.soft} to-transparent opacity-40`} />
+      <div className="relative">
+        <div className="flex items-center justify-between">
+          <p className="text-xs font-medium text-muted-foreground">{rotulo}</p>
+          {icon && <span className={a.num}>{icon}</span>}
+        </div>
+        <p className={`mt-1 text-3xl font-bold tabular-nums ${a.num}`}>{valor}</p>
+        {sub && <p className="mt-0.5 text-xs text-muted-foreground">{sub}</p>}
+      </div>
     </div>
   );
 }
 
-function Painel({ titulo, children, acao }: { titulo: string; children: React.ReactNode; acao?: React.ReactNode }) {
+function Painel({ titulo, children, acao, accent }: { titulo: string; children: React.ReactNode; acao?: React.ReactNode; accent?: Acento }) {
+  const bar = accent ? ACENTO[accent].bar : "from-slate-300 to-slate-400";
   return (
-    <section className="rounded-xl border bg-card p-4">
+    <section className="rounded-xl border bg-card p-4 shadow-sm">
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-sm font-semibold">{titulo}</h2>
+        <h2 className="flex items-center gap-2 text-sm font-semibold">
+          <span className={`inline-block h-4 w-1 rounded-full bg-gradient-to-b ${bar}`} />
+          {titulo}
+        </h2>
         {acao}
       </div>
       {children}
@@ -100,10 +126,15 @@ export default function Dashboard() {
     <div className="h-full overflow-y-auto">
       <div className="mx-auto max-w-6xl space-y-4 p-4 md:p-6">
         {/* Cabeçalho */}
-        <header className="flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h1 className="text-xl font-bold">Painel</h1>
-            <p className="text-sm text-muted-foreground">Produtividade e pendências da unidade{dados ? ` · ${diaBr(dados.periodo.de)}–${diaBr(dados.periodo.ate)}` : ""}.</p>
+        <header className="flex flex-wrap items-end justify-between gap-3 rounded-2xl border bg-gradient-to-r from-sky-50 via-card to-violet-50 p-4 shadow-sm">
+          <div className="flex items-center gap-3">
+            <span className="grid h-11 w-11 place-items-center rounded-xl bg-gradient-to-br from-sky-500 to-violet-500 text-white shadow-md">
+              <GraduationCap className="h-6 w-6" />
+            </span>
+            <div>
+              <h1 className="bg-gradient-to-r from-sky-600 to-violet-600 bg-clip-text text-2xl font-extrabold tracking-tight text-transparent">Painel</h1>
+              <p className="text-sm text-muted-foreground">Produtividade e pendências da unidade{dados ? ` · ${diaBr(dados.periodo.de)}–${diaBr(dados.periodo.ate)}` : ""}.</p>
+            </div>
           </div>
           <div className="flex flex-wrap items-end gap-2">
             {ehMaster && unidades.length > 1 && (
@@ -134,36 +165,36 @@ export default function Dashboard() {
           <>
             {/* Pedagógico — prioridade */}
             {temPed && (
-              <Painel titulo="Pedagógico" acao={<GraduationCap className="h-4 w-4 text-emerald-600" />}>
+              <Painel titulo="Pedagógico" accent="emerald" acao={<GraduationCap className="h-4 w-4 text-emerald-600" />}>
                 <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-                  <Kpi rotulo="Atendimentos abertos" valor={ped?.abertos ?? 0} sub={`${ped?.alta ?? 0} de alta prioridade`} />
-                  <Kpi rotulo="Resolvidos no período" valor={ped?.resolvidos_periodo ?? 0} cor="text-emerald-600" />
-                  <Kpi rotulo="Risco de evasão" valor={dados.risco?.total ?? 0} sub={`${dados.risco?.nivel2 ?? 0} em nível 2 · ${dados.risco?.novos_periodo ?? 0} novos`} cor="text-red-600" />
-                  <Kpi rotulo="Aguardando aluno" valor={ped?.aguardando ?? 0} cor="text-amber-600" />
+                  <Kpi rotulo="Atendimentos abertos" valor={ped?.abertos ?? 0} sub={`${ped?.alta ?? 0} de alta prioridade`} accent="sky" icon={<GraduationCap className="h-4 w-4" />} />
+                  <Kpi rotulo="Resolvidos no período" valor={ped?.resolvidos_periodo ?? 0} accent="emerald" />
+                  <Kpi rotulo="Risco de evasão" valor={dados.risco?.total ?? 0} sub={`${dados.risco?.nivel2 ?? 0} em nível 2 · ${dados.risco?.novos_periodo ?? 0} novos`} accent="red" icon={<AlertTriangle className="h-4 w-4" />} />
+                  <Kpi rotulo="Aguardando aluno" valor={ped?.aguardando ?? 0} accent="amber" />
                 </div>
               </Painel>
             )}
 
             {/* Financeiro — segundo */}
             {temFin && (
-              <Painel titulo="Financeiro" acao={<Receipt className="h-4 w-4 text-sky-600" />}>
+              <Painel titulo="Financeiro" accent="sky" acao={<Receipt className="h-4 w-4 text-sky-600" />}>
                 <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-                  <Kpi rotulo="Atendimentos abertos" valor={fin?.abertos ?? 0} sub={`${fin?.alta ?? 0} de alta prioridade`} />
-                  <Kpi rotulo="Resolvidos no período" valor={fin?.resolvidos_periodo ?? 0} cor="text-emerald-600" />
-                  <Kpi rotulo="Cobranças enviadas" valor={dados.fila?.cobranca ?? 0} sub="no período (fila)" />
-                  <Kpi rotulo="Aguardando" valor={fin?.aguardando ?? 0} cor="text-amber-600" />
+                  <Kpi rotulo="Atendimentos abertos" valor={fin?.abertos ?? 0} sub={`${fin?.alta ?? 0} de alta prioridade`} accent="sky" icon={<Receipt className="h-4 w-4" />} />
+                  <Kpi rotulo="Resolvidos no período" valor={fin?.resolvidos_periodo ?? 0} accent="emerald" />
+                  <Kpi rotulo="Cobranças enviadas" valor={dados.fila?.cobranca ?? 0} sub="no período (fila)" accent="violet" icon={<Send className="h-4 w-4" />} />
+                  <Kpi rotulo="Aguardando" valor={fin?.aguardando ?? 0} accent="amber" />
                 </div>
               </Painel>
             )}
 
             {/* Encaminhamento / Agência de Emprego — espaços reservados (em breve) */}
             {temEnc && (
-              <Painel titulo="Encaminhamento / Agência de Emprego" acao={<Briefcase className="h-4 w-4 text-violet-600" />}>
+              <Painel titulo="Encaminhamento / Agência de Emprego" accent="violet" acao={<Briefcase className="h-4 w-4 text-violet-600" />}>
                 <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-                  <Kpi rotulo="Alunos encaminhados" valor={dados.agencia_kpi?.encaminhados_periodo ?? 0} sub={`${dados.agencia_kpi?.contratados_periodo ?? 0} contratado(s) no período`} />
-                  <Kpi rotulo="Vagas abertas" valor={dados.agencia_kpi?.vagas_abertas ?? 0} cor="text-violet-600" />
-                  <Kpi rotulo="Atendimentos abertos" valor={enc?.abertos ?? 0} sub={`${enc?.alta ?? 0} de alta prioridade`} />
-                  <Kpi rotulo="Resolvidos no período" valor={enc?.resolvidos_periodo ?? 0} cor="text-emerald-600" />
+                  <Kpi rotulo="Alunos encaminhados" valor={dados.agencia_kpi?.encaminhados_periodo ?? 0} sub={`${dados.agencia_kpi?.contratados_periodo ?? 0} contratado(s) no período`} accent="violet" icon={<Briefcase className="h-4 w-4" />} />
+                  <Kpi rotulo="Vagas abertas" valor={dados.agencia_kpi?.vagas_abertas ?? 0} accent="sky" />
+                  <Kpi rotulo="Atendimentos abertos" valor={enc?.abertos ?? 0} sub={`${enc?.alta ?? 0} de alta prioridade`} accent="amber" />
+                  <Kpi rotulo="Resolvidos no período" valor={enc?.resolvidos_periodo ?? 0} accent="emerald" />
                 </div>
               </Painel>
             )}
@@ -171,24 +202,30 @@ export default function Dashboard() {
             {/* Fila de mensagens */}
             {dados.fila && (
               <div className="grid grid-cols-3 gap-3">
-                <Kpi rotulo="Na fila" valor={dados.fila.na_fila} />
-                <Kpi rotulo="Enviadas no período" valor={dados.fila.enviadas_periodo} sub={`${dados.fila.faltantes} faltantes · ${dados.fila.cobranca} cobrança`} cor="text-emerald-600" />
-                <Kpi rotulo="Erros" valor={dados.fila.erros} cor={dados.fila.erros ? "text-red-600" : ""} />
+                <Kpi rotulo="Na fila" valor={dados.fila.na_fila} accent="slate" icon={<Send className="h-4 w-4" />} />
+                <Kpi rotulo="Enviadas no período" valor={dados.fila.enviadas_periodo} sub={`${dados.fila.faltantes} faltantes · ${dados.fila.cobranca} cobrança`} accent="emerald" />
+                <Kpi rotulo="Erros" valor={dados.fila.erros} accent={dados.fila.erros ? "red" : "slate"} icon={<XCircle className="h-4 w-4" />} />
               </div>
             )}
 
             {/* Faltantes por dia — acompanhar a curva caindo */}
             {temPed && (
-              <Painel titulo="Faltantes por dia">
+              <Painel titulo="Faltantes por dia" accent="amber">
                 {dados.serie_faltantes.length ? (
                   <ResponsiveContainer width="100%" height={200}>
-                    <LineChart data={dados.serie_faltantes} margin={{ left: -20, right: 8, top: 4 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <AreaChart data={dados.serie_faltantes} margin={{ left: -20, right: 8, top: 4 }}>
+                      <defs>
+                        <linearGradient id="gradFaltantes" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#f59e0b" stopOpacity={0.35} />
+                          <stop offset="100%" stopColor="#f59e0b" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
                       <XAxis dataKey="dia" tickFormatter={diaBr} tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
                       <YAxis allowDecimals={false} tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
-                      <Tooltip labelFormatter={(v) => diaBr(String(v))} contentStyle={{ fontSize: 12, borderRadius: 8 }} />
-                      <Line type="monotone" dataKey="n" name="Faltantes" stroke="#f59e0b" strokeWidth={2} dot={{ r: 2 }} />
-                    </LineChart>
+                      <Tooltip labelFormatter={(v) => diaBr(String(v))} contentStyle={TOOLTIP} />
+                      <Area type="monotone" dataKey="n" name="Faltantes" stroke="#f59e0b" strokeWidth={2.5} fill="url(#gradFaltantes)" dot={{ r: 2 }} activeDot={{ r: 4 }} />
+                    </AreaChart>
                   </ResponsiveContainer>
                 ) : <p className="py-10 text-center text-sm text-muted-foreground">Sem faltantes no período.</p>}
               </Painel>
@@ -196,43 +233,55 @@ export default function Dashboard() {
 
             {/* Gráficos */}
             <div className="grid gap-4 lg:grid-cols-2">
-              <Painel titulo="Atendimentos resolvidos por dia">
+              <Painel titulo="Atendimentos resolvidos por dia" accent="emerald">
                 {dados.serie.length ? (
                   <ResponsiveContainer width="100%" height={220}>
-                    <LineChart data={dados.serie} margin={{ left: -20, right: 8, top: 4 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <AreaChart data={dados.serie} margin={{ left: -20, right: 8, top: 4 }}>
+                      <defs>
+                        <linearGradient id="gradResolvidos" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#10b981" stopOpacity={0.35} />
+                          <stop offset="100%" stopColor="#10b981" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
                       <XAxis dataKey="dia" tickFormatter={diaBr} tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
                       <YAxis allowDecimals={false} tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
-                      <Tooltip labelFormatter={(v) => diaBr(String(v))} contentStyle={{ fontSize: 12, borderRadius: 8 }} />
-                      <Line type="monotone" dataKey="n" name="Resolvidos" stroke="#10b981" strokeWidth={2} dot={false} />
-                    </LineChart>
+                      <Tooltip labelFormatter={(v) => diaBr(String(v))} contentStyle={TOOLTIP} />
+                      <Area type="monotone" dataKey="n" name="Resolvidos" stroke="#10b981" strokeWidth={2.5} fill="url(#gradResolvidos)" dot={false} activeDot={{ r: 4 }} />
+                    </AreaChart>
                   </ResponsiveContainer>
                 ) : <p className="py-10 text-center text-sm text-muted-foreground">Sem resolvidos no período.</p>}
               </Painel>
 
-              <Painel titulo="Resolvidos por colaborador">
+              <Painel titulo="Resolvidos por colaborador" accent="sky">
                 {dados.por_colaborador.length ? (
                   <ResponsiveContainer width="100%" height={220}>
                     <BarChart data={dados.por_colaborador} layout="vertical" margin={{ left: 8, right: 12 }}>
+                      <defs>
+                        <linearGradient id="gradColab" x1="0" y1="0" x2="1" y2="0">
+                          <stop offset="0%" stopColor="#0ea5e9" />
+                          <stop offset="100%" stopColor="#6366f1" />
+                        </linearGradient>
+                      </defs>
                       <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
                       <YAxis type="category" dataKey="nome" width={110} tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
-                      <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} />
-                      <Bar dataKey="n" name="Resolvidos" fill="#0ea5e9" radius={[0, 4, 4, 0]} />
+                      <Tooltip cursor={{ fill: "hsl(var(--muted))", opacity: 0.4 }} contentStyle={TOOLTIP} />
+                      <Bar dataKey="n" name="Resolvidos" fill="url(#gradColab)" radius={[0, 6, 6, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 ) : <p className="py-10 text-center text-sm text-muted-foreground">Sem atribuição por colaborador no período.</p>}
               </Painel>
 
               {temPed && dados.termometro && (
-                <Painel titulo="Termômetro dos alunos">
+                <Painel titulo="Termômetro dos alunos" accent="red">
                   {termoData.length ? (
                     <div className="flex items-center gap-4">
                       <ResponsiveContainer width="55%" height={200}>
                         <PieChart>
-                          <Pie data={termoData} dataKey="valor" nameKey="nome" innerRadius={48} outerRadius={78} paddingAngle={2}>
+                          <Pie data={termoData} dataKey="valor" nameKey="nome" innerRadius={48} outerRadius={78} paddingAngle={2} stroke="hsl(var(--card))" strokeWidth={2}>
                             {termoData.map((d) => <Cell key={d.nome} fill={COR_FAIXA[d.nome]} />)}
                           </Pie>
-                          <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} />
+                          <Tooltip contentStyle={TOOLTIP} />
                         </PieChart>
                       </ResponsiveContainer>
                       <div className="space-y-1 text-sm">

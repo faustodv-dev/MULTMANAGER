@@ -74,6 +74,14 @@ function somaDias(iso, dias) {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date(d));
 }
 
+/** Hash curto e estável de um texto (djb2), p/ compor a chave de campanhas personalizadas. */
+function hashCurto(s) {
+  let h = 5381;
+  const t = String(s || '');
+  for (let i = 0; i < t.length; i++) h = ((h << 5) + h + t.charCodeAt(i)) >>> 0;
+  return h.toString(36).slice(0, 8);
+}
+
 const primeiroNome = (n) => String(n || '').trim().split(/\s+/)[0]?.toLowerCase().replace(/^./, (c) => c.toUpperCase()) || '';
 
 export function nomesAlunos(lista) {
@@ -132,13 +140,14 @@ async function processarGrupos(unitId, gruposMap, origem, { viaFila = false, hor
       registros.push({ ...baseReg, status: 'pulado_boleto_ativo' });
       continue;
     }
+    const categoriaFila = g.passo.custom ? 'cobmanual' : `cob${g.passo.offset}`;
     const texto = preencher(g.passo.texto, {
       responsavel: primeiroNome(g.responsavel) || 'tudo bem', aluno: alunosTxt, valor: reais(g.valor), vencimento: dataBr(g.vencimento)
     });
     if (viaFila) {
       // Enfileira: o gateway envia no horário da unidade, grava a hora REAL e dispara a ocorrência.
       filaItens.push({
-        telefone: g.telefone, texto, origem: 'regua_cobranca', categoria: `cob${g.passo.offset}`,
+        telefone: g.telefone, texto, origem: 'regua_cobranca', categoria: categoriaFila,
         prioridade: 5, agendado_para: agendado, chave: `cob|${g.chave}`,
         cod_alu: g.cod_alu, alunos: alunosTxt, metadata: { matricula: g.matricula || '', offset: g.passo.offset, valor: g.valor, vencimento: g.vencimento || null }
       });
@@ -219,21 +228,32 @@ export async function previaManual(unitId, { de, ate, statuses }) {
  * Disparo MANUAL com relatório (job). Enfileira todos (lotes geridos pelo gateway),
  * grava um regua_jobs com o resultado e devolve o relatório.
  */
-export async function dispararManual(unitId, { de, ate, statuses, offset, criadoPor = null }) {
+export async function dispararManual(unitId, { de, ate, statuses, offset, textoCustom = null, criadoPor = null }) {
   const regua = await reguaDaUnidade(unitId);
-  const passo = regua.passos.find((p) => Number(p.offset) === Number(offset)) || regua.passos[0];
+  const custom = typeof textoCustom === 'string' && textoCustom.trim().length > 0;
+  // Campanha personalizada ("Outra"): passo sintético com o texto digitado; as variáveis
+  // {responsavel} {aluno} {valor} {vencimento} continuam funcionando (preencher em processarGrupos).
+  const passo = custom
+    ? { offset: null, texto: textoCustom.trim().slice(0, 4000), ativo: true, custom: true }
+    : (regua.passos.find((p) => Number(p.offset) === Number(offset)) || regua.passos[0]);
 
   const { data: job } = await supabase.from('regua_jobs').insert({
     unit_id: unitId, criado_por: criadoPor, tipo: 'manual',
-    params: { de, ate, offset: passo.offset, statuses }, status: 'processando'
+    params: { de, ate, offset: custom ? 'custom' : passo.offset, statuses, custom }, status: 'processando'
   }).select('id').single();
   const jobId = job?.id || null;
+
+  // Chave anti-duplicidade: no custom inclui um hash do texto — o MESMO texto no MESMO
+  // período não reenvia, mas um texto DIFERENTE pode ser disparado para as mesmas pessoas.
+  const chaveDe = custom
+    ? (_passo, _p, tel) => `MC|${tel}|${de}|${ate}|${hashCurto(passo.texto)}`
+    : (_passo, _p, tel) => `M|${tel}|${passo.offset}|${de}|${ate}`;
 
   let resumo;
   try {
     const carteira = await ponte(unitId, 'carteira', { de, ate, statuses }, { timeoutMs: 40000 });
     const lista = (carteira || []).filter((p) => p.telefone && digitos(p.telefone).length >= 10);
-    const grupos = agrupar(lista, () => passo, (_passo, _p, tel) => `M|${tel}|${passo.offset}|${de}|${ate}`);
+    const grupos = agrupar(lista, () => passo, chaveDe);
     resumo = await processarGrupos(unitId, grupos, 'manual', { viaFila: regua.via_fila, horario: regua.horario });
   } catch (e) {
     resumo = { total: 0, enviados: 0, pulados: 0, erros: 1, limitado: false, erros_detalhe: [{ erro: e.message }] };
