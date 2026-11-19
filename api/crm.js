@@ -146,6 +146,18 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true, cards: data || [] });
     }
 
+    // Atendimentos ENCERRADOS (resolvidos) num período — para o filtro das telas de depto.
+    // Separado do crm_inicial (que só traz os abertos) para não mexer nos KPIs do board.
+    if (acao === 'cards_encerrados') {
+      const de = b.de ? `${String(b.de)}T00:00:00-03:00` : null;
+      const ate = b.ate ? `${String(b.ate)}T23:59:59-03:00` : null;
+      let q = supabase.from('cards').select('*').eq('unit_id', unitId).eq('departamento', dep).eq('status', 'resolvido');
+      if (de) q = q.gte('resolvido_em', de);
+      if (ate) q = q.lte('resolvido_em', ate);
+      const { data } = await q.order('resolvido_em', { ascending: false }).limit(300);
+      return res.status(200).json({ ok: true, cards: data || [] });
+    }
+
     if (acao === 'card_criar') {
       const cod = b.cod_alu ? String(b.cod_alu) : null;
       const linha = {
