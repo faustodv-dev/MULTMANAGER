@@ -447,10 +447,16 @@ final class Escola
         if ($curCod === '') {
             return [];
         }
-        $rows = $this->db->todos(
-            'SELECT COD_TUR, NOM_TUR, DIA_SEMANA, PERIODO, HS_INICIO, HS_FIM, VAG_TUR FROM s_cad_turma WHERE COD_CUR = ?',
-            [$curCod]
-        );
+        // Só turmas ATIVAS (STATUS_TUR = 'Ativo'): nunca oferecer reposição/remanejamento em
+        // turma INATIVA, mesmo que tenha vaga (ex.: 028INF — inativa, mas com vaga). Nome da
+        // coluna descoberto em runtime para resistir a variações de schema entre unidades.
+        $colStatus = $this->colunaReal('s_cad_turma', ['STATUS_TUR', 'SIT_TUR', 'STATUS']);
+        $sql = 'SELECT COD_TUR, NOM_TUR, DIA_SEMANA, PERIODO, HS_INICIO, HS_FIM, VAG_TUR FROM s_cad_turma WHERE COD_CUR = ?';
+        $params = [$curCod];
+        if ($colStatus !== '') {
+            $sql .= " AND $colStatus = 'Ativo'";
+        }
+        $rows = $this->db->todos($sql, $params);
         $out = [];
         foreach ($rows as $r) {
             if ((string)$r['COD_TUR'] === $turmaCod) {
@@ -461,6 +467,7 @@ final class Escola
                 continue;
             }
             $out[] = [
+                'cod_tur' => (string)($r['COD_TUR'] ?? ''),
                 'turma' => Texto::doBanco($r['NOM_TUR'] ?? ''),
                 'dia_semana' => Texto::doBanco($r['DIA_SEMANA'] ?? ''),
                 'periodo' => Texto::doBanco($r['PERIODO'] ?? ''),
