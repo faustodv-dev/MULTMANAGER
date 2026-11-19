@@ -229,7 +229,7 @@ export default function Agencia() {
   };
   const imprimirDoc = (tipo: string) => {
     if (!docCand) return;
-    const html = gerarDocumentoHTML(tipo, docCand, docExtras);
+    const html = gerarDocumentoHTML(tipo, docCand, docExtras, unidades.find((u) => u.id === unidade));
     const w = window.open("", "_blank", "width=900,height=1000");
     if (!w) { toast.error("Permita pop-ups para gerar o documento."); return; }
     w.document.write(html); w.document.close(); w.focus();
