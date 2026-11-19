@@ -22,6 +22,7 @@ type Vaga = {
   sexo: string | null; curso_alvo: string | null; requisitos: string | null; experiencia: boolean | null;
   horario: string | null; beneficios: string | null; remuneracao: string | null; status: string;
   area?: string | null; turnos?: string[] | null; escolaridade_min?: string | null; cnh_exigida?: string | null;
+  conducao_exigida?: boolean | null; habilidades?: string[] | null;
   created_at?: string;
   empresa?: { nome: string } | null;
 };
@@ -36,6 +37,18 @@ type Candidato = {
   escolaridade: string | null; experiencia: boolean | null; experiencia_area: string | null;
   cnh: string | null; cursos_mult: string | null; pretensao: string | null; bairro: string | null;
   observacoes: string | null; status: string;
+  estado_civil?: string | null; endereco?: string | null; numero?: string | null; complemento?: string | null;
+  cidade?: string | null; uf?: string | null; cep?: string | null; email?: string | null; recado?: string | null;
+  falar_com?: string | null; conducao?: string | null;
+  pai_nome?: string | null; pai_profissao?: string | null; mae_nome?: string | null; mae_profissao?: string | null;
+  conjuge_nome?: string | null; conjuge_profissao?: string | null; num_filhos?: number | null; idades_filhos?: string | null;
+  estuda?: boolean | null; estuda_curso?: string | null; estuda_periodo?: string | null; estuda_serie?: string | null;
+  escola?: string | null; curso_complementacao?: string | null; curso_mult_atual?: string | null; turma?: string | null; periodo_mult?: string | null;
+  exp_area?: string | null; habilidades?: string[] | null; habilidades_livre?: string | null;
+  exp1_empresa?: string | null; exp1_cidade?: string | null; exp1_uf?: string | null; exp1_fone?: string | null;
+  exp1_entrada?: string | null; exp1_saida?: string | null; exp1_cargo?: string | null; exp1_funcoes?: string | null; exp1_motivo?: string | null; exp1_salario?: string | null;
+  exp2_empresa?: string | null; exp2_cidade?: string | null; exp2_uf?: string | null; exp2_fone?: string | null;
+  exp2_entrada?: string | null; exp2_saida?: string | null; exp2_cargo?: string | null; exp2_funcoes?: string | null; exp2_motivo?: string | null; exp2_salario?: string | null;
 };
 type MatchItem = { candidato: Candidato; score: number; ok: string[]; alertas: string[]; idade: number | null };
 
@@ -45,6 +58,9 @@ const AREAS = ["Administrativo", "Vendas / Comércio", "Atendimento / Telemarket
 const TURNOS: { id: string; rot: string }[] = [{ id: "manha", rot: "Manhã" }, { id: "tarde", rot: "Tarde" }, { id: "noite", rot: "Noite" }, { id: "comercial", rot: "Comercial" }];
 const ESCOLARIDADE = ["Fundamental", "Médio incompleto", "Médio completo", "Técnico", "Superior incompleto", "Superior completo"];
 const CNH_OPCOES = ["Não tem", "A", "B", "AB", "C", "D", "E"];
+const HABILIDADES = ["Atendimento ao cliente", "Vendas", "Pacote Office", "Informática básica", "Digitação", "Caixa / Financeiro", "Rotinas administrativas", "Organização", "Comunicação", "Trabalho em equipe", "Proatividade", "Liderança", "Estoque / Logística", "Atendimento telefônico", "Redes sociais", "Condução / Direção"];
+const ESTADO_CIVIL = ["Solteiro(a)", "Casado(a)", "Divorciado(a)", "Viúvo(a)", "Amasiado(a)"];
+const CONDUCAO: { id: string; rot: string }[] = [{ id: "nao", rot: "Não tem" }, { id: "carro", rot: "Carro" }, { id: "moto", rot: "Moto" }, { id: "ambos", rot: "Carro e moto" }];
 const rotTurnos = (ids?: string[] | null) => (ids || []).map((i) => TURNOS.find((t) => t.id === i)?.rot || i).join(", ");
 const idadeDe = (nasc?: string | null) => {
   if (!nasc) return null;
@@ -89,6 +105,19 @@ const TurnoPicker = ({ val, onChange }: { val: string[]; onChange: (v: string[])
     })}
   </div>
 );
+const HabPicker = ({ val, onChange }: { val: string[]; onChange: (v: string[]) => void }) => (
+  <div className="mt-1 flex flex-wrap gap-1.5">
+    {HABILIDADES.map((h) => {
+      const on = val.includes(h);
+      return (
+        <button type="button" key={h} onClick={() => onChange(on ? val.filter((x) => x !== h) : [...val, h])}
+          className={cn("rounded-md border px-2.5 py-1 text-xs font-medium transition-colors", on ? "border-violet-500 bg-violet-50 text-violet-700" : "bg-background text-muted-foreground hover:bg-muted")}>
+          {h}
+        </button>
+      );
+    })}
+  </div>
+);
 
 export default function Agencia() {
   const { perfil, unidades } = useAuth();
@@ -107,6 +136,7 @@ export default function Agencia() {
   const [formEmp, setFormEmp] = useState<Partial<Empresa> | null>(null);
   const [formVaga, setFormVaga] = useState<Partial<Vaga> | null>(null);
   const [formCand, setFormCand] = useState<Partial<Candidato> | null>(null);
+  const [passoCand, setPassoCand] = useState(1);
   const [matchVaga, setMatchVaga] = useState<Vaga | null>(null);
   const [matchData, setMatchData] = useState<{ max: number; ranking: MatchItem[] } | null>(null);
   const [matchLoad, setMatchLoad] = useState(false);
@@ -194,6 +224,10 @@ export default function Agencia() {
       carregar();
     } catch (e: any) { toast.error(e.message); }
   };
+  // Helpers da ficha em passos
+  const setC = (patch: Partial<Candidato>) => setFormCand((f) => ({ ...(f || {}), ...patch }));
+  const vC = (k: keyof Candidato) => { const x = formCand ? (formCand as any)[k] : null; return x == null ? "" : String(x); };
+  const abrirCand = (c?: Candidato) => { setPassoCand(1); setFormCand(c ? c : { status: "ativo", turnos: [], habilidades: [] }); };
   const encaminhar = async () => {
     if (!formEnc) return;
     if (!formEnc.cod_alu?.trim() && !formEnc.nome_aluno?.trim()) { toast.error("Informe o código ou o nome do aluno."); return; }
@@ -247,7 +281,7 @@ export default function Agencia() {
           ) : aba === "vagas" ? (
             <Button onClick={() => setFormVaga({ status: "aberta", qtd: 1, turnos: [] })}><Plus className="mr-1 h-4 w-4" /> Nova vaga</Button>
           ) : (
-            <Button onClick={() => setFormCand({ status: "ativo", turnos: [] })}><Plus className="mr-1 h-4 w-4" /> Novo candidato</Button>
+            <Button onClick={() => abrirCand()}><Plus className="mr-1 h-4 w-4" /> Novo candidato</Button>
           )}
         </div>
 
@@ -320,7 +354,7 @@ export default function Agencia() {
                       {campo(c.area)}{c.turnos?.length ? ` · ${rotTurnos(c.turnos)}` : ""}{id != null ? ` · ${id} anos` : ""}{c.cursos_mult ? ` · ${c.cursos_mult}` : ""}{c.telefone ? ` · ${c.telefone}` : ""}
                     </p>
                   </div>
-                  <Button variant="ghost" size="sm" onClick={() => setFormCand(c)}><Pencil className="h-4 w-4" /></Button>
+                  <Button variant="ghost" size="sm" onClick={() => abrirCand(c)}><Pencil className="h-4 w-4" /></Button>
                 </div>
               );
             })}
@@ -395,6 +429,8 @@ export default function Agencia() {
                 </select>
               </div>
               <div className="col-span-2"><Label className="text-xs">Turnos aceitos</Label><TurnoPicker val={formVaga.turnos || []} onChange={(v) => setFormVaga({ ...formVaga, turnos: v })} /></div>
+              <label className="col-span-2 flex items-center gap-2 text-sm"><input type="checkbox" checked={!!formVaga.conducao_exigida} onChange={(e) => setFormVaga({ ...formVaga, conducao_exigida: e.target.checked })} /> Exige condução própria (carro/moto)</label>
+              <div className="col-span-2"><Label className="text-xs">Habilidades desejadas</Label><HabPicker val={formVaga.habilidades || []} onChange={(v) => setFormVaga({ ...formVaga, habilidades: v })} /></div>
               <div><Label className="text-xs">Qtd. vagas</Label><Input type="number" value={formVaga.qtd ?? ""} onChange={(e) => setFormVaga({ ...formVaga, qtd: e.target.value === "" ? null : Number(e.target.value) })} /></div>
               <div><Label className="text-xs">Sexo</Label>
                 <select className="h-10 w-full rounded-md border bg-background px-2 text-sm" value={formVaga.sexo || "A"} onChange={(e) => setFormVaga({ ...formVaga, sexo: e.target.value })}>
@@ -418,54 +454,142 @@ export default function Agencia() {
         </DialogContent>
       </Dialog>
 
-      {/* Form Candidato (perfil profissional) */}
+      {/* Ficha do candidato = Solicitação de Encaminhamento (em 4 passos) */}
       <Dialog open={!!formCand} onOpenChange={(o) => !o && setFormCand(null)}>
         <DialogContent className="max-h-[90vh] max-w-xl overflow-y-auto">
-          <DialogHeader><DialogTitle>{formCand?.id ? "Editar candidato" : "Novo candidato"}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{formCand?.id ? "Editar ficha do candidato" : "Nova ficha do candidato"}</DialogTitle></DialogHeader>
           {formCand && (
-            <div className="grid grid-cols-2 gap-3">
-              <div className="col-span-2"><Label className="text-xs">Nome *</Label><Input value={formCand.nome || ""} onChange={(e) => setFormCand({ ...formCand, nome: e.target.value })} /></div>
-              <div><Label className="text-xs">Código do aluno (MULT)</Label><Input value={formCand.cod_alu || ""} onChange={(e) => setFormCand({ ...formCand, cod_alu: e.target.value })} placeholder="ex.: 13847" /></div>
-              <div><Label className="text-xs">Telefone</Label><Input value={formCand.telefone || ""} onChange={(e) => setFormCand({ ...formCand, telefone: e.target.value })} /></div>
-              <div><Label className="text-xs">Nascimento</Label><Input type="date" value={formCand.nascimento || ""} onChange={(e) => setFormCand({ ...formCand, nascimento: e.target.value })} /></div>
-              <div><Label className="text-xs">Sexo</Label>
-                <select className="h-10 w-full rounded-md border bg-background px-2 text-sm" value={formCand.sexo || ""} onChange={(e) => setFormCand({ ...formCand, sexo: e.target.value || null })}>
-                  <option value="">—</option><option value="M">Masculino</option><option value="F">Feminino</option>
-                </select>
+            <>
+              <div className="mb-1 flex flex-wrap gap-1 text-[11px] font-medium">
+                {["Dados pessoais", "Educação", "Experiência", "Preferências"].map((t, i) => (
+                  <span key={t} className={cn("rounded-full px-2 py-0.5", passoCand === i + 1 ? "bg-violet-100 text-violet-700" : "text-muted-foreground")}>{i + 1}. {t}</span>
+                ))}
               </div>
-              <div><Label className="text-xs">Área desejada</Label>
-                <select className="h-10 w-full rounded-md border bg-background px-2 text-sm" value={formCand.area || ""} onChange={(e) => setFormCand({ ...formCand, area: e.target.value || null })}>
-                  <option value="">—</option>{AREAS.map((a) => <option key={a} value={a}>{a}</option>)}
-                </select>
+
+              {passoCand === 1 && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="col-span-2"><Label className="text-xs">Nome *</Label><Input value={vC("nome")} onChange={(e) => setC({ nome: e.target.value })} /></div>
+                  <div><Label className="text-xs">Código do aluno</Label><Input value={vC("cod_alu")} onChange={(e) => setC({ cod_alu: e.target.value })} placeholder="ex.: 13847" /></div>
+                  <div><Label className="text-xs">Telefone</Label><Input value={vC("telefone")} onChange={(e) => setC({ telefone: e.target.value })} /></div>
+                  <div><Label className="text-xs">Recado</Label><Input value={vC("recado")} onChange={(e) => setC({ recado: e.target.value })} /></div>
+                  <div><Label className="text-xs">Falar com</Label><Input value={vC("falar_com")} onChange={(e) => setC({ falar_com: e.target.value })} /></div>
+                  <div className="col-span-2"><Label className="text-xs">E-mail</Label><Input value={vC("email")} onChange={(e) => setC({ email: e.target.value })} /></div>
+                  <div><Label className="text-xs">Nascimento</Label><Input type="date" value={vC("nascimento")} onChange={(e) => setC({ nascimento: e.target.value })} /></div>
+                  <div><Label className="text-xs">Sexo</Label>
+                    <select className="h-10 w-full rounded-md border bg-background px-2 text-sm" value={vC("sexo")} onChange={(e) => setC({ sexo: e.target.value || null })}>
+                      <option value="">—</option><option value="M">Masculino</option><option value="F">Feminino</option>
+                    </select></div>
+                  <div className="col-span-2"><Label className="text-xs">Estado civil</Label>
+                    <select className="h-10 w-full rounded-md border bg-background px-2 text-sm" value={vC("estado_civil")} onChange={(e) => setC({ estado_civil: e.target.value || null })}>
+                      <option value="">—</option>{ESTADO_CIVIL.map((x) => <option key={x} value={x}>{x}</option>)}
+                    </select></div>
+                  <div className="col-span-2"><Label className="text-xs">Endereço</Label><Input value={vC("endereco")} onChange={(e) => setC({ endereco: e.target.value })} /></div>
+                  <div><Label className="text-xs">Nº</Label><Input value={vC("numero")} onChange={(e) => setC({ numero: e.target.value })} /></div>
+                  <div><Label className="text-xs">Complemento</Label><Input value={vC("complemento")} onChange={(e) => setC({ complemento: e.target.value })} /></div>
+                  <div><Label className="text-xs">Bairro</Label><Input value={vC("bairro")} onChange={(e) => setC({ bairro: e.target.value })} /></div>
+                  <div><Label className="text-xs">Cidade</Label><Input value={vC("cidade")} onChange={(e) => setC({ cidade: e.target.value })} /></div>
+                  <div><Label className="text-xs">UF</Label><Input value={vC("uf")} onChange={(e) => setC({ uf: e.target.value })} /></div>
+                  <div><Label className="text-xs">CEP</Label><Input value={vC("cep")} onChange={(e) => setC({ cep: e.target.value })} /></div>
+                  <div><Label className="text-xs">CNH <span className="text-[10px] text-violet-600">★</span></Label>
+                    <select className="h-10 w-full rounded-md border bg-background px-2 text-sm" value={vC("cnh")} onChange={(e) => setC({ cnh: e.target.value || null })}>
+                      <option value="">—</option>{CNH_OPCOES.map((x) => <option key={x} value={x}>{x}</option>)}
+                    </select></div>
+                  <div><Label className="text-xs">Condução própria <span className="text-[10px] text-violet-600">★</span></Label>
+                    <select className="h-10 w-full rounded-md border bg-background px-2 text-sm" value={vC("conducao")} onChange={(e) => setC({ conducao: e.target.value || null })}>
+                      <option value="">—</option>{CONDUCAO.map((x) => <option key={x.id} value={x.id}>{x.rot}</option>)}
+                    </select></div>
+                  <p className="col-span-2 mt-1 text-xs font-semibold text-muted-foreground">Família (para os documentos)</p>
+                  <div><Label className="text-xs">Nome do pai</Label><Input value={vC("pai_nome")} onChange={(e) => setC({ pai_nome: e.target.value })} /></div>
+                  <div><Label className="text-xs">Profissão do pai</Label><Input value={vC("pai_profissao")} onChange={(e) => setC({ pai_profissao: e.target.value })} /></div>
+                  <div><Label className="text-xs">Nome da mãe</Label><Input value={vC("mae_nome")} onChange={(e) => setC({ mae_nome: e.target.value })} /></div>
+                  <div><Label className="text-xs">Profissão da mãe</Label><Input value={vC("mae_profissao")} onChange={(e) => setC({ mae_profissao: e.target.value })} /></div>
+                  <div><Label className="text-xs">Cônjuge</Label><Input value={vC("conjuge_nome")} onChange={(e) => setC({ conjuge_nome: e.target.value })} /></div>
+                  <div><Label className="text-xs">Profissão do cônjuge</Label><Input value={vC("conjuge_profissao")} onChange={(e) => setC({ conjuge_profissao: e.target.value })} /></div>
+                  <div><Label className="text-xs">Nº de filhos</Label><Input type="number" value={formCand.num_filhos ?? ""} onChange={(e) => setC({ num_filhos: e.target.value === "" ? null : Number(e.target.value) })} /></div>
+                  <div><Label className="text-xs">Idades dos filhos</Label><Input value={vC("idades_filhos")} onChange={(e) => setC({ idades_filhos: e.target.value })} /></div>
+                </div>
+              )}
+
+              {passoCand === 2 && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="col-span-2"><Label className="text-xs">Escolaridade <span className="text-[10px] text-violet-600">★</span></Label>
+                    <select className="h-10 w-full rounded-md border bg-background px-2 text-sm" value={vC("escolaridade")} onChange={(e) => setC({ escolaridade: e.target.value || null })}>
+                      <option value="">—</option>{ESCOLARIDADE.map((x) => <option key={x} value={x}>{x}</option>)}
+                    </select></div>
+                  <label className="col-span-2 flex items-center gap-2 text-sm"><input type="checkbox" checked={!!formCand.estuda} onChange={(e) => setC({ estuda: e.target.checked })} /> Estuda atualmente</label>
+                  {formCand.estuda && (<>
+                    <div><Label className="text-xs">Curso</Label><Input value={vC("estuda_curso")} onChange={(e) => setC({ estuda_curso: e.target.value })} /></div>
+                    <div><Label className="text-xs">Período</Label><Input value={vC("estuda_periodo")} onChange={(e) => setC({ estuda_periodo: e.target.value })} /></div>
+                    <div><Label className="text-xs">Série</Label><Input value={vC("estuda_serie")} onChange={(e) => setC({ estuda_serie: e.target.value })} /></div>
+                    <div><Label className="text-xs">Escola / Faculdade</Label><Input value={vC("escola")} onChange={(e) => setC({ escola: e.target.value })} /></div>
+                  </>)}
+                  <div className="col-span-2"><Label className="text-xs">Curso de complementação</Label><Input value={vC("curso_complementacao")} onChange={(e) => setC({ curso_complementacao: e.target.value })} /></div>
+                  <p className="col-span-2 mt-1 text-xs font-semibold text-muted-foreground">Na MULT Profissões</p>
+                  <div className="col-span-2"><Label className="text-xs">Curso(s) MULT <span className="text-[10px] text-violet-600">★</span></Label><Input value={vC("cursos_mult")} onChange={(e) => setC({ cursos_mult: e.target.value })} placeholder="ex.: Informática, AAS" /></div>
+                  <div><Label className="text-xs">Curso atual</Label><Input value={vC("curso_mult_atual")} onChange={(e) => setC({ curso_mult_atual: e.target.value })} /></div>
+                  <div><Label className="text-xs">Turma</Label><Input value={vC("turma")} onChange={(e) => setC({ turma: e.target.value })} /></div>
+                  <div><Label className="text-xs">Período</Label><Input value={vC("periodo_mult")} onChange={(e) => setC({ periodo_mult: e.target.value })} /></div>
+                </div>
+              )}
+
+              {passoCand === 3 && (
+                <div className="grid grid-cols-2 gap-3">
+                  <p className="col-span-2 text-xs font-semibold text-muted-foreground">Último emprego</p>
+                  <div className="col-span-2"><Label className="text-xs">Empresa</Label><Input value={vC("exp1_empresa")} onChange={(e) => setC({ exp1_empresa: e.target.value })} /></div>
+                  <div><Label className="text-xs">Cargo</Label><Input value={vC("exp1_cargo")} onChange={(e) => setC({ exp1_cargo: e.target.value })} /></div>
+                  <div><Label className="text-xs">Cidade / UF</Label><Input value={vC("exp1_cidade")} onChange={(e) => setC({ exp1_cidade: e.target.value })} /></div>
+                  <div><Label className="text-xs">Entrada</Label><Input type="date" value={vC("exp1_entrada")} onChange={(e) => setC({ exp1_entrada: e.target.value })} /></div>
+                  <div><Label className="text-xs">Saída</Label><Input type="date" value={vC("exp1_saida")} onChange={(e) => setC({ exp1_saida: e.target.value })} /></div>
+                  <div className="col-span-2"><Label className="text-xs">Funções</Label><Input value={vC("exp1_funcoes")} onChange={(e) => setC({ exp1_funcoes: e.target.value })} /></div>
+                  <div><Label className="text-xs">Motivo da saída</Label><Input value={vC("exp1_motivo")} onChange={(e) => setC({ exp1_motivo: e.target.value })} /></div>
+                  <div><Label className="text-xs">Último salário</Label><Input value={vC("exp1_salario")} onChange={(e) => setC({ exp1_salario: e.target.value })} /></div>
+                  <p className="col-span-2 mt-1 text-xs font-semibold text-muted-foreground">Penúltimo emprego</p>
+                  <div className="col-span-2"><Label className="text-xs">Empresa</Label><Input value={vC("exp2_empresa")} onChange={(e) => setC({ exp2_empresa: e.target.value })} /></div>
+                  <div><Label className="text-xs">Cargo</Label><Input value={vC("exp2_cargo")} onChange={(e) => setC({ exp2_cargo: e.target.value })} /></div>
+                  <div><Label className="text-xs">Cidade / UF</Label><Input value={vC("exp2_cidade")} onChange={(e) => setC({ exp2_cidade: e.target.value })} /></div>
+                  <div className="col-span-2"><Label className="text-xs">Funções</Label><Input value={vC("exp2_funcoes")} onChange={(e) => setC({ exp2_funcoes: e.target.value })} /></div>
+                  <p className="col-span-2 mt-1 text-xs font-semibold text-violet-700">Perfil profissional (★ entra no match)</p>
+                  <label className="col-span-2 flex items-center gap-2 text-sm"><input type="checkbox" checked={!!formCand.experiencia} onChange={(e) => setC({ experiencia: e.target.checked })} /> Tem experiência anterior <span className="text-[10px] text-violet-600">★</span></label>
+                  <div className="col-span-2"><Label className="text-xs">Área da experiência <span className="text-[10px] text-violet-600">★</span></Label>
+                    <select className="h-10 w-full rounded-md border bg-background px-2 text-sm" value={vC("exp_area")} onChange={(e) => setC({ exp_area: e.target.value || null })}>
+                      <option value="">—</option>{AREAS.map((a) => <option key={a} value={a}>{a}</option>)}
+                    </select></div>
+                  <div className="col-span-2"><Label className="text-xs">Habilidades <span className="text-[10px] text-violet-600">★</span></Label><HabPicker val={formCand.habilidades || []} onChange={(v) => setC({ habilidades: v })} /></div>
+                  <div className="col-span-2"><Label className="text-xs">Outras habilidades (texto livre, p/ documento)</Label><Textarea className="min-h-[50px]" value={vC("habilidades_livre")} onChange={(e) => setC({ habilidades_livre: e.target.value })} /></div>
+                </div>
+              )}
+
+              {passoCand === 4 && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div><Label className="text-xs">Área desejada <span className="text-[10px] text-violet-600">★</span></Label>
+                    <select className="h-10 w-full rounded-md border bg-background px-2 text-sm" value={vC("area")} onChange={(e) => setC({ area: e.target.value || null })}>
+                      <option value="">—</option>{AREAS.map((a) => <option key={a} value={a}>{a}</option>)}
+                    </select></div>
+                  <div><Label className="text-xs">Pretensão salarial</Label><Input value={vC("pretensao")} onChange={(e) => setC({ pretensao: e.target.value })} /></div>
+                  <div className="col-span-2"><Label className="text-xs">Disponibilidade de turno <span className="text-[10px] text-violet-600">★</span></Label><TurnoPicker val={formCand.turnos || []} onChange={(v) => setC({ turnos: v })} /></div>
+                  <div><Label className="text-xs">Status</Label>
+                    <select className="h-10 w-full rounded-md border bg-background px-2 text-sm" value={vC("status") || "ativo"} onChange={(e) => setC({ status: e.target.value })}>
+                      <option value="ativo">Ativo</option><option value="inativo">Inativo</option><option value="encaminhado">Encaminhado</option>
+                    </select></div>
+                  <div className="col-span-2"><Label className="text-xs">Observações</Label><Textarea className="min-h-[50px]" value={vC("observacoes")} onChange={(e) => setC({ observacoes: e.target.value })} /></div>
+                  <p className="col-span-2 rounded-md bg-violet-50 p-2 text-[11px] text-violet-700">★ = campos que entram no ranking de match. Os demais vão na Solicitação e cartas (Etapa 3).</p>
+                </div>
+              )}
+
+              <div className="mt-3 flex items-center justify-between gap-2 border-t pt-3">
+                <Button variant="outline" size="sm" disabled={passoCand === 1} onClick={() => setPassoCand((p) => Math.max(1, p - 1))}>Voltar</Button>
+                <div className="flex items-center gap-1.5">
+                  {[1, 2, 3, 4].map((n) => <span key={n} className={cn("h-2 w-2 rounded-full", n === passoCand ? "bg-violet-600" : "bg-muted")} />)}
+                  <span className="ml-2 text-xs font-medium tabular-nums text-muted-foreground">{String(passoCand).padStart(2, "0")}/04</span>
+                </div>
+                {passoCand < 4 ? (
+                  <Button size="sm" onClick={() => setPassoCand((p) => Math.min(4, p + 1))}>Próximo</Button>
+                ) : (
+                  <Button size="sm" onClick={salvarCandidato} disabled={salvando} className="bg-emerald-600 hover:bg-emerald-700">{salvando && <Loader2 className="mr-1 h-4 w-4 animate-spin" />} Salvar</Button>
+                )}
               </div>
-              <div><Label className="text-xs">Escolaridade</Label>
-                <select className="h-10 w-full rounded-md border bg-background px-2 text-sm" value={formCand.escolaridade || ""} onChange={(e) => setFormCand({ ...formCand, escolaridade: e.target.value || null })}>
-                  <option value="">—</option>{ESCOLARIDADE.map((x) => <option key={x} value={x}>{x}</option>)}
-                </select>
-              </div>
-              <div><Label className="text-xs">CNH</Label>
-                <select className="h-10 w-full rounded-md border bg-background px-2 text-sm" value={formCand.cnh || ""} onChange={(e) => setFormCand({ ...formCand, cnh: e.target.value || null })}>
-                  <option value="">—</option>{CNH_OPCOES.map((x) => <option key={x} value={x}>{x}</option>)}
-                </select>
-              </div>
-              <div className="col-span-2"><Label className="text-xs">Disponibilidade de turno</Label><TurnoPicker val={formCand.turnos || []} onChange={(v) => setFormCand({ ...formCand, turnos: v })} /></div>
-              <label className="col-span-2 flex items-center gap-2 text-sm"><input type="checkbox" checked={!!formCand.experiencia} onChange={(e) => setFormCand({ ...formCand, experiencia: e.target.checked })} /> Tem experiência anterior</label>
-              {formCand.experiencia && <div className="col-span-2"><Label className="text-xs">Em quê (área/cargo da experiência)</Label><Input value={formCand.experiencia_area || ""} onChange={(e) => setFormCand({ ...formCand, experiencia_area: e.target.value })} /></div>}
-              <div><Label className="text-xs">Curso(s) MULT</Label><Input value={formCand.cursos_mult || ""} onChange={(e) => setFormCand({ ...formCand, cursos_mult: e.target.value })} placeholder="ex.: Informática, AAS" /></div>
-              <div><Label className="text-xs">Pretensão salarial</Label><Input value={formCand.pretensao || ""} onChange={(e) => setFormCand({ ...formCand, pretensao: e.target.value })} /></div>
-              <div><Label className="text-xs">Bairro</Label><Input value={formCand.bairro || ""} onChange={(e) => setFormCand({ ...formCand, bairro: e.target.value })} /></div>
-              <div><Label className="text-xs">Status</Label>
-                <select className="h-10 w-full rounded-md border bg-background px-2 text-sm" value={formCand.status || "ativo"} onChange={(e) => setFormCand({ ...formCand, status: e.target.value })}>
-                  <option value="ativo">Ativo</option><option value="inativo">Inativo</option><option value="encaminhado">Encaminhado</option>
-                </select>
-              </div>
-              <div className="col-span-2"><Label className="text-xs">Observações</Label><Textarea className="min-h-[60px]" value={formCand.observacoes || ""} onChange={(e) => setFormCand({ ...formCand, observacoes: e.target.value })} /></div>
-            </div>
+            </>
           )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setFormCand(null)}>Cancelar</Button>
-            <Button onClick={salvarCandidato} disabled={salvando} className="bg-emerald-600 hover:bg-emerald-700">{salvando && <Loader2 className="mr-1 h-4 w-4 animate-spin" />} Salvar</Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
 
