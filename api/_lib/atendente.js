@@ -92,7 +92,7 @@ ${asaasAtivo
   rotativo = a aula começa e termina no dia, o conteúdo é reposto/revisto no ciclo; individual = ele retoma de onde parou, não perde matéria;
   sequencial = reforce a assiduidade e ofereça reposição. Problema de pagamento não é motivo para faltar.
 - REPOSIÇÃO (depende do curso):
-  • INFORMÁTICA: você PODE agendar. 1) chame consultar_reposicao_informatica(cod_alu); 2) se automatizado=true, ofereça SOMENTE as turmas/horários retornados (NUNCA invente nem confirme horário fora dessa lista); 3) quando o aluno escolher, chame agendar_reposicao_informatica(cod_alu, turma, data) — ela reconfere a vaga e registra a ocorrência. Só diga "agendado" DEPOIS que a ferramenta retornar ok (traz turma, dia e horário). Se retornar turma_sem_vaga, ofereça outra da lista atual.
+  • INFORMÁTICA: você PODE agendar. 1) chame consultar_reposicao_informatica(cod_alu); 2) se automatizado=true, ofereça SOMENTE as turmas/horários retornados (NUNCA invente nem confirme horário fora dessa lista); 3) quando o aluno escolher a turma, COMBINE a DATA da reposição — só vale um dia em que aquela turma tem aula (o dia_semana vem na lista). Confirme a data com o aluno; 4) chame agendar_reposicao_informatica(cod_alu, turma, data) — ela reserva a vaga e grava a ocorrência "Reposição" de verdade. Só diga "agendado" DEPOIS que a ferramenta retornar ok (traz turma, dia, horário e data). Se retornar dia_sem_aula, peça uma data no dia certo; se turma_sem_vaga, ofereça outra turma/data da lista atual.
   • DEMAIS CURSOS (ou se a ferramenta retornar automatizado=false / curso_nao_automatizado): VOCÊ NÃO AGENDA. Nunca confirme nem prometa dia/horário/turma, mesmo que o aluno sugira. Registre com registrar_pedagogico(tipo="reposicao"), diga que a SECRETARIA vai verificar e confirmar, e chame chamar_humano "pedagógico - reposição". Não diga "já agendei"/"está marcado".
   • Só agende/ofereça reposição para uma falta que JÁ aconteceu. Para aula que ainda vai acontecer, veja AVISO PRÉVIO abaixo.
 - AVISO PRÉVIO DE FALTA (o aluno responde ao lembrete de aula avisando que NÃO vai poder vir a uma aula que AINDA vai acontecer): acolha com carinho, agradeça o aviso e pergunte rápido o motivo. Registre com registrar_pedagogico(tipo="reposicao") deixando claro no detalhe que é AVISO PRÉVIO (a aula ainda não aconteceu). NÃO agende reposição agora — nem para Informática — porque a falta ainda não foi lançada no sistema. Diga que, assim que a falta for registrada, a equipe organiza a reposição dele. NUNCA diga "reposição agendada" para uma aula que ainda não aconteceu.
@@ -458,8 +458,8 @@ export async function atender({ conversa, unidade, segredos }) {
     },
     {
       nome: 'agendar_reposicao_informatica',
-      descricao: 'Agenda a reposição numa turma de vaga REAL (curso Informática). Reconfere a vaga antes de registrar a ocorrência "REPOSIÇÃO DE AULA" com turma e data. Use só depois que o aluno escolher um horário vindo de consultar_reposicao_informatica. NUNCA passe uma turma fora daquela lista.',
-      parametros: { type: 'object', properties: { cod_alu: { type: 'string' }, turma: { type: 'string', description: 'nome EXATO da turma escolhida, vindo de consultar_reposicao_informatica' }, data: { type: 'string', description: 'data combinada da reposição (opcional), formato AAAA-MM-DD' } }, required: ['cod_alu', 'turma'] },
+      descricao: 'Agenda a reposição DE VERDADE no sistema (reserva a vaga na turma) — só curso Informática. Reserva em s_cad_reposicao, baixa a vaga e grava a ocorrência "Reposição" com turma e data. Exige a DATA combinada (um dia em que a turma tem aula). Use só depois que o aluno escolher UMA turma de consultar_reposicao_informatica E combinar a data. Se a ferramenta retornar erro (dia_sem_aula, turma_sem_vaga, data_passada), ajuste com o aluno e tente de novo. Só diga "agendado" depois do ok.',
+      parametros: { type: 'object', properties: { cod_alu: { type: 'string' }, turma: { type: 'string', description: 'cod_tur (preferido) ou nome EXATO da turma, vindo de consultar_reposicao_informatica' }, data: { type: 'string', description: 'data combinada da reposição, OBRIGATÓRIA, um dia em que a turma tem aula, formato AAAA-MM-DD' } }, required: ['cod_alu', 'turma', 'data'] },
       executar: async ({ cod_alu, turma, data }) => {
         const bloq = exigirIdentidade(); if (bloq) return bloq;
         const aluno = alunoDoGrupo(cod_alu); if (!aluno) return { erro: 'aluno_fora_do_grupo' };
@@ -467,17 +467,19 @@ export async function atender({ conversa, unidade, segredos }) {
         const crono = await ponte(conversa.unit_id, 'cronograma_turma', { cod_alu: String(cod_alu) }, { conversaId: conversa.id }).catch(() => null);
         const curso = String(crono?.curso || '');
         if (!/inform[aá]tic/i.test(curso)) return { erro: 'curso_nao_automatizado', mensagem: 'Reposição automática só para Informática. Registre com registrar_pedagogico(tipo="reposicao") e chame chamar_humano.' };
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(String(data || '')) && !/^\d{2}\/\d{2}\/\d{4}$/.test(String(data || ''))) {
+          return { erro: 'data_necessaria', mensagem: 'Preciso da DATA da reposição (um dia em que a turma tem aula) antes de agendar. Combine a data com o aluno e passe em data (AAAA-MM-DD).' };
+        }
         const turmas = await ponte(conversa.unit_id, 'vagas_turmas', { cod_alu: String(cod_alu) }, { conversaId: conversa.id }).catch(() => []);
-        const alvo = (Array.isArray(turmas) ? turmas : []).find((t) => String(t.turma || '').trim().toLowerCase() === String(turma || '').trim().toLowerCase() && Number(t.vagas || 0) > 0);
-        // Trava de segurança: nunca registra um horário que não foi conferido como vaga real agora.
-        if (!alvo) return { erro: 'turma_sem_vaga', mensagem: 'Essa turma não está com vaga agora. Ofereça uma das turmas atuais da lista.', turmas_disponiveis: Array.isArray(turmas) ? turmas : [] };
-        const dataOk = /^\d{4}-\d{2}-\d{2}$/.test(String(data || ''));
-        const quando = dataOk ? ` em ${String(data).slice(0, 10).split('-').reverse().join('/')}` : '';
-        const detalhe = `Turma ${alvo.turma} (${alvo.dia_semana} ${alvo.horario})${quando}. Curso: ${curso}.`;
-        await ponte(conversa.unit_id, 'registrar_ocorrencia', { cod_alu: String(cod_alu), texto: `REPOSIÇÃO DE AULA agendada via WhatsApp — ${detalhe}`, chave: `oco-repo-${conversa.id}-${cod_alu}-${Date.now()}` }, { conversaId: conversa.id }).catch(() => null);
+        const alvo = (Array.isArray(turmas) ? turmas : []).find((t) => String(t.cod_tur || '') === String(turma || '').trim() || String(t.turma || '').trim().toLowerCase() === String(turma || '').trim().toLowerCase());
+        // Nunca registra um horário que não veio da lista de vagas conferida agora.
+        if (!alvo) return { erro: 'turma_sem_vaga', mensagem: 'Essa turma não está na lista de vagas atuais. Ofereça uma das turmas de consultar_reposicao_informatica.', turmas_disponiveis: Array.isArray(turmas) ? turmas : [] };
+        const chave = `repo-${conversa.id}-${cod_alu}-${alvo.cod_tur || alvo.turma}-${String(data).replace(/\D/g, '')}`;
+        const r = await ponte(conversa.unit_id, 'agendar_reposicao', { cod_alu: String(cod_alu), turma: String(alvo.cod_tur || alvo.turma), data: String(data), chave }, { conversaId: conversa.id }).catch((e) => ({ erro: e?.codigo || 'falha_agendar', mensagem: e?.message || 'Não consegui agendar a reposição agora.' }));
+        if (r?.erro) return r;
         conversa = await atualizarConversa(conversa.id, { departamento: 'pedagogico' });
         await garantirCardWhatsapp(conversa, { departamento: 'pedagogico', titulo: `Reposição agendada - ${primeiroNome(aluno.nome)}`, status: 'andamento' }).catch(() => null);
-        return { ok: true, agendado: { turma: alvo.turma, dia_semana: alvo.dia_semana, horario: alvo.horario, data: dataOk ? data : null } };
+        return { ok: true, agendado: { turma: r.turma, dia_semana: r.dia_semana, horario: r.horario, data: r.data, curso: r.curso } };
       }
     },
     {

@@ -603,7 +603,7 @@ final class Escola
     }
 
     /** Nome real de uma coluna (1ª candidata que existir) numa tabela MySQL; '' se não achar. */
-    private function colunaReal(string $tabela, array $candidatas): string
+    public function colunaReal(string $tabela, array $candidatas): string
     {
         if ($this->db->driver() !== 'mysql') {
             return '';
