@@ -159,13 +159,17 @@ confere('reposição: turma e data', [$rp['turma'], $rp['data']], ['001INF', '11
 $rr = $db->um('SELECT * FROM s_cad_reposicao WHERE COD_REP = ?', [$rp['cod_rep']]);
 confere('reposição gravada em s_cad_reposicao', [(string)$rr['COD_ALU'], (string)$rr['COD_TUR'], $rr['DAT_REP'], $rr['COD_MATRICULA']], ['13882', '001INF', '2026-11-11', 'MAT-INF']);
 $ro = $db->um('SELECT * FROM s_cad_ocorrencia WHERE COD_OCO = ?', [$rp['cod_oco']]);
-confere('ocorrência Reposição (não Informativo)', $ro['STATUS_OCO'], 'Reposição');
-confere('ocorrência texto automático', $ro['OCO_OCO'], 'REPOSIÇÃO MARCADA: TURMA: 001INF DATA: 11/11/2026.');
+confere('ocorrência Ação = Reposição (latin1, não mojibake)', Texto::doBanco($ro['STATUS_OCO']), 'Reposição');
+confere('ocorrência texto automático', Texto::doBanco($ro['OCO_OCO']), 'REPOSIÇÃO MARCADA: TURMA: 001INF DATA: 11/11/2026.');
 confere('ocorrência ligada à reposição (ID_REP)', $ro['ID_REP'], (string)$rp['cod_rep']);
 confere('ocorrência turma do aluno', $ro['TURMA_OCO'], '001INF');
 confere('mesma chave não duplica reposição', $fin->agendarReposicao('13882', '001INF', '2026-11-11', 'repo-1')['cod_rep'], $rp['cod_rep']);
-lanca('reposição em dia sem aula', fn() => $fin->agendarReposicao('13882', '001INF', '2026-11-12', 'repo-2'), 'dia_sem_aula');
-lanca('reposição em data passada', fn() => $fin->agendarReposicao('13882', '001INF', '2026-11-03', 'repo-3'), 'data_passada');
+// Trava "uma reposição por vez": 13882 já tem a de 11/11 pendente.
+confere('detecta reposição pendente', $escola->reposicaoPendente('13882', '2026-11-04')['pendente'], true);
+lanca('bloqueia 2ª reposição (uma por vez)', fn() => $fin->agendarReposicao('13882', '001INF', '2026-11-18', 'repo-x'), 'reposicao_pendente');
+// Guardas de data com outro aluno (20001, sem reposição pendente).
+lanca('reposição em dia sem aula', fn() => $fin->agendarReposicao('20001', '001INF', '2026-11-12', 'repo-2'), 'dia_sem_aula');
+lanca('reposição em data passada', fn() => $fin->agendarReposicao('20001', '001INF', '2026-11-03', 'repo-3'), 'data_passada');
 
 $ca = $fin->registrarCarta('13882', 9, '2026-11-02', 'carta-1');
 confere('carta registrada', $db->um('SELECT NOM_CART FROM historico_carta WHERE COD_HIST = ?', [$ca['cod_hist']])['NOM_CART'], 'Carta 1 - 15 dias - Envio Dia 10 e 30');

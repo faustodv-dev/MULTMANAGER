@@ -502,6 +502,35 @@ final class Escola
     }
 
     /**
+     * Reposição ainda não ocorrida do aluno. O MULT só deixa UMA reposição por vez, até a aula
+     * acontecer. Definição (padrão): pendente = reposição com DAT_REP >= hoje.
+     */
+    public function reposicaoPendente(string $codAlu, string $hoje = ''): array
+    {
+        $codAlu = trim($codAlu);
+        if ($codAlu === '') {
+            return ['pendente' => false];
+        }
+        $colAlu = $this->colunaReal('s_cad_reposicao', ['COD_ALU']);
+        $colTur = $this->colunaReal('s_cad_reposicao', ['COD_TUR', 'COD_TURMA']);
+        $alu = $colAlu !== '' ? $colAlu : 'COD_ALU';
+        $tur = $colTur !== '' ? $colTur : 'COD_TUR';
+        if ($hoje === '') {
+            $hoje = (new \DateTime('now', new \DateTimeZone('America/Sao_Paulo')))->format('Y-m-d');
+        }
+        $p = $this->db->um("SELECT COD_REP, $tur AS COD_TUR, DAT_REP FROM s_cad_reposicao WHERE $alu = ? AND DAT_REP >= ? ORDER BY DAT_REP ASC LIMIT 1", [$codAlu, $hoje]);
+        if ($p === null) {
+            return ['pendente' => false];
+        }
+        return [
+            'pendente' => true,
+            'cod_rep' => (string)$p['COD_REP'],
+            'turma' => (string)$p['COD_TUR'],
+            'data' => date('d/m/Y', strtotime(((string)$p['DAT_REP']) . ' 12:00:00')),
+        ];
+    }
+
+    /**
      * Alunos que TÊM aula numa data (para o lembrete de aula / régua de avisos, na véspera).
      * Cruza turmas ATIVAS cujo dia da semana bate com a data × matrículas ativas × cadastro.
      * Retorna o telefone do ALUNO (e o do responsável como fallback), turma, dia e horário.

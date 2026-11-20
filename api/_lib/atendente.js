@@ -443,7 +443,7 @@ export async function atender({ conversa, unidade, segredos }) {
     },
     {
       nome: 'consultar_reposicao_informatica',
-      descricao: 'REPOSIÇÃO: lista as turmas do MESMO curso com vaga REAL (dia/horário) — só quando o curso é INFORMÁTICA. Chame ANTES de oferecer qualquer horário de reposição. Se automatizado=false, NÃO ofereça horários: registre com registrar_pedagogico(tipo="reposicao") e chame chamar_humano.',
+      descricao: 'REPOSIÇÃO: verifica se o aluno JÁ TEM reposição marcada (o MULT só deixa UMA por vez) e lista as turmas do MESMO curso com vaga REAL (dia/horário) — só quando o curso é INFORMÁTICA. Chame ANTES de oferecer qualquer horário. Se ja_tem_reposicao vier preenchido, NÃO ofereça: avise o aluno da reposição que ele já tem. Se automatizado=false, registre com registrar_pedagogico(tipo="reposicao") e chame chamar_humano.',
       parametros: { type: 'object', properties: { cod_alu: { type: 'string' } }, required: ['cod_alu'] },
       executar: async ({ cod_alu }) => {
         const bloq = exigirIdentidade(); if (bloq) return bloq;
@@ -452,6 +452,11 @@ export async function atender({ conversa, unidade, segredos }) {
         const crono = await ponte(conversa.unit_id, 'cronograma_turma', { cod_alu: String(cod_alu) }, { conversaId: conversa.id }).catch(() => null);
         const curso = String(crono?.curso || '');
         if (!/inform[aá]tic/i.test(curso)) return { automatizado: false, curso, motivo: 'Reposição automática só para Informática. Registre e encaminhe à secretaria.' };
+        // O MULT só permite UMA reposição por vez. Se já houver uma pendente, não oferece outra.
+        const pend = await ponte(conversa.unit_id, 'reposicao_pendente', { cod_alu: String(cod_alu) }, { conversaId: conversa.id }).catch(() => null);
+        if (pend?.pendente) {
+          return { automatizado: true, curso, ja_tem_reposicao: { turma: pend.turma, data: pend.data }, turmas: [], mensagem: `O aluno já tem uma reposição marcada para ${pend.data} (turma ${pend.turma}). Só é possível uma por vez — após essa aula, dá para agendar a próxima. Avise o aluno e NÃO ofereça outra.` };
+        }
         const turmas = await ponte(conversa.unit_id, 'vagas_turmas', { cod_alu: String(cod_alu) }, { conversaId: conversa.id }).catch(() => []);
         return { automatizado: true, curso, turmas: Array.isArray(turmas) ? turmas : [] };
       }
@@ -479,7 +484,11 @@ export async function atender({ conversa, unidade, segredos }) {
         if (r?.erro) return r;
         conversa = await atualizarConversa(conversa.id, { departamento: 'pedagogico' });
         await garantirCardWhatsapp(conversa, { departamento: 'pedagogico', titulo: `Reposição agendada - ${primeiroNome(aluno.nome)}`, status: 'andamento' }).catch(() => null);
-        return { ok: true, agendado: { turma: r.turma, dia_semana: r.dia_semana, horario: r.horario, data: r.data, curso: r.curso } };
+        const dataBr = /^\d{2}\/\d{2}\/\d{4}$/.test(String(data)) ? String(data) : String(data).slice(0, 10).split('-').reverse().join('/');
+        const agendado = r.simulado
+          ? { turma: alvo.turma, dia_semana: alvo.dia_semana, horario: alvo.horario, data: dataBr, curso, simulado: true }
+          : { turma: r.turma, dia_semana: r.dia_semana, horario: r.horario, data: r.data, curso: r.curso };
+        return { ok: true, agendado };
       }
     },
     {
