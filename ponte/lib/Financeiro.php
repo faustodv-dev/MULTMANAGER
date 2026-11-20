@@ -321,6 +321,143 @@ final class Financeiro
         return $res;
     }
 
+    /**
+     * Agenda uma reposição DE VERDADE, exatamente como a tela addocorrencia.php (opção "Reposição"):
+     *   1) INSERT em s_cad_reposicao (reserva a vaga do aluno na turma/data);
+     *   2) UPDATE s_cad_turma VAG_RES = VAG_RES - 1 (baixa a vaga restante);
+     *   3) INSERT em s_cad_ocorrencia com STATUS_OCO='Reposição', texto automático e ID_REP vinculado.
+     * Guardas: turma Informática ATIVA do mesmo curso do aluno; data futura e num dia em que a
+     * turma tem aula; e lotação (matriculados ativos + reposições já marcadas na data < limite).
+     */
+    public function agendarReposicao(string $codAlu, string $turma, string $data, string $chave): array
+    {
+        $codAlu = trim($codAlu);
+        $turma = trim($turma);
+        if ($codAlu === '' || $turma === '') {
+            throw new ErroPonte('parametros', 'Informe o aluno e a turma da reposição.');
+        }
+        if ($chave !== '' && ($ant = $this->registro->anterior($chave))) {
+            return $ant;
+        }
+
+        // Matrícula ativa do aluno (curso, turma do aluno e status anterior da ocorrência).
+        $m = $this->db->um(
+            "SELECT COD_MATRICULA, COD_TUR, STATUS_MAT, NOM_CUR FROM s_cad_matricula
+             WHERE COD_ALU = ? ORDER BY (STATUS_MAT = 'Ativo') DESC, COD_MATRICULA DESC LIMIT 1",
+            [$codAlu]
+        );
+        if ($m === null) {
+            throw new ErroPonte('aluno_sem_matricula', 'Aluno sem matrícula.');
+        }
+        $matId = (string)$m['COD_MATRICULA'];
+        $turmaAluno = (string)$m['COD_TUR'];
+        $statusAtual = (string)$m['STATUS_MAT'];
+        $nomCurAluno = Texto::doBanco($m['NOM_CUR'] ?? '');
+
+        // Turma de reposição (aceita COD_TUR ou NOM_TUR). Precisa estar ATIVA e ser do mesmo curso.
+        $colStatus = $this->escola->colunaReal('s_cad_turma', ['STATUS_TUR', 'SIT_TUR', 'STATUS']);
+        $selStatus = $colStatus !== '' ? ", $colStatus AS ST" : '';
+        $t = $this->db->um("SELECT COD_TUR, NOM_TUR, COD_CUR, DIA_SEMANA, HS_INICIO, HS_FIM$selStatus FROM s_cad_turma WHERE COD_TUR = ? LIMIT 1", [$turma]);
+        if ($t === null) {
+            $t = $this->db->um("SELECT COD_TUR, NOM_TUR, COD_CUR, DIA_SEMANA, HS_INICIO, HS_FIM$selStatus FROM s_cad_turma WHERE NOM_TUR = ? LIMIT 1", [$turma]);
+        }
+        if ($t === null) {
+            throw new ErroPonte('turma_nao_encontrada', 'Turma de reposição não encontrada.');
+        }
+        if ($colStatus !== '' && strcasecmp(trim((string)($t['ST'] ?? '')), 'Ativo') !== 0) {
+            throw new ErroPonte('turma_inativa', 'A turma de reposição não está ativa.');
+        }
+        $codTur = (string)$t['COD_TUR'];
+        $codCur = (string)$t['COD_CUR'];
+        $tAluno = $this->db->um('SELECT COD_CUR FROM s_cad_turma WHERE COD_TUR = ? LIMIT 1', [$turmaAluno]);
+        if ($tAluno !== null && (string)$tAluno['COD_CUR'] !== $codCur) {
+            throw new ErroPonte('curso_diferente', 'A turma de reposição é de outro curso.');
+        }
+
+        // Curso precisa ser Informática (nome do curso da turma via s_cad_curso; cai no NOM_CUR da matrícula se faltar).
+        $cur = $this->db->um('SELECT NOM_CUR FROM s_cad_curso WHERE COD_CUR = ? LIMIT 1', [$codCur]);
+        $nomCur = Texto::doBanco($cur['NOM_CUR'] ?? '');
+        if ($nomCur === '') {
+            $nomCur = $nomCurAluno;
+        }
+        if (!preg_match('/inform/i', $nomCur)) {
+            throw new ErroPonte('curso_nao_informatica', 'Reposição automática só para o curso de Informática.');
+        }
+
+        // Data: válida, futura (ou hoje) e num dia em que a turma tem aula.
+        $dataIso = Texto::dataIso($data);
+        if ($dataIso === '') {
+            throw new ErroPonte('data_invalida', 'Informe a data da reposição (um dia em que a turma tem aula).');
+        }
+        if ($dataIso < $this->agora()->format('Y-m-d')) {
+            throw new ErroPonte('data_passada', 'Essa data já passou. Combine uma data futura.');
+        }
+        $norm = function ($s) {
+            $s = mb_strtolower(trim((string)$s), 'UTF-8');
+            $s = strtr($s, ['á' => 'a', 'à' => 'a', 'â' => 'a', 'ã' => 'a', 'é' => 'e', 'ê' => 'e', 'í' => 'i', 'ó' => 'o', 'ô' => 'o', 'õ' => 'o', 'ú' => 'u', 'ç' => 'c']);
+            return preg_replace('/[^a-z]/', '', (string)$s);
+        };
+        $dias = [0 => 'Domingo', 1 => 'Segunda-Feira', 2 => 'Terça-Feira', 3 => 'Quarta-Feira', 4 => 'Quinta-Feira', 5 => 'Sexta-Feira', 6 => 'Sábado'];
+        $diaData = $norm($dias[(int)date('w', strtotime($dataIso . ' 12:00:00'))]);
+        $diaTurma = $norm(Texto::doBanco($t['DIA_SEMANA'] ?? ''));
+        if ($diaTurma !== '' && $diaData !== $diaTurma) {
+            throw new ErroPonte('dia_sem_aula', 'A turma ' . $codTur . ' tem aula em ' . Texto::doBanco($t['DIA_SEMANA'] ?? '') . '. Marque a reposição nesse dia.');
+        }
+
+        // Lotação: matriculados ativos + reposições já marcadas nessa data precisam caber (15 PCs).
+        $LIMITE = 15;
+        $mAtivos = (int)(($this->db->um("SELECT COUNT(*) n FROM s_cad_matricula WHERE COD_TUR = ? AND STATUS_MAT = 'Ativo'", [$codTur]) ?? ['n' => 0])['n']);
+        $repDia = (int)(($this->db->um('SELECT COUNT(*) n FROM s_cad_reposicao WHERE COD_TUR = ? AND DAT_REP = ?', [$codTur, $dataIso]) ?? ['n' => 0])['n']);
+        if ($mAtivos + $repDia >= $LIMITE) {
+            throw new ErroPonte('turma_sem_vaga', 'Essa turma já está lotada nessa data (limite de ' . $LIMITE . '). Ofereça outro dia ou turma.');
+        }
+
+        // Dados do aluno para gravação.
+        $al = $this->db->um('SELECT NOM_ALU FROM s_cad_aluno WHERE COD_ALU = ? LIMIT 1', [$codAlu]);
+        $nomAlu = Texto::doBanco($al['NOM_ALU'] ?? '');
+        $matOco = ($matId === $codAlu) ? '' : $matId;
+        $dataBr = date('d/m/Y', strtotime($dataIso . ' 12:00:00'));
+
+        // 1) Reserva em s_cad_reposicao.
+        $this->db->executar(
+            'INSERT INTO s_cad_reposicao (COD_ALU, NOM_ALU, COD_CUR, COD_TUR, DAT_REP, COD_MATRICULA) VALUES (?, ?, ?, ?, ?, ?)',
+            [$codAlu, Texto::paraBanco($nomAlu), $codCur, $codTur, $dataIso, $matOco]
+        );
+        $codRep = (string)$this->db->ultimoId();
+
+        // 2) Baixa a vaga restante da turma (como a tela do MULT faz).
+        $colVagRes = $this->escola->colunaReal('s_cad_turma', ['VAG_RES']);
+        if ($colVagRes !== '') {
+            $this->db->executar("UPDATE s_cad_turma SET $colVagRes = $colVagRes - 1 WHERE COD_TUR = ?", [$codTur]);
+        }
+
+        // 3) Ocorrência 'Reposição' com o texto automático do MULT e ID_REP vinculado.
+        $ocoTexto = 'REPOSIÇÃO MARCADA: TURMA: ' . $codTur . ' DATA: ' . $dataBr . '.';
+        $agora = $this->agora();
+        $this->db->executar(
+            'INSERT INTO s_cad_ocorrencia (STATUS_OCO, COD_ALU, MATRICULA_OCO, TURMA_OCO, DAT_OCO, HOR_OCO, OCO_OCO, PRO_OCO, STATUS_ANT_OCO, ID_REP)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            [
+                Texto::paraBanco('Reposição'), $codAlu, $matOco, $turmaAluno,
+                $agora->format('Y-m-d'), $agora->format('H:i:s'),
+                Texto::paraBanco($ocoTexto), Texto::paraBanco((string)($this->agente['login'] ?? '')), $statusAtual, $codRep,
+            ]
+        );
+        $codOco = (string)$this->db->ultimoId();
+
+        $res = [
+            'cod_rep' => $codRep,
+            'cod_oco' => $codOco,
+            'turma' => $codTur,
+            'curso' => $nomCur,
+            'data' => $dataBr,
+            'dia_semana' => Texto::doBanco($t['DIA_SEMANA'] ?? ''),
+            'horario' => trim(Texto::doBanco($t['HS_INICIO'] ?? '') . ' - ' . Texto::doBanco($t['HS_FIM'] ?? ''), ' -'),
+        ];
+        $this->registro->gravar('reposicao', $chave ?: null, 'ok', compact('codAlu', 'turma', 'data'), $res);
+        return $res;
+    }
+
     /** Coloca o certificado do aluno na fila de emissão da secretaria (s_cad_solicita_certificado). */
     public function solicitarCertificado(string $codAlu, string $chave): array
     {

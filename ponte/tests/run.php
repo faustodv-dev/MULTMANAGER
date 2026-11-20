@@ -151,6 +151,22 @@ confere('agendamento gravado', [(string)$a['COD_ALU'], $a['DAT_VENC'], (string)$
 $oa = $db->um('SELECT * FROM s_cad_ocorrencia WHERE COD_OCO = ?', [$ag['ocorrencia']['cod_oco']]);
 confere('ocorrência agend_pag ligada', [$oa['STATUS_OCO'], $oa['ID_REP']], ['agend_pag', (string)$ag['agendamento_id']]);
 
+// Reposição real (como a tela do MULT): reserva em s_cad_reposicao + ocorrência 'Reposição'.
+// Relógio = 2026-11-04 (quarta). 001INF tem aula Quarta-Feira → 2026-11-11 é dia de aula e futuro.
+echo "== Reposição (Informática)\n";
+$rp = $fin->agendarReposicao('13882', '001INF', '2026-11-11', 'repo-1');
+confere('reposição: turma e data', [$rp['turma'], $rp['data']], ['001INF', '11/11/2026']);
+$rr = $db->um('SELECT * FROM s_cad_reposicao WHERE COD_REP = ?', [$rp['cod_rep']]);
+confere('reposição gravada em s_cad_reposicao', [(string)$rr['COD_ALU'], (string)$rr['COD_TUR'], $rr['DAT_REP'], $rr['COD_MATRICULA']], ['13882', '001INF', '2026-11-11', 'MAT-INF']);
+$ro = $db->um('SELECT * FROM s_cad_ocorrencia WHERE COD_OCO = ?', [$rp['cod_oco']]);
+confere('ocorrência Reposição (não Informativo)', $ro['STATUS_OCO'], 'Reposição');
+confere('ocorrência texto automático', $ro['OCO_OCO'], 'REPOSIÇÃO MARCADA: TURMA: 001INF DATA: 11/11/2026.');
+confere('ocorrência ligada à reposição (ID_REP)', $ro['ID_REP'], (string)$rp['cod_rep']);
+confere('ocorrência turma do aluno', $ro['TURMA_OCO'], '001INF');
+confere('mesma chave não duplica reposição', $fin->agendarReposicao('13882', '001INF', '2026-11-11', 'repo-1')['cod_rep'], $rp['cod_rep']);
+lanca('reposição em dia sem aula', fn() => $fin->agendarReposicao('13882', '001INF', '2026-11-12', 'repo-2'), 'dia_sem_aula');
+lanca('reposição em data passada', fn() => $fin->agendarReposicao('13882', '001INF', '2026-11-03', 'repo-3'), 'data_passada');
+
 $ca = $fin->registrarCarta('13882', 9, '2026-11-02', 'carta-1');
 confere('carta registrada', $db->um('SELECT NOM_CART FROM historico_carta WHERE COD_HIST = ?', [$ca['cod_hist']])['NOM_CART'], 'Carta 1 - 15 dias - Envio Dia 10 e 30');
 

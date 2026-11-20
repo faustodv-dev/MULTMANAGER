@@ -1,7 +1,9 @@
 -- Dados fictícios
 INSERT INTO franquia VALUES (1, 'Multprofissoes de Rio Verde - Popular', 'MULT Profissoes', '26436081000160');
 INSERT INTO s_cad_curso VALUES (1, 'HAR', 'Hardware'), (2, 'INF', 'Informática Administrativa');
-INSERT INTO s_cad_turma VALUES (1, '001HAR', 'HAR'), (2, '001INF', 'INF');
+INSERT INTO s_cad_turma (ID_TUR, COD_TUR, COD_CUR, NOM_TUR, DIA_SEMANA, HS_INICIO, HS_FIM, VAG_TUR, VAG_RES, STATUS_TUR) VALUES
+  (1, '001HAR', 'HAR', '001HAR', 'Segunda-Feira', '08:00', '10:00', '17', '5', 'Ativo'),
+  (2, '001INF', 'INF', '001INF', 'Quarta-Feira', '08:00', '10:00', '17', '5', 'Ativo');
 
 -- Aluno que é o próprio responsável, 2 matrículas (como no print)
 INSERT INTO s_cad_aluno VALUES (13882, NULL, 'EDILSON JOSE DA SILVA LIMA', '111.444.777-35', '111.444.777-35', 'Edilson Jose da Silva Lima',
