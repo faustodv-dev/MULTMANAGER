@@ -354,6 +354,12 @@ final class Financeiro
         $statusAtual = (string)$m['STATUS_MAT'];
         $nomCurAluno = Texto::doBanco($m['NOM_CUR'] ?? '');
 
+        // Trava "uma reposição por vez": o MULT bloqueia nova reposição enquanto houver uma pendente.
+        $pend = $this->escola->reposicaoPendente($codAlu, $this->agora()->format('Y-m-d'));
+        if (!empty($pend['pendente'])) {
+            throw new ErroPonte('reposicao_pendente', 'O aluno já tem uma reposição marcada para ' . $pend['data'] . ' (turma ' . $pend['turma'] . '). O sistema permite uma reposição por vez, até essa aula acontecer.');
+        }
+
         // Turma de reposição (aceita COD_TUR ou NOM_TUR). Precisa estar ATIVA e ser do mesmo curso.
         $colStatus = $this->escola->colunaReal('s_cad_turma', ['STATUS_TUR', 'SIT_TUR', 'STATUS']);
         $selStatus = $colStatus !== '' ? ", $colStatus AS ST" : '';
@@ -408,7 +414,10 @@ final class Financeiro
         // VAG_TUR de cada turma). Tendo vaga, o MULT aceita a reposição sem trava própria — aqui
         // não repetimos um limite fixo (turmas têm capacidades diferentes).
 
-        // Dados do aluno para gravação.
+        // Dados do aluno para gravação. O MULT grava essas telas em latin1 (utf8_decode no
+        // addocorrencia.php); a conexão da ponte é latin1, então convertemos UTF-8 -> latin1
+        // para a Ação/textos saírem corretos (senão vira "ReposiÃ§Ã£o").
+        $latin1 = static fn (string $s): string => (string)mb_convert_encoding($s, 'ISO-8859-1', 'UTF-8');
         $al = $this->db->um('SELECT NOM_ALU FROM s_cad_aluno WHERE COD_ALU = ? LIMIT 1', [$codAlu]);
         $nomAlu = Texto::doBanco($al['NOM_ALU'] ?? '');
         $matOco = ($matId === $codAlu) ? '' : $matId;
@@ -417,7 +426,7 @@ final class Financeiro
         // 1) Reserva em s_cad_reposicao.
         $this->db->executar(
             'INSERT INTO s_cad_reposicao (COD_ALU, NOM_ALU, COD_CUR, COD_TUR, DAT_REP, COD_MATRICULA) VALUES (?, ?, ?, ?, ?, ?)',
-            [$codAlu, Texto::paraBanco($nomAlu), $codCur, $codTur, $dataIso, $matOco]
+            [$codAlu, $latin1($nomAlu), $codCur, $codTur, $dataIso, $matOco]
         );
         $codRep = (string)$this->db->ultimoId();
 
@@ -434,9 +443,9 @@ final class Financeiro
             'INSERT INTO s_cad_ocorrencia (STATUS_OCO, COD_ALU, MATRICULA_OCO, TURMA_OCO, DAT_OCO, HOR_OCO, OCO_OCO, PRO_OCO, STATUS_ANT_OCO, ID_REP)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
             [
-                Texto::paraBanco('Reposição'), $codAlu, $matOco, $turmaAluno,
+                $latin1('Reposição'), $codAlu, $matOco, $turmaAluno,
                 $agora->format('Y-m-d'), $agora->format('H:i:s'),
-                Texto::paraBanco($ocoTexto), Texto::paraBanco((string)($this->agente['login'] ?? '')), $statusAtual, $codRep,
+                $latin1($ocoTexto), $latin1((string)($this->agente['login'] ?? '')), $statusAtual, $codRep,
             ]
         );
         $codOco = (string)$this->db->ultimoId();

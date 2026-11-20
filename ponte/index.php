@@ -135,6 +135,7 @@ try {
         'status_certificado' => $escola->statusCertificado($s('cod_alu')),
         'cronograma_turma' => $escola->cronogramaTurma($s('cod_alu')),
         'vagas_turmas' => $escola->vagasTurmas($s('cod_alu')),
+        'reposicao_pendente' => $escola->reposicaoPendente($s('cod_alu')),
         'entrega_apostila' => $escola->entregaApostila($s('cod_alu')),
         'solicitar_certificado' => $fin()->solicitarCertificado($s('cod_alu'), $s('chave')),
         'cartas' => (new Financeiro($db, $escola, $U['agente']))->cartas(),

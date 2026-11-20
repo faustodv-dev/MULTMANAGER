@@ -3,7 +3,7 @@ import { CFG, registrar } from './base.js';
 import { simulando } from './contexto.js';
 
 // No simulador, estas ações não gravam nada no sistema escolar
-const ESCRITAS = ['baixar', 'registrar_ocorrencia', 'agendar_pagamento', 'registrar_carta'];
+const ESCRITAS = ['baixar', 'registrar_ocorrencia', 'agendar_pagamento', 'registrar_carta', 'agendar_reposicao'];
 
 export class ErroPonte extends Error {
   constructor(codigo, mensagem, detalhes = {}, http = 0) {
@@ -28,6 +28,7 @@ export async function ponte(unidade, acao, params = {}, { conversaId = null, tim
     }
     if (acao === 'agendar_pagamento') return { agendamento_id: 0, simulado: true };
     if (acao === 'registrar_carta') return { cod_hist: 0, simulado: true };
+    if (acao === 'agendar_reposicao') return { cod_rep: 0, cod_oco: 0, simulado: true };
     return { cod_oco: 0, simulado: true };
   }
   const corpo = JSON.stringify({ ...params, acao, unidade });
