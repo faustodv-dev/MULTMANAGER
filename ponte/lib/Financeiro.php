@@ -404,13 +404,9 @@ final class Financeiro
             throw new ErroPonte('dia_sem_aula', 'A turma ' . $codTur . ' tem aula em ' . Texto::doBanco($t['DIA_SEMANA'] ?? '') . '. Marque a reposição nesse dia.');
         }
 
-        // Lotação: matriculados ativos + reposições já marcadas nessa data precisam caber (15 PCs).
-        $LIMITE = 15;
-        $mAtivos = (int)(($this->db->um("SELECT COUNT(*) n FROM s_cad_matricula WHERE COD_TUR = ? AND STATUS_MAT = 'Ativo'", [$codTur]) ?? ['n' => 0])['n']);
-        $repDia = (int)(($this->db->um('SELECT COUNT(*) n FROM s_cad_reposicao WHERE COD_TUR = ? AND DAT_REP = ?', [$codTur, $dataIso]) ?? ['n' => 0])['n']);
-        if ($mAtivos + $repDia >= $LIMITE) {
-            throw new ErroPonte('turma_sem_vaga', 'Essa turma já está lotada nessa data (limite de ' . $LIMITE . '). Ofereça outro dia ou turma.');
-        }
+        // Vaga: a conferência de capacidade é feita ANTES, ao oferecer (vagas_turmas respeita o
+        // VAG_TUR de cada turma). Tendo vaga, o MULT aceita a reposição sem trava própria — aqui
+        // não repetimos um limite fixo (turmas têm capacidades diferentes).
 
         // Dados do aluno para gravação.
         $al = $this->db->um('SELECT NOM_ALU FROM s_cad_aluno WHERE COD_ALU = ? LIMIT 1', [$codAlu]);
