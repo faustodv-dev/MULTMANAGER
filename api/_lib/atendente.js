@@ -43,10 +43,21 @@ function dadosUnidade(u) {
   return `${cab}\n${linhas.join('\n')}`;
 }
 
-function sistema(unidade, conversa, grupos, asaasAtivo) {
+// Feriado/fechamento na data (AAAA-MM-DD) para a unidade: nacional (unit_id null) ou da própria unidade.
+async function feriadoNaData(unitId, dataIso) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(dataIso || ''))) return null;
+  const mes = parseInt(dataIso.slice(5, 7), 10);
+  const dia = parseInt(dataIso.slice(8, 10), 10);
+  const { data: rows } = await supabase.from('feriados').select('nome, data, dia, mes, recorrente')
+    .or(`unit_id.is.null,unit_id.eq.${unitId}`);
+  const hit = (rows || []).find((r) => r.recorrente ? (Number(r.dia) === dia && Number(r.mes) === mes) : (r.data === dataIso));
+  return hit ? hit.nome : null;
+}
+
+function sistema(unidade, conversa, grupos, asaasAtivo, feriadoHoje) {
   const conf = conversa.identidade_confirmada;
   const g = conversa.contexto?.grupo;
-  return `Você é a assistente virtual da MULT Profissões (cursos profissionalizantes), unidade ${unidade.name}, no WhatsApp. Hoje é ${dataBr(hojeSP())}.
+  return `Você é a assistente virtual da MULT Profissões (cursos profissionalizantes), unidade ${unidade.name}, no WhatsApp. Hoje é ${dataBr(hojeSP())}.${feriadoHoje ? ` ATENÇÃO: HOJE é FERIADO/FECHAMENTO (${feriadoHoje}) — a unidade está FECHADA e NÃO há aula hoje. Se perguntarem se funciona/tem aula hoje, avise que hoje não há expediente por causa disso. NUNCA ofereça reposição nem aula para a data de hoje.` : ''}
 Atende alunos e responsáveis de forma acolhedora, empática e profissional (padrão de atendimento pedagógico).
 
 ESTILO: português do Brasil, mensagens curtas e humanizadas (no máximo ~5 linhas), sem markdown, sem tabelas,
@@ -92,7 +103,7 @@ ${asaasAtivo
   rotativo = a aula começa e termina no dia, o conteúdo é reposto/revisto no ciclo; individual = ele retoma de onde parou, não perde matéria;
   sequencial = reforce a assiduidade e ofereça reposição. Problema de pagamento não é motivo para faltar.
 - REPOSIÇÃO (depende do curso):
-  • INFORMÁTICA: você PODE agendar. 1) chame consultar_reposicao_informatica(cod_alu); 2) se automatizado=true, ofereça SOMENTE as turmas/horários retornados (NUNCA invente nem confirme horário fora dessa lista); 3) quando o aluno escolher a turma, COMBINE a DATA da reposição — só vale um dia em que aquela turma tem aula (o dia_semana vem na lista). Confirme a data com o aluno; 4) chame agendar_reposicao_informatica(cod_alu, turma, data) — ela reserva a vaga e grava a ocorrência "Reposição" de verdade. Só diga "agendado" DEPOIS que a ferramenta retornar ok (traz turma, dia, horário e data). Se retornar dia_sem_aula, peça uma data no dia certo; se turma_sem_vaga, ofereça outra turma/data da lista atual.
+  • INFORMÁTICA: você PODE agendar. 1) chame consultar_reposicao_informatica(cod_alu); 2) se automatizado=true, ofereça SOMENTE as turmas/horários retornados (NUNCA invente nem confirme horário fora dessa lista); 3) quando o aluno escolher a turma, COMBINE a DATA da reposição — só vale um dia em que aquela turma tem aula (o dia_semana vem na lista). Confirme a data com o aluno; 4) chame agendar_reposicao_informatica(cod_alu, turma, data) — ela reserva a vaga e grava a ocorrência "Reposição" de verdade. Só diga "agendado" DEPOIS que a ferramenta retornar ok (traz turma, dia, horário e data). Se retornar dia_sem_aula, peça uma data no dia certo; se turma_sem_vaga, ofereça outra turma/data da lista atual; se data_feriado, o dia escolhido é feriado — peça outra data.
   • DEMAIS CURSOS (ou se a ferramenta retornar automatizado=false / curso_nao_automatizado): VOCÊ NÃO AGENDA. Nunca confirme nem prometa dia/horário/turma, mesmo que o aluno sugira. Registre com registrar_pedagogico(tipo="reposicao"), diga que a SECRETARIA vai verificar e confirmar, e chame chamar_humano "pedagógico - reposição". Não diga "já agendei"/"está marcado".
   • Só agende/ofereça reposição para uma falta que JÁ aconteceu. Para aula que ainda vai acontecer, veja AVISO PRÉVIO abaixo.
 - AVISO PRÉVIO DE FALTA (o aluno responde ao lembrete de aula avisando que NÃO vai poder vir a uma aula que AINDA vai acontecer): acolha com carinho, agradeça o aviso e pergunte rápido o motivo. Registre com registrar_pedagogico(tipo="reposicao") deixando claro no detalhe que é AVISO PRÉVIO (a aula ainda não aconteceu). NÃO agende reposição agora — nem para Informática — porque a falta ainda não foi lançada no sistema. Diga que, assim que a falta for registrada, a equipe organiza a reposição dele. NUNCA diga "reposição agendada" para uma aula que ainda não aconteceu.
@@ -494,6 +505,9 @@ export async function atender({ conversa, unidade, segredos }) {
         if (!/^\d{4}-\d{2}-\d{2}$/.test(String(data || '')) && !/^\d{2}\/\d{2}\/\d{4}$/.test(String(data || ''))) {
           return { erro: 'data_necessaria', mensagem: 'Preciso da DATA da reposição (um dia em que a turma tem aula) antes de agendar. Combine a data com o aluno e passe em data (AAAA-MM-DD).' };
         }
+        const dataIsoRep = /^\d{2}\/\d{2}\/\d{4}$/.test(String(data)) ? String(data).split('/').reverse().join('-') : String(data).slice(0, 10);
+        const feriadoRep = await feriadoNaData(conversa.unit_id, dataIsoRep);
+        if (feriadoRep) return { erro: 'data_feriado', mensagem: `Dia ${dataIsoRep.split('-').reverse().join('/')} é feriado (${feriadoRep}) — não há aula nesse dia. Combine outra data com o aluno.` };
         const turmas = await ponte(conversa.unit_id, 'vagas_turmas', { cod_alu: String(cod_alu) }, { conversaId: conversa.id }).catch(() => []);
         const alvo = (Array.isArray(turmas) ? turmas : []).find((t) => String(t.cod_tur || '') === String(turma || '').trim() || String(t.turma || '').trim().toLowerCase() === String(turma || '').trim().toLowerCase());
         // Nunca registra um horário que não veio da lista de vagas conferida agora.
@@ -566,8 +580,9 @@ export async function atender({ conversa, unidade, segredos }) {
   while (linhas.length && linhas[0].papel !== 'usuario') linhas.shift();
   if (!linhas.length) return;
 
+  const feriadoHoje = await feriadoNaData(conversa.unit_id, hojeSP());
   const r = await agente({
-    sistema: sistema(unidade, conversa, grupos, !!segredos.asaas),
+    sistema: sistema(unidade, conversa, grupos, !!segredos.asaas, feriadoHoje),
     historico: linhas,
     ferramentas,
     chaves: { gemini: segredos.gemini, groq: segredos.groq },
