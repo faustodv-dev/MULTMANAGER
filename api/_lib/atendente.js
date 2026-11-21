@@ -132,6 +132,25 @@ ${unidade.instrucoes_agente ? `\nREGRAS DESTA UNIDADE (definidas pela própria u
 
 /** Executa o agente para a conversa e envia a resposta. */
 export async function atender({ conversa, unidade, segredos }) {
+  // Vínculo manual (tela Atendimento): se um humano já amarrou este número a um aluno,
+  // assume a identidade sem depender de o MULT achar o telefone. Roda só enquanto não confirmada.
+  if (!conversa.identidade_confirmada) {
+    const tel = digitos(conversa.telefone || '');
+    if (tel) {
+      const { data: vinc } = await supabase.from('vinculos_telefone')
+        .select('grupo').eq('unit_id', conversa.unit_id).eq('telefone', tel).maybeSingle();
+      if (vinc?.grupo?.alunos?.length) {
+        conversa = await atualizarConversa(conversa.id, {
+          identidade_confirmada: true,
+          cpf_responsavel: vinc.grupo.cpf_responsavel || null,
+          nome_responsavel: vinc.grupo.nome_responsavel || null,
+          cod_alus: vinc.grupo.alunos.map((a) => String(a.cod_alu)),
+          contexto: { ...(conversa.contexto || {}), grupo: vinc.grupo, confirmado_por: 'vinculo_manual', confirmado_em: new Date().toISOString(), vinculo_manual: true }
+        });
+      }
+    }
+  }
+
   let grupos = conversa.contexto?.candidatos;
   const velho = !conversa.contexto?.candidatos_em || Date.now() - new Date(conversa.contexto.candidatos_em).getTime() > 6 * 3600 * 1000;
   if (!conversa.identidade_confirmada && (!grupos || velho)) {
