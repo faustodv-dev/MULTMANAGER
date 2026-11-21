@@ -94,6 +94,88 @@ async function informativo(unitId, codAlu, texto) {
   }).catch(() => null);
 }
 
+/* ───────── Vínculo manual aluno↔conversa (tela Atendimento) ───────── */
+const grupoDeAluno = (a) => ({
+  nome_responsavel: a.nome_responsavel || null,
+  cpf_responsavel: a.cpf_responsavel || null,
+  alunos: [{ cod_alu: String(a.cod_alu), nome: a.nome, matriculas: a.matriculas || [] }]
+});
+const cursosAtivos = (matriculas) => (matriculas || []).filter((m) => /ativo/i.test(m.status)).map((m) => m.curso_nome);
+
+async function vinculo(res, acao, unitId, b, eu) {
+  // Busca candidatos por código do aluno OU por CPF/telefone do responsável.
+  if (acao === 'vincular_buscar') {
+    const codigo = digitos(b.codigo || ''), cpf = digitos(b.cpf || ''), fone = digitos(b.telefone || '');
+    let candidatos = [];
+    if (codigo) {
+      const a = await ponte(unitId, 'aluno', { cod_alu: codigo }).catch(() => null);
+      if (a) candidatos = [{
+        cod_alu: String(a.cod_alu), nome: a.nome, ativo: a.ativo,
+        nome_responsavel: a.nome_responsavel || null, cpf_responsavel: a.cpf_responsavel || null,
+        cursos: cursosAtivos(a.matriculas), grupo: grupoDeAluno(a)
+      }];
+    } else if (cpf.length === 11 || fone.length >= 10) {
+      const grupos = cpf.length === 11
+        ? await ponte(unitId, 'buscar_cpf', { cpf })
+        : await ponte(unitId, 'buscar_telefone', { telefone: fone });
+      for (const g of (grupos || [])) {
+        const grupo = {
+          nome_responsavel: g.nome_responsavel || null, cpf_responsavel: g.cpf_responsavel || null,
+          alunos: (g.alunos || []).map((a) => ({ cod_alu: String(a.cod_alu), nome: a.nome, matriculas: a.matriculas || [] }))
+        };
+        for (const a of (g.alunos || [])) candidatos.push({
+          cod_alu: String(a.cod_alu), nome: a.nome, ativo: a.ativo,
+          nome_responsavel: g.nome_responsavel || null, cpf_responsavel: g.cpf_responsavel || null,
+          cursos: cursosAtivos(a.matriculas), grupo
+        });
+      }
+    } else {
+      return res.status(400).json({ erro: 'parametros', mensagem: 'Informe o código do aluno, ou CPF/telefone do responsável.' });
+    }
+    return res.status(200).json({ ok: true, candidatos });
+  }
+
+  // vincular/desvincular operam sobre a conversa
+  const { data: conversa } = await supabase.from('conversas').select('*').eq('id', b.conversa_id).eq('unit_id', unitId).maybeSingle();
+  if (!conversa) return res.status(404).json({ erro: 'conversa_nao_encontrada' });
+  const fone = digitos(conversa.telefone || '');
+
+  if (acao === 'desvincular_aluno') {
+    if (fone) await supabase.from('vinculos_telefone').delete().eq('unit_id', unitId).eq('telefone', fone);
+    const ctx = { ...(conversa.contexto || {}) }; delete ctx.grupo; ctx.vinculo_manual = false;
+    await supabase.from('conversas').update({ identidade_confirmada: false, cod_alus: [], nome_responsavel: null, cpf_responsavel: null, contexto: ctx }).eq('id', conversa.id);
+    return res.status(200).json({ ok: true });
+  }
+
+  // vincular_aluno
+  const cod = digitos(b.cod_alu || '');
+  if (!cod) return res.status(400).json({ erro: 'sem_codigo', mensagem: 'Código do aluno é obrigatório.' });
+  let grupo = (b.grupo && Array.isArray(b.grupo.alunos) && b.grupo.alunos.length) ? b.grupo : null;
+  if (!grupo || !grupo.alunos.some((x) => String(x.cod_alu) === cod)) {
+    const a = await ponte(unitId, 'aluno', { cod_alu: cod }); // valida o código no MULT
+    grupo = grupoDeAluno(a);
+  }
+  const nomeAluno = (grupo.alunos.find((x) => String(x.cod_alu) === cod) || grupo.alunos[0] || {}).nome || null;
+
+  if (fone) {
+    await supabase.from('vinculos_telefone').upsert({
+      unit_id: unitId, telefone: fone, cod_alu: cod, grupo, nome_aluno: nomeAluno,
+      criado_por: eu.id, criado_por_nome: eu.nome || null, criado_em: new Date().toISOString()
+    }, { onConflict: 'unit_id,telefone' });
+  }
+  const ctx = { ...(conversa.contexto || {}), grupo, confirmado_por: 'vinculo_manual', confirmado_em: new Date().toISOString(), vinculo_manual: true };
+  await supabase.from('conversas').update({
+    identidade_confirmada: true,
+    cod_alus: grupo.alunos.map((x) => String(x.cod_alu)),
+    nome_responsavel: grupo.nome_responsavel || null,
+    cpf_responsavel: grupo.cpf_responsavel || null,
+    contexto: ctx
+  }).eq('id', conversa.id);
+  // Carimba os cards desta conversa que estavam sem aluno (os antigos e os que vierem).
+  await supabase.from('cards').update({ cod_alu: cod, nome_aluno: nomeAluno }).eq('unit_id', unitId).eq('conversa_id', conversa.id).is('cod_alu', null);
+  return res.status(200).json({ ok: true, cod_alu: cod, nome_aluno: nomeAluno, grupo });
+}
+
 const unidadeDe = (perfil, corpo) => (perfil.papel === 'master' ? String(corpo.unidade || perfil.unit_id || 'rio_verde') : perfil.unit_id);
 
 export default async function handler(req, res) {
@@ -116,6 +198,13 @@ export default async function handler(req, res) {
     const podeAg = eu.papel === 'master' || eu.papel === 'admin' || (eu.modulos || []).includes('encaminhamento');
     if (!podeAg) return res.status(403).json({ erro: 'sem_permissao' });
     try { return await agencia(res, acao, unitId, b); }
+    catch (e) { return res.status(500).json({ erro: 'erro', mensagem: e.message }); }
+  }
+
+  // Vínculo manual aluno↔conversa (tela Atendimento): nível de conversa, fora do gate de departamento.
+  if (acao === 'vincular_buscar' || acao === 'vincular_aluno' || acao === 'desvincular_aluno') {
+    if (eu.papel !== 'master' && eu.unit_id !== unitId) return res.status(403).json({ erro: 'sem_permissao' });
+    try { return await vinculo(res, acao, unitId, b, eu); }
     catch (e) { return res.status(500).json({ erro: 'erro', mensagem: e.message }); }
   }
 

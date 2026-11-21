@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Bot, FileText, Send, UserRound, CheckCircle2, Paperclip } from "lucide-react";
+import { Bot, FileText, Send, UserRound, CheckCircle2, Paperclip, Link2 } from "lucide-react";
 import { api, supabase, urlArquivo, dataHora, telefoneBonito, type Conversa, type Mensagem } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 
 const STATUS: Record<Conversa["status"], { rotulo: string; cor: string }> = {
@@ -152,6 +153,98 @@ export default function Atendimento() {
   );
 }
 
+type Cand = { cod_alu: string; nome: string; ativo?: boolean; nome_responsavel?: string | null; cursos?: string[]; grupo?: any };
+
+// Botão + diálogo para amarrar esta conversa a um aluno do MULT (quando o WhatsApp
+// não bate com o telefone cadastrado). Vale para a conversa e os próximos contatos do número.
+function VincularAluno({ conversa }: { conversa: Conversa }) {
+  const [open, setOpen] = useState(false);
+  const [modo, setModo] = useState<"codigo" | "resp">("codigo");
+  const [codigo, setCodigo] = useState("");
+  const [cpf, setCpf] = useState("");
+  const [buscando, setBuscando] = useState(false);
+  const [cands, setCands] = useState<Cand[]>([]);
+  const [salvando, setSalvando] = useState(false);
+  const manual = !!conversa.contexto?.vinculo_manual;
+  const alunoVinc = conversa.contexto?.grupo?.alunos?.[0];
+
+  const buscar = async () => {
+    setBuscando(true); setCands([]);
+    try {
+      const corpo: any = { acao: "vincular_buscar", unidade: conversa.unit_id };
+      if (modo === "codigo") corpo.codigo = codigo.trim(); else corpo.cpf = cpf.trim();
+      const r = await api<{ candidatos: Cand[] }>("crm", corpo);
+      setCands(r.candidatos || []);
+      if (!r.candidatos?.length) toast.info("Nada encontrado. Confira o código ou o CPF.");
+    } catch (e: any) { toast.error(e.message); } finally { setBuscando(false); }
+  };
+
+  const vincular = async (c: Cand) => {
+    setSalvando(true);
+    try {
+      await api("crm", { acao: "vincular_aluno", unidade: conversa.unit_id, conversa_id: conversa.id, cod_alu: c.cod_alu, grupo: c.grupo });
+      toast.success(`Vinculado a ${c.nome} (cód. ${c.cod_alu}).`);
+      setOpen(false); setCands([]); setCodigo(""); setCpf("");
+    } catch (e: any) { toast.error(e.message); } finally { setSalvando(false); }
+  };
+
+  const desvincular = async () => {
+    setSalvando(true);
+    try {
+      await api("crm", { acao: "desvincular_aluno", unidade: conversa.unit_id, conversa_id: conversa.id });
+      toast.success("Vínculo removido.");
+      setOpen(false);
+    } catch (e: any) { toast.error(e.message); } finally { setSalvando(false); }
+  };
+
+  return (
+    <>
+      <Button size="sm" variant={manual ? "secondary" : "outline"} onClick={() => setOpen(true)} title="Vincular esta conversa a um aluno do MULT">
+        <Link2 className="mr-1 h-4 w-4" />{manual ? "Aluno vinculado" : "Vincular aluno"}
+      </Button>
+      <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) setCands([]); }}>
+        <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto">
+          <DialogHeader><DialogTitle>Vincular aluno a esta conversa</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Amarra este número ({telefoneBonito(conversa.telefone)}) a um aluno do MULT — útil quando o WhatsApp é diferente do telefone cadastrado. Vale para esta conversa e para os próximos contatos deste número.
+          </p>
+          {manual && (
+            <div className="rounded-md border border-amber-300 bg-amber-50 p-2 text-sm dark:border-amber-800 dark:bg-amber-950">
+              Já vinculado manualmente{alunoVinc ? ` a ${alunoVinc.nome} (cód. ${alunoVinc.cod_alu})` : ""}.
+              <Button size="sm" variant="ghost" className="ml-1 h-7 text-destructive" onClick={desvincular} disabled={salvando}>Desvincular</Button>
+            </div>
+          )}
+          <div className="flex gap-1 rounded-lg border bg-muted/40 p-1">
+            <button onClick={() => setModo("codigo")} className={cn("flex-1 rounded-md px-3 py-1.5 text-sm font-medium", modo === "codigo" ? "bg-background shadow-sm" : "text-muted-foreground")}>Por código</button>
+            <button onClick={() => setModo("resp")} className={cn("flex-1 rounded-md px-3 py-1.5 text-sm font-medium", modo === "resp" ? "bg-background shadow-sm" : "text-muted-foreground")}>Por CPF do responsável</button>
+          </div>
+          <div className="flex gap-2">
+            {modo === "codigo" ? (
+              <Input autoFocus placeholder="Código do aluno (ex.: 14005)" value={codigo} onChange={(e) => setCodigo(e.target.value)} onKeyDown={(e) => e.key === "Enter" && buscar()} />
+            ) : (
+              <Input autoFocus placeholder="CPF do responsável (só números)" value={cpf} onChange={(e) => setCpf(e.target.value)} onKeyDown={(e) => e.key === "Enter" && buscar()} />
+            )}
+            <Button onClick={buscar} disabled={buscando || (modo === "codigo" ? !codigo.trim() : !cpf.trim())}>{buscando ? "Buscando…" : "Buscar"}</Button>
+          </div>
+          <div className="space-y-2">
+            {cands.map((c) => (
+              <div key={c.cod_alu} className="flex items-center justify-between gap-2 rounded-md border p-2">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium">{c.nome} <span className="font-normal text-muted-foreground">· cód. {c.cod_alu}</span></p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {c.cursos?.length ? c.cursos.join(", ") : "sem curso ativo"}{c.nome_responsavel ? ` · resp.: ${c.nome_responsavel}` : ""}{c.ativo === false ? " · inativo" : ""}
+                  </p>
+                </div>
+                <Button size="sm" onClick={() => vincular(c)} disabled={salvando}>Vincular</Button>
+              </div>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
 function Chat({ conversa, meuId, voltar }: { conversa: Conversa; meuId: string; voltar: () => void }) {
   const [msgs, setMsgs] = useState<Mensagem[]>([]);
   const [texto, setTexto] = useState("");
@@ -225,6 +318,7 @@ function Chat({ conversa, meuId, voltar }: { conversa: Conversa; meuId: string; 
           )}
         </div>
         <Badge className={cn("border-0", STATUS[conversa.status].cor)}>{STATUS[conversa.status].rotulo}</Badge>
+        <VincularAluno conversa={conversa} />
         {conversa.status !== "humano" && <Button size="sm" variant="outline" onClick={() => mudarStatus("humano")}><UserRound className="mr-1 h-4 w-4" />Assumir</Button>}
         {conversa.status !== "ia" && <Button size="sm" variant="outline" onClick={() => mudarStatus("ia")}><Bot className="mr-1 h-4 w-4" />Devolver à assistente</Button>}
         {conversa.status !== "encerrada" && <Button size="sm" variant="outline" onClick={() => mudarStatus("encerrada")}><CheckCircle2 className="mr-1 h-4 w-4" />Encerrar</Button>}
