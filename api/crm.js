@@ -176,6 +176,41 @@ async function vinculo(res, acao, unitId, b, eu) {
   return res.status(200).json({ ok: true, cod_alu: cod, nome_aluno: nomeAluno, grupo });
 }
 
+/* ───────── Feriados e fechamentos (configurações da unidade) ───────── */
+async function feriados(res, acao, unitId, b, eu) {
+  if (acao === 'feriados_listar') {
+    const { data: rows } = await supabase.from('feriados').select('*')
+      .or(`unit_id.is.null,unit_id.eq.${unitId}`)
+      .order('recorrente', { ascending: false }).order('mes', { ascending: true, nullsFirst: false })
+      .order('dia', { ascending: true, nullsFirst: false }).order('data', { ascending: true, nullsFirst: false });
+    return res.status(200).json({ ok: true, feriados: rows || [] });
+  }
+  if (acao === 'feriado_criar') {
+    const nome = String(b.nome || '').trim();
+    if (!nome) return res.status(400).json({ erro: 'sem_nome', mensagem: 'Informe o nome do feriado ou fechamento.' });
+    const escopo = ['municipal', 'recesso'].includes(b.escopo) ? b.escopo : 'municipal';
+    const recorrente = !!b.recorrente;
+    const bruto = String(b.data || '');
+    let data = null, dia = null, mes = null;
+    const iso = /^\d{4}-\d{2}-\d{2}$/.test(bruto) ? bruto
+      : (/^\d{2}\/\d{2}\/\d{4}$/.test(bruto) ? bruto.split('/').reverse().join('-') : '');
+    if (!iso) return res.status(400).json({ erro: 'data_invalida', mensagem: 'Informe uma data válida.' });
+    if (recorrente) { mes = parseInt(iso.slice(5, 7), 10); dia = parseInt(iso.slice(8, 10), 10); }
+    else { data = iso; }
+    const { data: ins, error } = await supabase.from('feriados')
+      .insert({ unit_id: unitId, escopo, nome, data, dia, mes, recorrente, criado_por: eu.id })
+      .select('id').maybeSingle();
+    if (error) return res.status(500).json({ erro: 'erro', mensagem: error.message });
+    return res.status(200).json({ ok: true, id: ins?.id });
+  }
+  if (acao === 'feriado_remover') {
+    // Só remove feriado da PRÓPRIA unidade — nacionais (unit_id null) ficam protegidos.
+    const { error } = await supabase.from('feriados').delete().eq('id', String(b.id || '')).eq('unit_id', unitId);
+    if (error) return res.status(500).json({ erro: 'erro', mensagem: error.message });
+    return res.status(200).json({ ok: true });
+  }
+}
+
 const unidadeDe = (perfil, corpo) => (perfil.papel === 'master' ? String(corpo.unidade || perfil.unit_id || 'rio_verde') : perfil.unit_id);
 
 export default async function handler(req, res) {
@@ -205,6 +240,13 @@ export default async function handler(req, res) {
   if (acao === 'vincular_buscar' || acao === 'vincular_aluno' || acao === 'desvincular_aluno') {
     if (eu.papel !== 'master' && eu.unit_id !== unitId) return res.status(403).json({ erro: 'sem_permissao' });
     try { return await vinculo(res, acao, unitId, b, eu); }
+    catch (e) { return res.status(500).json({ erro: 'erro', mensagem: e.message }); }
+  }
+
+  // Feriados e fechamentos (configurações da unidade): nível de unidade, fora do gate de departamento.
+  if (acao === 'feriados_listar' || acao === 'feriado_criar' || acao === 'feriado_remover') {
+    if (eu.papel !== 'master' && eu.unit_id !== unitId) return res.status(403).json({ erro: 'sem_permissao' });
+    try { return await feriados(res, acao, unitId, b, eu); }
     catch (e) { return res.status(500).json({ erro: 'erro', mensagem: e.message }); }
   }
 

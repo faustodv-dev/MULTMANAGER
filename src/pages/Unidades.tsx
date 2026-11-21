@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Plus, Download, KeyRound, Smartphone, Loader2, CheckCircle2 } from "lucide-react";
+import { Plus, Download, KeyRound, Smartphone, Loader2, CheckCircle2, CalendarOff } from "lucide-react";
 import { api, supabase, type Unidade } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
@@ -146,6 +146,7 @@ export default function Unidades() {
               </div>
             </div>
           </div>
+          <FeriadosUnidade unitId={u.id} />
           <ChavesUnidade unitId={u.id} />
         </div>
       ))}
@@ -237,6 +238,94 @@ function ChavesUnidade({ unitId }: { unitId: string }) {
         </div>
       )}
       {qrAberto && <QrDialog unitId={unitId} aoFechar={() => { setQrAberto(false); carregar(); }} />}
+    </div>
+  );
+}
+
+/** Feriados e fechamentos da unidade: o agente usa para saber se a escola está aberta e não marcar reposição em feriado. */
+function FeriadosUnidade({ unitId }: { unitId: string }) {
+  const [aberto, setAberto] = useState(false);
+  const [lista, setLista] = useState<any[] | null>(null);
+  const [form, setForm] = useState({ nome: "", data: "", escopo: "municipal", recorrente: false });
+  const [busy, setBusy] = useState(false);
+
+  const carregar = async () => {
+    try { const r = await api<any>("crm", { acao: "feriados_listar", unidade: unitId }); setLista(r.feriados || []); }
+    catch (e: any) { toast.error(e.message); }
+  };
+  const abrir = () => { setAberto(!aberto); if (lista === null) carregar(); };
+
+  const criar = async () => {
+    if (!form.nome.trim() || !form.data) return toast.error("Informe nome e data.");
+    setBusy(true);
+    try {
+      const r = await api<any>("crm", { acao: "feriado_criar", unidade: unitId, ...form });
+      if (!r.ok) return toast.error(r.mensagem || r.erro);
+      toast.success("Feriado adicionado.");
+      setForm({ nome: "", data: "", escopo: "municipal", recorrente: false });
+      carregar();
+    } catch (e: any) { toast.error(e.message); } finally { setBusy(false); }
+  };
+  const remover = async (id: string) => {
+    try {
+      const r = await api<any>("crm", { acao: "feriado_remover", unidade: unitId, id });
+      if (!r.ok) return toast.error(r.mensagem || r.erro);
+      setLista((l) => (l || []).filter((x) => x.id !== id));
+    } catch (e: any) { toast.error(e.message); }
+  };
+
+  const quando = (f: any) => f.recorrente
+    ? `todo dia ${String(f.dia).padStart(2, "0")}/${String(f.mes).padStart(2, "0")}`
+    : (f.data ? f.data.slice(0, 10).split("-").reverse().join("/") : "—");
+  const nacionais = (lista || []).filter((f) => f.escopo === "nacional");
+  const daUnidade = (lista || []).filter((f) => f.escopo !== "nacional");
+
+  return (
+    <div className="rounded-lg border bg-muted/30 p-3">
+      <button onClick={abrir} className="flex w-full items-center gap-2 text-sm font-medium">
+        <CalendarOff className="h-4 w-4" />Feriados &amp; fechamentos
+        {lista && <span className="ml-2 text-xs text-muted-foreground">{daUnidade.length} desta unidade · {nacionais.length} nacionais</span>}
+        <span className="ml-auto text-xs text-muted-foreground">{aberto ? "ocultar" : "editar"}</span>
+      </button>
+      {aberto && (
+        <div className="mt-3 space-y-3">
+          <p className="text-xs text-muted-foreground">A assistente usa isto para saber se a unidade está aberta e para <b>não marcar reposição em feriado</b>. Os nacionais já vêm prontos. Adicione os <b>municipais</b> da sua cidade e <b>fechamentos</b> (recesso, ponte, sábado fechado).</p>
+
+          <div className="flex flex-wrap items-end gap-2 rounded-md border bg-background p-2">
+            <div className="min-w-[160px] flex-1"><Label className="text-xs">Nome</Label><Input placeholder="Ex.: Aniversário da cidade" value={form.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })} /></div>
+            <div><Label className="text-xs">Data</Label><Input type="date" value={form.data} onChange={(e) => setForm({ ...form, data: e.target.value })} /></div>
+            <div><Label className="text-xs">Tipo</Label>
+              <select className="h-9 rounded-md border bg-background px-2 text-sm" value={form.escopo} onChange={(e) => setForm({ ...form, escopo: e.target.value })}>
+                <option value="municipal">Feriado municipal</option>
+                <option value="recesso">Recesso / fechamento</option>
+              </select>
+            </div>
+            <label className="flex items-center gap-1.5 pb-2 text-xs"><input type="checkbox" checked={form.recorrente} onChange={(e) => setForm({ ...form, recorrente: e.target.checked })} />repete todo ano</label>
+            <Button size="sm" onClick={criar} disabled={busy}>Adicionar</Button>
+          </div>
+
+          {daUnidade.length > 0 && (
+            <div className="space-y-1">
+              <p className="text-xs font-semibold text-muted-foreground">Desta unidade</p>
+              {daUnidade.map((f) => (
+                <div key={f.id} className="flex items-center gap-2 rounded-md border bg-background px-2 py-1 text-sm">
+                  <span className="flex-1">{f.nome} <span className="text-xs text-muted-foreground">· {quando(f)}{f.escopo === "recesso" ? " · fechamento" : ""}{f.recorrente ? " · anual" : ""}</span></span>
+                  <Button size="sm" variant="ghost" className="h-7 text-destructive" onClick={() => remover(f.id)}>Remover</Button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="space-y-1">
+            <p className="text-xs font-semibold text-muted-foreground">Nacionais (herdados · valem para todas as unidades)</p>
+            <div className="flex flex-wrap gap-1">
+              {nacionais.map((f) => (
+                <span key={f.id} className="rounded-md border bg-background px-2 py-0.5 text-xs text-muted-foreground">{f.nome} · {quando(f)}</span>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
