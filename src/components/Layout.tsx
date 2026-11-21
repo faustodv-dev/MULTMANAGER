@@ -1,8 +1,9 @@
 import { NavLink } from "react-router-dom";
 import { useEffect, useState, type ReactNode } from "react";
-import { MessageCircle, Receipt, Users, Building2, LogOut, FlaskConical, Banknote, ClipboardList, GraduationCap, Briefcase, BellRing, UserX, LayoutDashboard, Handshake, BellPlus } from "lucide-react";
+import { MessageCircle, Receipt, Users, Building2, LogOut, FlaskConical, Banknote, ClipboardList, GraduationCap, Briefcase, BellRing, UserX, LayoutDashboard, Handshake, BellPlus, Megaphone } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
+import { CentralNovidades } from "@/components/CentralNovidades";
 import { cn } from "@/lib/utils";
 
 const PAPEL: Record<string, string> = { master: "Master geral", admin: "Administrador", colaborador: "Colaborador" };
@@ -40,6 +41,7 @@ export default function Layout({ children }: { children: ReactNode }) {
     { to: "/boleto-teste", rotulo: "Boleto (teste)", icone: Banknote, ok: perfil?.papel === "master" },
     { to: "/usuarios", rotulo: "Usuários", icone: Users, ok: pode("configuracoes") },
     { to: "/unidades", rotulo: "Unidades", icone: Building2, ok: pode("configuracoes") },
+    { to: "/novidades", rotulo: "Novidades", icone: Megaphone, ok: perfil?.papel === "master" },
   ].filter((i) => i.ok);
 
   const unidade = unidades.find((u) => u.id === perfil?.unit_id);
@@ -80,7 +82,13 @@ export default function Layout({ children }: { children: ReactNode }) {
           </button>
         </div>
       </aside>
-      <main className="min-h-0 flex-1 overflow-hidden bg-background">{children}</main>
+      <main className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
+        <header className="flex h-12 shrink-0 items-center justify-between gap-2 border-b bg-card/60 px-4 backdrop-blur">
+          <p className="truncate text-sm font-medium text-muted-foreground">{unidade ? unidade.name : "MULT Profissões"}</p>
+          <CentralNovidades />
+        </header>
+        <div className="min-h-0 flex-1 overflow-hidden">{children}</div>
+      </main>
     </div>
   );
 }

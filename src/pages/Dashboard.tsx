@@ -3,13 +3,14 @@ import {
   ResponsiveContainer, AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, Tooltip, CartesianGrid,
 } from "recharts";
-import { GraduationCap, Receipt, Send, AlertTriangle, RefreshCw, CalendarDays, ListTodo, Loader2, Briefcase, XCircle } from "lucide-react";
+import { GraduationCap, Receipt, Send, AlertTriangle, RefreshCw, CalendarDays, ListTodo, Loader2, Briefcase, XCircle, Megaphone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useAuth } from "@/lib/auth";
 import { api, dataHora } from "@/lib/supabase";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
 type Dep = "pedagogico" | "financeiro" | "encaminhamento";
@@ -85,6 +86,50 @@ function Painel({ titulo, children, acao, accent }: { titulo: string; children: 
   );
 }
 
+const TIPO_DASH: Record<string, { rot: string; cls: string }> = {
+  novidade: { rot: "Novidade", cls: "bg-sky-100 text-sky-700" },
+  aviso: { rot: "Aviso", cls: "bg-amber-100 text-amber-700" },
+  importante: { rot: "Importante", cls: "bg-red-100 text-red-700" },
+};
+
+/** Feed de novidades do sistema no topo do Início (publicadas pelo master). */
+function FeedNovidades() {
+  const [lista, setLista] = useState<any[]>([]);
+  const [exp, setExp] = useState<string | null>(null);
+  const carregar = async () => { try { const r = await api<any>("crm", { acao: "novidades_feed" }); setLista(r.novidades || []); } catch { /* ok */ } };
+  useEffect(() => { carregar(); }, []);
+  if (!lista.length) return null;
+  const abrir = async (n: any) => {
+    setExp((e) => (e === n.id ? null : n.id));
+    if (!n.lido) { setLista((l) => l.map((x) => (x.id === n.id ? { ...x, lido: true } : x))); try { await api("crm", { acao: "novidade_marcar_lida", id: n.id }); } catch { /* ok */ } }
+  };
+  return (
+    <Painel titulo="Novidades do sistema" accent="violet" acao={<Megaphone className="h-4 w-4 text-violet-600" />}>
+      <div className="space-y-2">
+        {lista.slice(0, 5).map((n) => {
+          const t = TIPO_DASH[n.tipo] || TIPO_DASH.novidade;
+          return (
+            <div key={n.id} className={cn("rounded-lg border p-2.5 transition-colors", !n.lido && "border-sky-200 bg-sky-50/50")}>
+              <button onClick={() => abrir(n)} className="flex w-full items-center gap-2 text-left">
+                <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${t.cls}`}>{t.rot}</span>
+                {!n.lido && <span className="h-2 w-2 shrink-0 rounded-full bg-sky-500" />}
+                <span className="flex-1 truncate text-sm font-medium">{n.titulo}</span>
+                <span className="shrink-0 text-xs text-muted-foreground">{diaBr((n.criado_em || "").slice(0, 10))}</span>
+              </button>
+              {exp === n.id && (
+                <div className="mt-2 whitespace-pre-wrap text-sm text-muted-foreground">
+                  {n.corpo}
+                  {n.anexo_url && <a href={n.anexo_url} target="_blank" rel="noreferrer" className="mt-1 block font-medium text-sky-600 hover:underline">📎 Abrir anexo</a>}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </Painel>
+  );
+}
+
 export default function Dashboard() {
   const { perfil, unidades } = useAuth();
   const ehMaster = perfil?.papel === "master";
@@ -156,6 +201,8 @@ export default function Dashboard() {
             </Button>
           </div>
         </header>
+
+        <FeedNovidades />
 
         {carregando && !dados ? (
           <div className="flex items-center gap-2 p-8 text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Carregando painel…</div>

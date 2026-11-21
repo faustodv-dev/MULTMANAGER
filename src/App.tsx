@@ -19,6 +19,7 @@ import Faltantes from "@/pages/Faltantes";
 import Avisos from "@/pages/Avisos";
 import Dashboard from "@/pages/Dashboard";
 import Agencia from "@/pages/Agencia";
+import Novidades from "@/pages/Novidades";
 import type { Modulo } from "@/lib/supabase";
 
 function Protegida({ modulo, children }: { modulo?: Modulo; children: JSX.Element }) {
@@ -64,6 +65,7 @@ export default function App() {
             <Route path="/pops" element={<Protegida><Pops /></Protegida>} />
             <Route path="/boleto-teste" element={<Protegida><BoletoTeste /></Protegida>} />
             <Route path="/unidades" element={<Protegida modulo="configuracoes"><Unidades /></Protegida>} />
+            <Route path="/novidades" element={<Protegida><Novidades /></Protegida>} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </BrowserRouter>
