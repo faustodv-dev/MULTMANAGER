@@ -211,6 +211,93 @@ async function feriados(res, acao, unitId, b, eu) {
   }
 }
 
+/* ───────── Mural de novidades/avisos internos (equipe) ───────── */
+async function novidades(res, acao, unitId, b, eu) {
+  // Feed de quem está vendo: publicadas, da sua unidade ou de todas (unit_id null).
+  if (acao === 'novidades_feed') {
+    const { data: itens } = await supabase.from('novidades').select('*')
+      .eq('publicado', true).or(`unit_id.is.null,unit_id.eq.${eu.unit_id}`)
+      .order('fixado', { ascending: false }).order('criado_em', { ascending: false }).limit(50);
+    const ids = (itens || []).map((n) => n.id);
+    let lidos = new Set();
+    if (ids.length) {
+      const { data: ls } = await supabase.from('novidades_leituras').select('novidade_id').eq('user_id', eu.id).in('novidade_id', ids);
+      lidos = new Set((ls || []).map((l) => l.novidade_id));
+    }
+    const lista = (itens || []).map((n) => ({ ...n, lido: lidos.has(n.id) }));
+    return res.status(200).json({ ok: true, novidades: lista, nao_lidas: lista.filter((n) => !n.lido).length, modal: lista.find((n) => n.tipo === 'importante' && !n.lido) || null });
+  }
+  if (acao === 'novidade_marcar_lida') {
+    if (!b.id) return res.status(400).json({ erro: 'sem_id' });
+    await supabase.from('novidades_leituras').upsert({ novidade_id: String(b.id), user_id: eu.id, lido_em: new Date().toISOString() }, { onConflict: 'novidade_id,user_id' });
+    return res.status(200).json({ ok: true });
+  }
+  if (acao === 'novidade_marcar_todas') {
+    const { data: itens } = await supabase.from('novidades').select('id').eq('publicado', true).or(`unit_id.is.null,unit_id.eq.${eu.unit_id}`);
+    const linhas = (itens || []).map((n) => ({ novidade_id: n.id, user_id: eu.id, lido_em: new Date().toISOString() }));
+    if (linhas.length) await supabase.from('novidades_leituras').upsert(linhas, { onConflict: 'novidade_id,user_id' });
+    return res.status(200).json({ ok: true });
+  }
+
+  // Daqui pra baixo: só master (publicar/gerir/ver quem leu).
+  if (eu.papel !== 'master') return res.status(403).json({ erro: 'sem_permissao' });
+
+  if (acao === 'novidades_admin') {
+    const { data: itens } = await supabase.from('novidades').select('*').order('criado_em', { ascending: false }).limit(100);
+    const { data: leituras } = await supabase.from('novidades_leituras').select('novidade_id');
+    const cont = {};
+    for (const l of (leituras || [])) cont[l.novidade_id] = (cont[l.novidade_id] || 0) + 1;
+    const { data: perfis } = await supabase.from('profiles').select('unit_id').eq('ativo', true);
+    const totalTodas = (perfis || []).length;
+    const porUnidade = {};
+    for (const p of (perfis || [])) porUnidade[p.unit_id] = (porUnidade[p.unit_id] || 0) + 1;
+    const lista = (itens || []).map((n) => ({ ...n, lidos: cont[n.id] || 0, total: n.unit_id ? (porUnidade[n.unit_id] || 0) : totalTodas }));
+    return res.status(200).json({ ok: true, novidades: lista });
+  }
+  if (acao === 'novidade_leitores') {
+    const { data: nov } = await supabase.from('novidades').select('*').eq('id', String(b.id || '')).maybeSingle();
+    if (!nov) return res.status(404).json({ erro: 'nao_encontrada' });
+    let q = supabase.from('profiles').select('id, nome, email, unit_id').eq('ativo', true);
+    if (nov.unit_id) q = q.eq('unit_id', nov.unit_id);
+    const { data: perfis } = await q;
+    const { data: ls } = await supabase.from('novidades_leituras').select('user_id, lido_em').eq('novidade_id', nov.id);
+    const quando = {};
+    for (const l of (ls || [])) quando[l.user_id] = l.lido_em;
+    const leram = [], faltam = [];
+    for (const p of (perfis || [])) {
+      if (quando[p.id]) leram.push({ nome: p.nome || p.email, lido_em: quando[p.id] });
+      else faltam.push({ nome: p.nome || p.email });
+    }
+    leram.sort((a, x) => (a.lido_em < x.lido_em ? 1 : -1));
+    return res.status(200).json({ ok: true, titulo: nov.titulo, leram, faltam });
+  }
+  if (acao === 'novidade_salvar') {
+    const titulo = String(b.titulo || '').trim();
+    if (!titulo) return res.status(400).json({ erro: 'sem_titulo', mensagem: 'Informe o título.' });
+    const reg = {
+      titulo, corpo: String(b.corpo || ''),
+      tipo: ['novidade', 'aviso', 'importante'].includes(b.tipo) ? b.tipo : 'novidade',
+      fixado: !!b.fixado, unit_id: b.unit_id ? String(b.unit_id) : null,
+      anexo_url: b.anexo_url ? String(b.anexo_url) : null,
+      publicado: b.publicado !== false, atualizado_em: new Date().toISOString()
+    };
+    if (b.id) {
+      const { error } = await supabase.from('novidades').update(reg).eq('id', String(b.id));
+      if (error) return res.status(500).json({ erro: 'erro', mensagem: error.message });
+      return res.status(200).json({ ok: true, id: b.id });
+    }
+    const { data: ins, error } = await supabase.from('novidades').insert({ ...reg, criado_por: eu.id }).select('id').maybeSingle();
+    if (error) return res.status(500).json({ erro: 'erro', mensagem: error.message });
+    return res.status(200).json({ ok: true, id: ins?.id });
+  }
+  if (acao === 'novidade_remover') {
+    const { error } = await supabase.from('novidades').delete().eq('id', String(b.id || ''));
+    if (error) return res.status(500).json({ erro: 'erro', mensagem: error.message });
+    return res.status(200).json({ ok: true });
+  }
+  return res.status(400).json({ erro: 'acao_desconhecida' });
+}
+
 const unidadeDe = (perfil, corpo) => (perfil.papel === 'master' ? String(corpo.unidade || perfil.unit_id || 'rio_verde') : perfil.unit_id);
 
 export default async function handler(req, res) {
@@ -247,6 +334,12 @@ export default async function handler(req, res) {
   if (acao === 'feriados_listar' || acao === 'feriado_criar' || acao === 'feriado_remover') {
     if (eu.papel !== 'master' && eu.unit_id !== unitId) return res.status(403).json({ erro: 'sem_permissao' });
     try { return await feriados(res, acao, unitId, b, eu); }
+    catch (e) { return res.status(500).json({ erro: 'erro', mensagem: e.message }); }
+  }
+
+  // Mural de novidades (equipe): feed/marcar p/ todos; publicar/gerir só master.
+  if (acao.startsWith('novidade')) {
+    try { return await novidades(res, acao, unitId, b, eu); }
     catch (e) { return res.status(500).json({ erro: 'erro', mensagem: e.message }); }
   }
 
