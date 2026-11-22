@@ -561,6 +561,8 @@ function DossieDialog({ dep, card, unidade, colabs, aoFechar, aoMudar, mover, ab
                           </span>
                         </div>
                         {e.texto && <p className="mt-0.5 whitespace-pre-wrap text-muted-foreground">{e.texto}</p>}
+                        {e.feedback && <p className="mt-1 whitespace-pre-wrap rounded bg-muted px-1.5 py-1 text-[11px] italic text-muted-foreground"><span className="font-medium not-italic text-primary">IA:</span> {e.feedback}</p>}
+                        {e.xp != null && e.xp > 0 && <span className="mt-1 inline-block text-[10px] font-medium text-primary">+{e.xp} XP</span>}
                       </li>
                     ))}
                   </ul>
