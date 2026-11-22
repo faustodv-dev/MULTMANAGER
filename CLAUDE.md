@@ -27,6 +27,21 @@ Separado. Só serviu de **inspiração**. **Nunca** deployar mudança do pedagó
 | IDs de unidade | **aleatórios** (ex.: `Q60oB7mFhvUZy1zsboAV` = Rio Verde). Se você vê ids aleatórios, está no sistema COMERCIAL. |
 | Gateway WhatsApp | serviço **`mult-whatsapp-gateway`**, repo `faustodv-dev/mult-whatsapp-gateway`, Render **"My Workspace"** (`tea-db7rcvrncjis73fav8ag`, conta `faustodv@gmail.com`). ⚠️ **Este é o COMERCIAL. NÃO mexer para o pedagógico.** |
 
+## 🟣 DIÁRIO DE BORDO (sistema CONECTADO — Fase 4, NÃO é este repo)
+Sistema de gamificação/jornada do aluno (missões, candidaturas, vagas). **Estratégia: conectar, não migrar** (deep-link; a agência oficial continua a do nosso CRM). Egress-driven: nada de cross-read ao vivo.
+
+| Peça | Onde |
+|---|---|
+| Supabase | **`qtaxuzubejquqfeflsjy`** = "DIARIO DE BORDO", org **`multprofissoesoficial`** (FREE). **Conta/org SEPARADA** — **NÃO alcançável** pelo nosso MCP Supabase (só vemos a org `nvhdlkvzxbcpxpdxnnpq`). Schema vem de prints do Fausto. |
+| Tabelas | `candidaturas`, `cursos`, `empresas`, `franquias`, `matriculas`, `missoes`, `usuarios`, `vagas` |
+
+**`usuarios`** (colunas confirmadas por print): `id` text = `{franquia_id}_{codigo}` (ex.: `aparecida_5475`) · `uid` (auth) · `email` = `{id}@mult.com.br` · `display_name` (nome do aluno) · **`codigo` = `cod_alu` do MULT ✓** · `role` (`aluno`…) · `franquia_id` (ex.: `aparecida`).
+
+**Ponte de identidade (trivial):** Diário `usuarios.codigo` == MULT `cod_alu`. O deep-link do card do aluno sai de **(franquia_id, codigo)**.
+
+**⚠️ De-para de franquia (PENDENTE):** o Diário usa `franquia_id` curto (`aparecida`), nosso CRM usa `unit_id` longo (`aparecida_goiania`). Falta a lista completa da tabela `franquias` pra mapear `rio_verde`/`anapolis`/`agua_boa`/`bom_jesus` ↔ ids do Diário.
+**⚠️ Padrão de URL (PENDENTE):** falta a URL real da ficha do aluno no Diário pra montar o deep-link por unidade.
+
 ## Como saber em qual você está (checagem rápida)
 - IDs de unidade **amigáveis** (`rio_verde`) → pedagógico (`jrdrglfzvloxqbuuxhaq`).
 - IDs **aleatórios** (`Q60oB7...`) → comercial (`mpzupaofcmuaiiitgzud`).
