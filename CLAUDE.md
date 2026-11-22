@@ -28,7 +28,7 @@ Separado. Só serviu de **inspiração**. **Nunca** deployar mudança do pedagó
 | Gateway WhatsApp | serviço **`mult-whatsapp-gateway`**, repo `faustodv-dev/mult-whatsapp-gateway`, Render **"My Workspace"** (`tea-db7rcvrncjis73fav8ag`, conta `faustodv@gmail.com`). ⚠️ **Este é o COMERCIAL. NÃO mexer para o pedagógico.** |
 
 ## 🟣 DIÁRIO DE BORDO (sistema CONECTADO — Fase 4, NÃO é este repo)
-Sistema de gamificação/jornada do aluno (missões, candidaturas, vagas). **Estratégia: conectar, não migrar** (deep-link; a agência oficial continua a do nosso CRM). Egress-driven: nada de cross-read ao vivo.
+Sistema de gamificação/jornada do aluno (missões, candidaturas, vagas). **Estratégia: conectar, não migrar.** A agência oficial continua a do nosso CRM. Leitura **sob demanda** do `missoes` (no clique), que bate na quota do Diário, não na nossa — nada de cron/cross-read contínuo.
 
 | Peça | Onde |
 |---|---|
@@ -37,10 +37,11 @@ Sistema de gamificação/jornada do aluno (missões, candidaturas, vagas). **Est
 
 **`usuarios`** (colunas confirmadas por print): `id` text = `{franquia_id}_{codigo}` (ex.: `aparecida_5475`) · `uid` (auth) · `email` = `{id}@mult.com.br` · `display_name` (nome do aluno) · **`codigo` = `cod_alu` do MULT ✓** · `role` (`aluno`…) · `franquia_id` (ex.: `aparecida`).
 
-**Ponte de identidade (trivial):** Diário `usuarios.codigo` == MULT `cod_alu`. O deep-link do card do aluno sai de **(franquia_id, codigo)**.
+**Ponte de identidade:** Diário `usuarios.codigo` == MULT `cod_alu`. Chave composta: `missoes.student_id` == `usuarios.id` == `${franquia_id}_${cod_alu}` (ex.: `rio-verde_14017`).
 
-**⚠️ De-para de franquia (PENDENTE):** o Diário usa `franquia_id` curto (`aparecida`), nosso CRM usa `unit_id` longo (`aparecida_goiania`). Falta a lista completa da tabela `franquias` pra mapear `rio_verde`/`anapolis`/`agua_boa`/`bom_jesus` ↔ ids do Diário.
-**⚠️ Padrão de URL (PENDENTE):** falta a URL real da ficha do aluno no Diário pra montar o deep-link por unidade.
+**LIGADO (Fase 4) — leitura direta, NÃO deep-link.** O Diário não tem URL por aluno, então em vez de link a gente **lê o `missoes` direto** por um 2º cliente Supabase (só no servidor): `api/_lib/diario.js`, env **`DIARIO_SUPABASE_URL`** + **`DIARIO_SUPABASE_SERVICE_KEY`** no Vercel `mult-financeiro` (⚠️ foram parar no `multmanager`/comercial por engano uma vez — confira o projeto certo). Ação `diario_aluno` no `crm.js`; seção "Ver Diário de Bordo" na ficha do card (`Departamento.tsx`), sob demanda. **Egress bate na quota do DIÁRIO, não na nossa.**
+- **De-para** (tabela `franquias`): `rio_verde`→`rio-verde`, `aparecida_goiania`→`aparecida`. **Só estas 2 unidades têm Diário** (anapolis/agua_boa/bom_jesus não existem lá → seção some).
+- **`missoes`** (colunas usadas): `student_id`, `student_name`, `module` (módulo), `class_num` (aula), `course_name`, `turma`, `status` (approved/pending/…), `content` (texto do aluno), `ai_feedback` (retorno da IA), `xp_awarded` (XP/missão), `created_at`. XP total = soma de `xp_awarded` (o Diário não guarda total em `usuarios`).
 
 ## Como saber em qual você está (checagem rápida)
 - IDs de unidade **amigáveis** (`rio_verde`) → pedagógico (`jrdrglfzvloxqbuuxhaq`).
