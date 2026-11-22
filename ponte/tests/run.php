@@ -201,5 +201,40 @@ confere('baixa confirmada: desconto', $p400['VLR_DES'], Texto::subtracaoLegada('
 $st1 = $escola->parcelasStatus([400002]);
 confere('parcelas_status: 400002 agora baixada', $st1[0]['baixada'], true);
 
+echo "== Notas (lançamento no MULT, espelhando controle_nota.php)\n";
+// Opções: 2 matrículas ativas; módulos vêm da cadeia curso->cronograma->conteúdo (agrupados).
+$op = $escola->notaOpcoes('13882');
+confere('nota_opcoes: critérios do MULT', array_keys($op['criterios']), ['TBO', 'PVA', 'CEP', 'AVF']);
+confere('nota_opcoes: 2 matrículas ativas', count($op['matriculas']), 2);
+$matInf = current(array_filter($op['matriculas'], fn($m) => $m['cod_mat'] === 'MAT-INF'));
+confere('nota_opcoes: curso com nome amigável', $matInf['curso'], 'Informática Administrativa');
+confere('nota_opcoes: módulos INF (Windows/Word/Excel)', array_column($matInf['modulos'], 'nome'), ['Windows', 'Word', 'Excel']);
+$matHar = current(array_filter($op['matriculas'], fn($m) => $m['cod_mat'] === 'MAT-HAR'));
+confere('nota_opcoes: HAR agrupa módulo repetido', array_column($matHar['modulos'], 'nome'), ['Montagem e Manutenção', 'Redes']);
+
+// Lançamento: 2 módulos (Word|Excel), vírgula vira ponto, data br -> iso.
+$mWord = $matInf['modulos'][1]['cod'];
+$mExcel = $matInf['modulos'][2]['cod'];
+$ln = $fin->lancarNota('13882', 'MAT-INF', 'PVA', '7,5', "$mWord|$mExcel", '20/11/2026', 'nota-1');
+$nr = $db->um('SELECT * FROM s_cad_nota WHERE COD = ?', [$ln['cod']]);
+confere('nota gravada: valor/critério/data', [$nr['VALOR'], $nr['CRIT_AVAL'], $nr['DAT_LANC']], [7.5, 'PVA', '2026-11-20']);
+confere('nota gravada: MODULO em pipe', $nr['MODULO'], "$mWord|$mExcel");
+confere('mesma chave/nota não duplica', $fin->lancarNota('13882', 'MAT-INF', 'PVA', '7,5', "$mWord|$mExcel", '20/11/2026', 'nota-1')['cod'], $ln['cod']);
+lanca('critério inválido bloqueia', fn() => $fin->lancarNota('13882', 'MAT-INF', 'XYZ', '8', $mWord, '20/11/2026', 'n2'), 'criterio_invalido');
+lanca('nota fora de 0–10 bloqueia', fn() => $fin->lancarNota('13882', 'MAT-INF', 'PVA', '11', $mWord, '20/11/2026', 'n3'), 'nota_invalida');
+lanca('sem módulo bloqueia', fn() => $fin->lancarNota('13882', 'MAT-INF', 'PVA', '8', '', '20/11/2026', 'n4'), 'sem_modulo');
+lanca('matrícula de outro aluno bloqueia', fn() => $fin->lancarNota('13882', 'MAT-A', 'PVA', '8', $mWord, '20/11/2026', 'n5'), 'matricula_invalida');
+
+// Listagem: resolve critério e nomes dos módulos.
+$lista = $escola->notas('13882');
+$nova = current(array_filter($lista, fn($n) => $n['cod'] === (string)$ln['cod']));
+confere('notas: critério resolvido', $nova['criterio_nome'], 'Prova');
+confere('notas: módulos resolvidos', $nova['modulos'], 'Word, Excel');
+confere('notas: data br', $nova['data'], '20/11/2026');
+
+// Remoção.
+$fin->removerNota((string)$ln['cod']);
+confere('nota removida', $db->um('SELECT COD FROM s_cad_nota WHERE COD = ?', [$ln['cod']]), null);
+
 echo "\n$total verificações, $falhas falha(s)\n";
 exit($falhas ? 1 : 0);

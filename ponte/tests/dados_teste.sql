@@ -1,6 +1,11 @@
 -- Dados fictícios
 INSERT INTO franquia VALUES (1, 'Multprofissoes de Rio Verde - Popular', 'MULT Profissoes', '26436081000160');
 INSERT INTO s_cad_curso VALUES (1, 'HAR', 'Hardware'), (2, 'INF', 'Informática Administrativa');
+-- Cadeia de módulos para notas: curso.ID_CUR -> cronograma.COD_CUR -> conteudo.COD_CRON (agrupado por MODULO)
+INSERT INTO s_cad_cronograma (COD, COD_CUR) VALUES (10, '1'), (20, '2');
+INSERT INTO s_cad_conteudo (COD, COD_CRON, MODULO) VALUES
+  (101, '10', 'Montagem e Manutenção'), (102, '10', 'Montagem e Manutenção'), (103, '10', 'Redes'),
+  (201, '20', 'Windows'), (202, '20', 'Word'), (203, '20', 'Excel');
 INSERT INTO s_cad_turma (ID_TUR, COD_TUR, COD_CUR, NOM_TUR, DIA_SEMANA, HS_INICIO, HS_FIM, VAG_TUR, VAG_RES, STATUS_TUR) VALUES
   (1, '001HAR', 'HAR', '001HAR', 'Segunda-Feira', '08:00', '10:00', '17', '5', 'Ativo'),
   (2, '001INF', 'INF', '001INF', 'Quarta-Feira', '08:00', '10:00', '17', '5', 'Ativo');

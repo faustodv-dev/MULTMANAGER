@@ -8,6 +8,14 @@ final class Escola
 {
     private const CAMPOS_TELEFONE = ['WHATS', 'CEL_ALU', 'FON_ALU', 'TEL_RESP', 'FON_PAI_ALU'];
 
+    /** Critérios de avaliação do MULT (controle_nota.php). */
+    public const CRITERIOS_NOTA = [
+        'TBO' => 'Trabalho',
+        'PVA' => 'Prova',
+        'CEP' => 'Conceito e participação',
+        'AVF' => 'Avaliação Final',
+    ];
+
     public function __construct(private Db $db)
     {
     }
@@ -1014,6 +1022,96 @@ final class Escola
             ];
         }
         return $out;
+    }
+
+    /**
+     * Opções para lançar nota de um aluno: matrículas ativas e, em cada uma, os
+     * módulos do curso (cadeia matrícula -> curso -> cronograma -> conteúdo),
+     * espelhando controle_nota.php OP=1 e OP=2. Critérios são fixos no MULT.
+     */
+    public function notaOpcoes(string $codAlu): array
+    {
+        $mats = $this->db->todos(
+            "SELECT COD_MATRICULA, NOM_CUR FROM s_cad_matricula WHERE COD_ALU = ? AND STATUS_MAT = 'Ativo'",
+            [$codAlu]
+        );
+        $out = [];
+        foreach ($mats as $m) {
+            $nomCur = (string)($m['NOM_CUR'] ?? '');
+            $cur = $nomCur !== '' ? $this->db->um('SELECT ID_CUR, NOM_CUR FROM s_cad_curso WHERE COD_CUR = ? LIMIT 1', [$nomCur]) : null;
+            $out[] = [
+                'cod_mat' => (string)$m['COD_MATRICULA'],
+                // Nome amigável do curso quando a tabela de cursos tiver; senão o próprio campo da matrícula.
+                'curso' => trim(Texto::doBanco($cur['NOM_CUR'] ?? '')) ?: trim(Texto::doBanco($nomCur)),
+                'modulos' => $cur ? $this->modulosDoCronograma((string)$cur['ID_CUR']) : [],
+            ];
+        }
+        return [
+            'criterios' => self::CRITERIOS_NOTA,
+            'matriculas' => $out,
+        ];
+    }
+
+    /** Módulos do curso (nome -> COD do conteúdo), no modelo de cronograma. */
+    private function modulosDoCronograma(string $idCur): array
+    {
+        $cron = $this->db->um('SELECT COD FROM s_cad_cronograma WHERE COD_CUR = ? LIMIT 1', [$idCur]);
+        if (!$cron) {
+            return [];
+        }
+        // Um COD representativo por módulo (MIN p/ determinismo); o MULT guarda esses COD em s_cad_nota.MODULO.
+        $mods = $this->db->todos(
+            'SELECT MIN(COD) AS COD, MODULO FROM s_cad_conteudo WHERE COD_CRON = ? GROUP BY MODULO ORDER BY MIN(COD)',
+            [$cron['COD']]
+        );
+        return array_map(
+            fn($x) => ['cod' => (string)$x['COD'], 'nome' => trim(Texto::doBanco($x['MODULO'] ?? ''))],
+            $mods
+        );
+    }
+
+    /** Lista as notas lançadas de um aluno, com critério e módulos já resolvidos (OP=5). */
+    public function notas(string $codAlu, int $limite = 50): array
+    {
+        $limite = max(1, min($limite, 300));
+        $rows = $this->db->todos(
+            'SELECT COD, COD_MAT, CRIT_AVAL, VALOR, MODULO, DAT_LANC FROM s_cad_nota WHERE COD_ALU = ? ORDER BY DAT_LANC DESC, COD DESC LIMIT ' . $limite,
+            [$codAlu]
+        );
+        $out = [];
+        foreach ($rows as $n) {
+            $out[] = [
+                'cod' => (string)$n['COD'],
+                'cod_mat' => (string)$n['COD_MAT'],
+                'curso' => trim(Texto::doBanco($this->cursoDaMatricula((string)$n['COD_MAT']))),
+                'criterio' => (string)$n['CRIT_AVAL'],
+                'criterio_nome' => self::CRITERIOS_NOTA[$n['CRIT_AVAL']] ?? (string)$n['CRIT_AVAL'],
+                'valor' => (float)str_replace(',', '.', (string)$n['VALOR']),
+                'modulos' => $this->nomesDosModulos((string)($n['MODULO'] ?? '')),
+                'data' => Texto::dataBr((string)($n['DAT_LANC'] ?? '')),
+            ];
+        }
+        return $out;
+    }
+
+    /** Nome do curso de uma matrícula (para exibir na lista de notas). */
+    private function cursoDaMatricula(string $codMat): string
+    {
+        $m = $this->db->um('SELECT NOM_CUR FROM s_cad_matricula WHERE COD_MATRICULA = ? LIMIT 1', [$codMat]);
+        return (string)($m['NOM_CUR'] ?? '');
+    }
+
+    /** Resolve "22|32|17" em "Módulo A, Módulo B, …" via s_cad_conteudo (OP=5). */
+    private function nomesDosModulos(string $pipe): string
+    {
+        $ids = array_values(array_filter(array_map('intval', explode('|', $pipe))));
+        if (!$ids) {
+            return '';
+        }
+        $ph = implode(',', array_fill(0, count($ids), '?'));
+        $rows = $this->db->todos("SELECT MODULO FROM s_cad_conteudo WHERE COD IN ($ph)", $ids);
+        $nomes = array_map(fn($r) => trim(Texto::doBanco($r['MODULO'] ?? '')), $rows);
+        return implode(', ', array_filter($nomes));
     }
 
     /** Dados da unidade (tabela franquia) para o carnê. */
