@@ -2,107 +2,120 @@
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-
-@import url("https://fonts.googleapis.com/css2?family=Inter&display=swap");
+/* Identidade MULT: Fraunces (títulos, caráter) + Hanken Grotesk (interface, legível) */
+@import url('https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800&family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&display=swap');
 
 @layer base {
   :root {
-    --background: 220 20% 97%;
-    --foreground: 222 47% 11%;
+    /* Base quente (papel + tinta), não o cinza-frio de template */
+    --background: 34 40% 96%;
+    --foreground: 26 16% 16%;
 
     --card: 0 0% 100%;
-    --card-foreground: 222 47% 11%;
+    --card-foreground: 26 16% 16%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 222 47% 11%;
+    --popover-foreground: 26 16% 16%;
 
-    --primary: 27 95.9799% 60.9804%;
+    /* Laranja MULT = ação */
+    --primary: 27 92% 54%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 220 14% 96%;
-    --secondary-foreground: 142 70.5628% 45.2941%;
+    --secondary: 33 32% 92%;
+    --secondary-foreground: 26 16% 22%;
 
-    --muted: 220 14% 96%;
-    --muted-foreground: 220 9% 46%;
+    --muted: 33 30% 92%;
+    --muted-foreground: 28 10% 44%;
 
-    --accent: 292 84.0796% 60.5882%;
+    /* Magenta da marca = destaque raro */
+    --accent: 318 60% 56%;
     --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 84% 60%;
+    --destructive: 4 74% 54%;
     --destructive-foreground: 0 0% 100%;
 
-    --success: 142 76% 36%;
+    --success: 142 54% 40%;
     --success-foreground: 0 0% 100%;
 
-    --warning: 38 92% 50%;
+    --warning: 32 94% 52%;
     --warning-foreground: 0 0% 100%;
 
-    --border: 220 13% 91%;
-    --input: 220 13% 91%;
-    --ring: 222 47% 20%;
+    --border: 32 30% 87%;
+    --input: 32 30% 87%;
+    --ring: 27 92% 54%;
 
-    --radius: 0.75rem;
+    --radius: 0.7rem;
 
-    /* Department colors */
-    --dept-agencia: 142 76% 36%;
-    --dept-financeiro: 217 91% 60%;
-    --dept-pedagogico: 24 95% 53%;
+    /* Cores de departamento (semânticas) */
+    --dept-agencia: 142 54% 40%;
+    --dept-financeiro: 214 80% 55%;
+    --dept-pedagogico: 27 92% 54%;
 
-    /* Sidebar */
-    --sidebar-background: 222 47% 11%;
-    --sidebar-foreground: 220 14% 96%;
-    --sidebar-primary: 24 95% 53%;
+    /* Sidebar — espresso quente, ativo laranja */
+    --sidebar-background: 28 16% 12%;
+    --sidebar-foreground: 33 24% 86%;
+    --sidebar-primary: 27 92% 54%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 222 47% 20%;
-    --sidebar-accent-foreground: 220 14% 96%;
-    --sidebar-border: 222 47% 20%;
-    --sidebar-ring: 24 95% 53%;
+    --sidebar-accent: 28 14% 18%;
+    --sidebar-accent-foreground: 33 24% 92%;
+    --sidebar-border: 28 14% 18%;
+    --sidebar-ring: 27 92% 54%;
 
-    /* Kanban columns */
-    --kanban-todo: 220 14% 96%;
-    --kanban-progress: 217 91% 97%;
-    --kanban-review: 38 92% 97%;
-    --kanban-done: 142 76% 97%;
+    /* Colunas kanban (tons quentes) */
+    --kanban-todo: 33 30% 93%;
+    --kanban-progress: 214 70% 95%;
+    --kanban-review: 38 80% 94%;
+    --kanban-done: 142 45% 93%;
   }
 
   .dark {
-    --background: 222 47% 6%;
-    --foreground: 220 14% 96%;
+    --background: 28 16% 8%;
+    --foreground: 33 24% 90%;
 
-    --card: 222 47% 9%;
-    --card-foreground: 220 14% 96%;
+    --card: 28 14% 11%;
+    --card-foreground: 33 24% 90%;
 
-    --popover: 222 47% 9%;
-    --popover-foreground: 220 14% 96%;
+    --popover: 28 14% 11%;
+    --popover-foreground: 33 24% 90%;
 
-    --primary: 24 95% 53%;
-    --primary-foreground: 0 0% 100%;
+    --primary: 27 92% 56%;
+    --primary-foreground: 20 30% 10%;
 
-    --secondary: 222 47% 15%;
-    --secondary-foreground: 220 14% 96%;
+    --secondary: 28 12% 18%;
+    --secondary-foreground: 33 24% 90%;
 
-    --muted: 222 47% 15%;
-    --muted-foreground: 220 9% 60%;
+    --muted: 28 12% 18%;
+    --muted-foreground: 30 10% 60%;
 
-    --accent: 24 95% 53%;
+    --accent: 318 55% 58%;
     --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 62% 30%;
+    --destructive: 4 60% 42%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 222 47% 20%;
-    --input: 222 47% 20%;
-    --ring: 24 95% 53%;
+    --success: 142 48% 44%;
+    --success-foreground: 0 0% 100%;
 
-    --sidebar-background: 222 47% 6%;
-    --sidebar-foreground: 220 14% 96%;
-    --sidebar-primary: 24 95% 53%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 222 47% 15%;
-    --sidebar-accent-foreground: 220 14% 96%;
-    --sidebar-border: 222 47% 15%;
-    --sidebar-ring: 24 95% 53%;
+    --warning: 32 90% 54%;
+    --warning-foreground: 20 30% 10%;
+
+    --border: 28 12% 20%;
+    --input: 28 12% 20%;
+    --ring: 27 92% 56%;
+
+    --sidebar-background: 28 18% 7%;
+    --sidebar-foreground: 33 20% 84%;
+    --sidebar-primary: 27 92% 56%;
+    --sidebar-primary-foreground: 20 30% 10%;
+    --sidebar-accent: 28 14% 14%;
+    --sidebar-accent-foreground: 33 24% 90%;
+    --sidebar-border: 28 14% 14%;
+    --sidebar-ring: 27 92% 56%;
+
+    --kanban-todo: 28 12% 16%;
+    --kanban-progress: 214 40% 18%;
+    --kanban-review: 38 45% 18%;
+    --kanban-done: 142 35% 16%;
   }
 }
 
@@ -113,7 +126,13 @@
 
   body {
     @apply bg-background text-foreground font-sans antialiased;
-    font-family: 'Inter', system-ui, sans-serif;
+    font-family: 'Hanken Grotesk', system-ui, sans-serif;
+  }
+
+  /* Títulos de página em Fraunces — o único movimento de caráter */
+  h1 {
+    font-family: 'Fraunces', Georgia, serif;
+    letter-spacing: -0.01em;
   }
 }
 
@@ -122,20 +141,25 @@
     @apply bg-card/80 backdrop-blur-xl;
   }
 
+  .font-display {
+    font-family: 'Fraunces', Georgia, serif;
+  }
+
   .gradient-accent {
-    background: linear-gradient(135deg, hsl(var(--accent)) 0%, hsl(24 95% 45%) 100%);
+    background: linear-gradient(135deg, hsl(var(--accent)) 0%, hsl(27 92% 50%) 100%);
   }
 
   .gradient-primary {
-    background: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(222 47% 30%) 100%);
+    background: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(16 85% 46%) 100%);
   }
 
+  /* Sombra quente e baixa (não o cinza uniforme de SaaS) */
   .shadow-soft {
-    box-shadow: 0 4px 20px -4px hsl(var(--foreground) / 0.08);
+    box-shadow: 0 6px 24px -8px hsl(26 40% 20% / 0.14);
   }
 
   .shadow-glow {
-    box-shadow: 0 0 30px -5px hsl(var(--accent) / 0.3);
+    box-shadow: 0 0 30px -5px hsl(var(--primary) / 0.28);
   }
 }
 

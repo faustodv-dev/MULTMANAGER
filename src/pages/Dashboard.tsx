@@ -38,45 +38,42 @@ const diaBr = (iso: string) => iso.slice(8, 10) + "/" + iso.slice(5, 7);
 const COR_FAIXA: Record<string, string> = { quente: "#ef4444", morno: "#f59e0b", frio: "#3b82f6" };
 const DEP_ROTULO: Record<string, string> = { pedagogico: "Pedagógico", financeiro: "Financeiro", encaminhamento: "Encaminhamento" };
 
-// Paleta de acentos (tema claro, vibrante). Cada métrica ganha uma cor própria:
-// barra de gradiente no topo do tile, número colorido e leve tingido de fundo.
+// Cada métrica tem uma cor própria (a cor codifica o assunto, não decora). Marca quente:
+// um fio sólido no topo do tile e o número na cor — sem gradiente neon nem hover que levanta.
 type Acento = "slate" | "emerald" | "sky" | "red" | "amber" | "violet";
-const ACENTO: Record<Acento, { bar: string; num: string; soft: string; hex: string }> = {
-  slate:   { bar: "from-slate-300 to-slate-400",     num: "text-slate-700",   soft: "from-slate-50",   hex: "#64748b" },
-  emerald: { bar: "from-emerald-400 to-teal-500",    num: "text-emerald-600", soft: "from-emerald-50", hex: "#10b981" },
-  sky:     { bar: "from-sky-400 to-indigo-500",      num: "text-sky-600",     soft: "from-sky-50",     hex: "#0ea5e9" },
-  red:     { bar: "from-rose-400 to-red-500",        num: "text-red-600",     soft: "from-rose-50",    hex: "#ef4444" },
-  amber:   { bar: "from-amber-400 to-orange-500",    num: "text-amber-600",   soft: "from-amber-50",   hex: "#f59e0b" },
-  violet:  { bar: "from-violet-400 to-fuchsia-500",  num: "text-violet-600",  soft: "from-violet-50",  hex: "#8b5cf6" },
+const ACENTO: Record<Acento, { num: string; hex: string }> = {
+  slate:   { num: "text-stone-700",    hex: "#78716c" },
+  emerald: { num: "text-emerald-600",  hex: "#059669" },
+  sky:     { num: "text-blue-600",     hex: "#2563eb" },
+  red:     { num: "text-rose-600",     hex: "#e11d48" },
+  amber:   { num: "text-amber-600",    hex: "#d97706" },
+  violet:  { num: "text-fuchsia-700",  hex: "#c026d3" },
 };
 
-const TOOLTIP = { fontSize: 12, borderRadius: 12, border: "1px solid hsl(var(--border))", boxShadow: "0 8px 24px rgba(15,23,42,0.12)", background: "hsl(var(--card))" };
+const TOOLTIP = { fontSize: 12, borderRadius: 12, border: "1px solid hsl(var(--border))", boxShadow: "0 10px 28px -8px rgba(40,30,20,0.18)", background: "hsl(var(--card))" };
 
 function Kpi({ rotulo, valor, sub, accent = "slate", icon }: { rotulo: string; valor: number | string; sub?: string; accent?: Acento; icon?: React.ReactNode }) {
   const a = ACENTO[accent];
   return (
-    <div className="group relative overflow-hidden rounded-xl border bg-card p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
-      <div className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${a.bar}`} />
-      <div className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${a.soft} to-transparent opacity-40`} />
-      <div className="relative">
-        <div className="flex items-center justify-between">
-          <p className="text-xs font-medium text-muted-foreground">{rotulo}</p>
-          {icon && <span className={a.num}>{icon}</span>}
-        </div>
-        <p className={`mt-1 text-3xl font-bold tabular-nums ${a.num}`}>{valor}</p>
-        {sub && <p className="mt-0.5 text-xs text-muted-foreground">{sub}</p>}
+    <div className="relative overflow-hidden rounded-xl border bg-card p-4 shadow-sm">
+      <span className="absolute inset-x-0 top-0 h-[3px]" style={{ background: a.hex }} />
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-medium text-muted-foreground">{rotulo}</p>
+        {icon && <span style={{ color: a.hex }}>{icon}</span>}
       </div>
+      <p className="mt-1.5 text-[1.9rem] font-bold leading-none tabular-nums tracking-tight" style={{ color: a.hex }}>{valor}</p>
+      {sub && <p className="mt-1 text-xs text-muted-foreground">{sub}</p>}
     </div>
   );
 }
 
 function Painel({ titulo, children, acao, accent }: { titulo: string; children: React.ReactNode; acao?: React.ReactNode; accent?: Acento }) {
-  const bar = accent ? ACENTO[accent].bar : "from-slate-300 to-slate-400";
+  const hex = accent ? ACENTO[accent].hex : "#a8a29e";
   return (
     <section className="rounded-xl border bg-card p-4 shadow-sm">
       <div className="mb-3 flex items-center justify-between">
         <h2 className="flex items-center gap-2 text-sm font-semibold">
-          <span className={`inline-block h-4 w-1 rounded-full bg-gradient-to-b ${bar}`} />
+          <span className="inline-block h-4 w-1 rounded-full" style={{ background: hex }} />
           {titulo}
         </h2>
         {acao}

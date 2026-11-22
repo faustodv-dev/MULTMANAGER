@@ -15,7 +15,7 @@ export default {
   	extend: {
   		fontFamily: {
   			sans: [
-  				'Inter',
+  				'Hanken Grotesk',
   				'ui-sans-serif',
   				'system-ui',
   				'sans-serif',
@@ -25,6 +25,7 @@ export default {
   				'Noto Color Emoji'
   			],
   			serif: [
+  				'Fraunces',
   				'ui-serif',
   				'Georgia',
   				'Cambria',

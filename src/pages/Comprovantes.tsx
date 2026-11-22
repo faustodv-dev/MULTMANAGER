@@ -10,9 +10,9 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
 
 const STATUS: Record<string, { rotulo: string; cor: string }> = {
-  recebido: { rotulo: "Recebido", cor: "bg-gray-100 text-gray-800" },
-  analisando: { rotulo: "Analisando", cor: "bg-gray-100 text-gray-800" },
-  nao_e_comprovante: { rotulo: "Não é comprovante", cor: "bg-gray-100 text-gray-600" },
+  recebido: { rotulo: "Recebido", cor: "bg-muted text-foreground" },
+  analisando: { rotulo: "Analisando", cor: "bg-muted text-foreground" },
+  nao_e_comprovante: { rotulo: "Não é comprovante", cor: "bg-muted text-muted-foreground" },
   aguardando_aluno: { rotulo: "Aguardando identificação", cor: "bg-amber-100 text-amber-800" },
   divergente: { rotulo: "Divergente", cor: "bg-red-100 text-red-800" },
   duplicado: { rotulo: "Duplicado", cor: "bg-purple-100 text-purple-800" },
@@ -20,7 +20,7 @@ const STATUS: Record<string, { rotulo: string; cor: string }> = {
   baixado: { rotulo: "Baixado", cor: "bg-green-100 text-green-800" },
   aguardando_humano: { rotulo: "Conferir", cor: "bg-red-100 text-red-800" },
   resolvido_manual: { rotulo: "Resolvido", cor: "bg-green-100 text-green-800" },
-  rejeitado: { rotulo: "Rejeitado", cor: "bg-gray-200 text-gray-700" },
+  rejeitado: { rotulo: "Rejeitado", cor: "bg-muted text-muted-foreground" },
 };
 
 const hoje = () => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());

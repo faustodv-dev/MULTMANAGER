@@ -28,7 +28,7 @@ export default function Login() {
     <div className="flex min-h-screen items-center justify-center bg-sidebar p-4">
       <form onSubmit={enviar} className="w-full max-w-sm space-y-5 rounded-2xl bg-card p-8 shadow-xl">
         <div>
-          <h1 className="text-2xl font-bold">MULT Profissões</h1>
+          <h1 className="text-2xl font-bold tracking-tight">MULT <span className="text-primary">Profissões</span></h1>
           <p className="text-sm text-muted-foreground">CRM financeiro e pedagógico</p>
         </div>
         <div className="space-y-2">

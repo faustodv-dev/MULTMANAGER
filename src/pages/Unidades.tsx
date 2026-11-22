@@ -191,7 +191,7 @@ function ChavesUnidade({ unitId }: { unitId: string }) {
       setVals({ asaas: "", gemini: "", groq: "" }); carregar();
     } catch (e: any) { toast.error(e.message); } finally { setBusy(false); }
   };
-  const Bolinha = ({ ok }: { ok: boolean }) => <span className={`inline-block h-2 w-2 rounded-full ${ok ? "bg-green-500" : "bg-slate-300"}`} />;
+  const Bolinha = ({ ok }: { ok: boolean }) => <span className={`inline-block h-2 w-2 rounded-full ${ok ? "bg-emerald-500" : "bg-stone-300"}`} />;
 
   return (
     <div className="rounded-lg border bg-muted/30 p-3">

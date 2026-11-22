@@ -14,7 +14,7 @@ const STATUS: Record<Conversa["status"], { rotulo: string; cor: string }> = {
   ia: { rotulo: "Assistente", cor: "bg-blue-100 text-blue-800" },
   aguardando_humano: { rotulo: "Aguardando secretaria", cor: "bg-red-100 text-red-800" },
   humano: { rotulo: "Com a secretaria", cor: "bg-amber-100 text-amber-800" },
-  encerrada: { rotulo: "Encerrada", cor: "bg-gray-100 text-gray-700" },
+  encerrada: { rotulo: "Encerrada", cor: "bg-muted text-muted-foreground" },
 };
 
 type Filtro = "todas" | "aguardando_humano" | "humano" | "ia";
