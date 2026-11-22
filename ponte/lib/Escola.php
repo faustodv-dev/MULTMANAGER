@@ -685,6 +685,18 @@ final class Escola
             return [];
         }
 
+        return $this->indicadoresDeMatriculas($faltas, $data);
+    }
+
+    /**
+     * Calcula os indicadores (frequência, faltas seguidas, notas, telefone, cursos) para um
+     * conjunto de matrículas-semente. $faltas: linhas com COD_ALU, COD_MATRICULA_PRES, COD_TUR,
+     * NOM_ALU, NOM_PAI_ALU, telefones, STATUS_MAT, NOM_CUR. $data = data-limite do histórico.
+     * Reaproveitado pela régua de faltantes (semente = ausentes do dia) e pela de formandos
+     * (semente = matrículas ativas). Lógica idêntica à de antes — só foi extraída.
+     */
+    private function indicadoresDeMatriculas(array $faltas, string $data): array
+    {
         $codAlus = array_values(array_unique(array_map(fn($r) => (string)$r['COD_ALU'], $faltas)));
         $hist = [];        // [COD_ALU][MATRICULA] => [ ['data'=>ISO, 'v'=>'S'|'N'|outro] ]
         $matInfo = [];     // [COD_ALU][MATRICULA] => ['curso'=>..., 'status'=>...]
@@ -874,6 +886,42 @@ final class Escola
                 'media_notas' => $notas[$codAlu] ?? null,
                 'turmas' => $turmas[$codAlu] ?? [],
             ];
+        }
+        return $out;
+    }
+
+    /**
+     * Alunos "formandos": matrículas ativas com frequência >= $minPct (padrão 80%).
+     * Reaproveita o MESMO cálculo da régua de faltantes (presenças+reposições ÷ aulas previstas),
+     * só que a semente são os ATIVOS (não os ausentes do dia). Uma linha por matrícula.
+     */
+    public function formandos(array $statuses = [], float $minPct = 80.0, int $limite = 3000): array
+    {
+        $statuses = array_values(array_filter(array_map(fn($x) => trim((string)$x), $statuses), fn($x) => $x !== ''));
+        if (!$statuses) {
+            $statuses = ['Ativo'];
+        }
+        $hoje = date('Y-m-d');
+
+        $sql = "SELECT DISTINCT m.COD_ALU, m.COD_MATRICULA AS COD_MATRICULA_PRES, '' AS COD_TUR,
+                       a.NOM_ALU, a.NOM_PAI_ALU, a.WHATS, a.CEL_ALU, a.TEL_RESP, a.FON_ALU,
+                       m.STATUS_MAT, m.NOM_CUR
+                FROM s_cad_matricula m
+                JOIN s_cad_aluno a ON a.COD_ALU = m.COD_ALU
+                WHERE m.STATUS_MAT IN (" . implode(',', array_fill(0, count($statuses), '?')) . ")
+                LIMIT " . (int)max(1, $limite);
+        $seed = $this->db->todos($sql, $statuses);
+        if (!$seed) {
+            return [];
+        }
+
+        $todos = $this->indicadoresDeMatriculas($seed, $hoje);
+        $out = [];
+        foreach ($todos as $r) {
+            $pct = $r['percentual_presenca'];
+            if ($pct !== null && (float)$pct >= $minPct) {
+                $out[] = $r;
+            }
         }
         return $out;
     }

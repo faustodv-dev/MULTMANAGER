@@ -32,3 +32,8 @@ INSERT INTO s_cad_pres_aluno (COD_ALU, FAL_PRE, DAT_FAL, COD_TUR, COD_MATRICULA_
   ('13882', 'S', '2026-10-01', '001HAR', 'MAT-HAR'), ('13882', 'S', '2026-10-08', '001HAR', 'MAT-HAR'),
   ('13882', 'S', '2026-10-15', '001HAR', 'MAT-HAR'), ('13882', 'N', '2026-10-22', '001HAR', 'MAT-HAR'),
   ('13882', 'N', '2026-10-29', '001HAR', 'MAT-HAR');
+
+-- Notas (média alimenta o termômetro 4d)
+INSERT INTO s_cad_nota (COD_ALU, COD_MAT, CRIT_AVAL, VALOR, MODULO, DAT_LANC) VALUES
+  ('13882','MAT-INF','PVA',8.0,'1','2026-11-10'),
+  ('13882','MAT-INF','AVF',9.0,'1','2026-11-12');
