@@ -51,8 +51,8 @@ export default function Layout({ children }: { children: ReactNode }) {
     <div className="flex h-screen flex-col md:flex-row">
       <aside className="flex shrink-0 flex-row items-center gap-1 overflow-x-auto bg-sidebar px-3 py-2 text-sidebar-foreground md:w-60 md:flex-col md:items-stretch md:gap-2 md:px-4 md:py-6">
         <div className="mr-3 md:mb-6 md:mr-0">
-          <p className="text-lg font-bold leading-tight">MULT</p>
-          <p className="hidden text-xs text-sidebar-foreground/60 md:block">Financeiro &amp; Pedagógico</p>
+          <p className="font-display text-xl font-bold leading-none tracking-tight">MULT <span className="text-sidebar-primary">Profissões</span></p>
+          <p className="mt-1 hidden text-[11px] text-sidebar-foreground/55 md:block">Cursos profissionalizantes</p>
         </div>
         {itens.map((i) => (
           <NavLink
