@@ -15,7 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { cn } from "@/lib/utils";
 
 const COLS = [
-  { id: "novo", rotulo: "Novo", ponto: "bg-slate-400" },
+  { id: "novo", rotulo: "Novo", ponto: "bg-stone-400" },
   { id: "andamento", rotulo: "Em andamento", ponto: "bg-blue-500" },
   { id: "aguardando", rotulo: "Aguardando aluno", ponto: "bg-amber-500" },
 ];
@@ -39,8 +39,8 @@ function SeloTemp({ t }: { t?: Temp }) {
 }
 const PRIOR: Record<string, { rotulo: string; barra: string }> = {
   alta: { rotulo: "Alta", barra: "bg-red-500" },
-  normal: { rotulo: "Normal", barra: "bg-slate-300 dark:bg-slate-600" },
-  baixa: { rotulo: "Baixa", barra: "bg-slate-200 dark:bg-slate-700" },
+  normal: { rotulo: "Normal", barra: "bg-stone-300 dark:bg-stone-600" },
+  baixa: { rotulo: "Baixa", barra: "bg-stone-200 dark:bg-stone-700" },
 };
 const BUCKETS = [
   { id: "diaria", rotulo: "Hoje", freqs: ["diaria"], anel: "text-sky-500" },
