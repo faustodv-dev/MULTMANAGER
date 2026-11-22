@@ -131,6 +131,7 @@ try {
         ]),
         'faltantes_do_dia' => $escola->faltantesDoDia($s('data'), (array)($req['statuses'] ?? [])),
         'formandos' => $escola->formandos((array)($req['statuses'] ?? []), (float)($req['min_pct'] ?? 80), (int)($req['limite'] ?? 3000)),
+        'resumo_bi' => $escola->resumoBi(),
         'nota_opcoes' => $escola->notaOpcoes($s('cod_alu')),
         'nota_listar' => $escola->notas($s('cod_alu'), (int)($req['limite'] ?? 50)),
         'alunos_com_aula' => $escola->alunosComAula($s('data')),

@@ -1114,6 +1114,47 @@ final class Escola
         return implode(', ', array_filter($nomes));
     }
 
+    /**
+     * Resumo agregado da unidade para o BI (snapshot diário). Reaproveita o
+     * cálculo de frequência das matrículas ativas e devolve só números — payload
+     * minúsculo, barato para o cron puxar 1x/dia. A frequência é capada a 100%
+     * para neutralizar a contagem a mais de reposição (pendência 4d).
+     */
+    public function resumoBi(): array
+    {
+        $hoje = date('Y-m-d');
+        $seed = $this->db->todos(
+            "SELECT DISTINCT m.COD_ALU, m.COD_MATRICULA AS COD_MATRICULA_PRES, '' AS COD_TUR,
+                    a.NOM_ALU, a.NOM_PAI_ALU, a.WHATS, a.CEL_ALU, a.TEL_RESP, a.FON_ALU,
+                    m.STATUS_MAT, m.NOM_CUR
+             FROM s_cad_matricula m
+             JOIN s_cad_aluno a ON a.COD_ALU = m.COD_ALU
+             WHERE m.STATUS_MAT = 'Ativo' LIMIT 5000"
+        );
+        $ativas = count($seed);
+        $ind = $seed ? $this->indicadoresDeMatriculas($seed, $hoje) : [];
+        $soma = 0.0;
+        $com = 0;
+        $form80 = 0;
+        foreach ($ind as $r) {
+            $p = $r['percentual_presenca'];
+            if ($p === null) {
+                continue;
+            }
+            $p = min((float)$p, 100.0);
+            $soma += $p;
+            $com++;
+            if ($p >= 80.0) {
+                $form80++;
+            }
+        }
+        return [
+            'matriculas_ativas' => $ativas,
+            'frequencia_media' => $com ? round($soma / $com, 1) : 0.0,
+            'formandos_80' => $form80,
+        ];
+    }
+
     /** Dados da unidade (tabela franquia) para o carnê. */
     public function unidade(): array
     {
