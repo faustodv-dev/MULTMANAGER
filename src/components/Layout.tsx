@@ -1,6 +1,6 @@
 import { NavLink } from "react-router-dom";
 import { useEffect, useState, type ReactNode } from "react";
-import { MessageCircle, Receipt, Users, Building2, LogOut, FlaskConical, Banknote, ClipboardList, GraduationCap, Briefcase, BellRing, UserX, LayoutDashboard, Handshake, BellPlus, Megaphone } from "lucide-react";
+import { MessageCircle, Receipt, Users, Building2, LogOut, FlaskConical, Banknote, ClipboardList, GraduationCap, Briefcase, BellRing, UserX, LayoutDashboard, Handshake, BellPlus, Megaphone, ClipboardCheck } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 import { CentralNovidades } from "@/components/CentralNovidades";
@@ -30,6 +30,7 @@ export default function Layout({ children }: { children: ReactNode }) {
     { to: "/atendimento", rotulo: "Atendimento", icone: MessageCircle, ok: pode("atendimento"), badge: pendencias },
     { to: "/financeiro", rotulo: "Financeiro", icone: Receipt, ok: pode("financeiro") },
     { to: "/pedagogico", rotulo: "Pedagógico", icone: GraduationCap, ok: pode("pedagogico") },
+    { to: "/notas", rotulo: "Notas", icone: ClipboardCheck, ok: pode("pedagogico") },
     { to: "/encaminhamento", rotulo: "Encaminhamento", icone: Briefcase, ok: pode("encaminhamento") },
     { to: "/agencia", rotulo: "Agência de Emprego", icone: Handshake, ok: pode("encaminhamento") },
     { to: "/comprovantes", rotulo: "Comprovantes", icone: Banknote, ok: pode("comprovantes") },

@@ -1,4 +1,4 @@
-import { supabase, CFG, usuarioDaRequisicao, podeModulo, lerCorpo, hojeSP, digitos, reais, dataBr } from './_lib/base.js';
+import { supabase, CFG, usuarioDaRequisicao, podeModulo, lerCorpo, hojeSP, digitos, reais, dataBr, registrar } from './_lib/base.js';
 import { ponte } from './_lib/ponte.js';
 
 export const config = { maxDuration: 30 };
@@ -176,6 +176,61 @@ async function vinculo(res, acao, unitId, b, eu) {
   return res.status(200).json({ ok: true, cod_alu: cod, nome_aluno: nomeAluno, grupo });
 }
 
+/* ───────── Notas (lançamento pedagógico no MULT, via ponte) ───────── */
+async function notas(res, acao, unitId, b, eu) {
+  const cod = digitos(b.cod_alu || b.codigo || '');
+
+  // Busca aluno por código OU CPF do responsável (reaproveita o padrão do vínculo).
+  if (acao === 'nota_buscar') {
+    const cpf = digitos(b.cpf || '');
+    let alunos = [];
+    if (cod) {
+      const a = await ponte(unitId, 'aluno', { cod_alu: cod }).catch(() => null);
+      if (a) alunos = [{ cod_alu: String(a.cod_alu), nome: a.nome, ativo: a.ativo, cursos: cursosAtivos(a.matriculas) }];
+    } else if (cpf.length === 11) {
+      const grupos = await ponte(unitId, 'buscar_cpf', { cpf });
+      for (const g of (grupos || [])) for (const a of (g.alunos || []))
+        alunos.push({ cod_alu: String(a.cod_alu), nome: a.nome, ativo: a.ativo, cursos: cursosAtivos(a.matriculas) });
+    } else {
+      return res.status(400).json({ erro: 'parametros', mensagem: 'Informe o código do aluno ou o CPF do responsável.' });
+    }
+    return res.status(200).json({ ok: true, alunos });
+  }
+
+  if (!cod) return res.status(400).json({ erro: 'sem_codigo', mensagem: 'Código do aluno é obrigatório.' });
+
+  // Opções de lançamento (matrículas + módulos + critérios) e notas já lançadas.
+  if (acao === 'nota_opcoes') {
+    const [opcoes, lista] = await Promise.all([
+      ponte(unitId, 'nota_opcoes', { cod_alu: cod }),
+      ponte(unitId, 'nota_listar', { cod_alu: cod, limite: 50 }).catch(() => [])
+    ]);
+    return res.status(200).json({ ok: true, ...opcoes, notas: lista });
+  }
+
+  if (acao === 'nota_lancar') {
+    const modulos = Array.isArray(b.modulos) ? b.modulos : String(b.modulo || '').split('|');
+    const modulo = modulos.map((m) => digitos(String(m))).filter(Boolean).join('|');
+    const chave = `nota|${unitId}|${cod}|${b.cod_mat}|${b.criterio}|${modulo}|${b.data || ''}|${String(b.valor).replace(',', '.')}`;
+    const r = await ponte(unitId, 'lancar_nota', {
+      cod_alu: cod, cod_mat: String(b.cod_mat || ''), criterio: String(b.criterio || ''),
+      valor: String(b.valor ?? ''), modulo, data: String(b.data || ''), chave
+    });
+    await registrar('crm', 'nota_lancar', true, { unitId, detalhe: { por: eu.nome || eu.id, cod_alu: cod, cod_mat: b.cod_mat, criterio: b.criterio, valor: r.valor, cod: r.cod } });
+    const lista = await ponte(unitId, 'nota_listar', { cod_alu: cod, limite: 50 }).catch(() => []);
+    return res.status(200).json({ ok: true, lancada: r, notas: lista });
+  }
+
+  if (acao === 'nota_remover') {
+    await ponte(unitId, 'remover_nota', { cod: String(b.cod || '') });
+    await registrar('crm', 'nota_remover', true, { unitId, detalhe: { por: eu.nome || eu.id, cod_alu: cod, cod: b.cod } });
+    const lista = await ponte(unitId, 'nota_listar', { cod_alu: cod, limite: 50 }).catch(() => []);
+    return res.status(200).json({ ok: true, notas: lista });
+  }
+
+  return res.status(400).json({ erro: 'acao_desconhecida' });
+}
+
 /* ───────── Feriados e fechamentos (configurações da unidade) ───────── */
 async function feriados(res, acao, unitId, b, eu) {
   if (acao === 'feriados_listar') {
@@ -335,6 +390,13 @@ export default async function handler(req, res) {
     if (eu.papel !== 'master' && eu.unit_id !== unitId) return res.status(403).json({ erro: 'sem_permissao' });
     try { return await feriados(res, acao, unitId, b, eu); }
     catch (e) { return res.status(500).json({ erro: 'erro', mensagem: e.message }); }
+  }
+
+  // Notas (lançamento pedagógico no MULT): coordenação (módulo pedagógico) + admin/master.
+  if (acao.startsWith('nota_')) {
+    if (!podeModulo(eu, unitId, 'pedagogico')) return res.status(403).json({ erro: 'sem_permissao' });
+    try { return await notas(res, acao, unitId, b, eu); }
+    catch (e) { return res.status(e?.http || 500).json({ erro: e?.codigo || 'erro', mensagem: e.message, detalhes: e?.detalhes }); }
   }
 
   // Mural de novidades (equipe): feed/marcar p/ todos; publicar/gerir só master.

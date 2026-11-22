@@ -592,4 +592,74 @@ final class Financeiro
             'documentos' => $docs,
         ];
     }
+
+    /**
+     * Lança uma nota no MULT (s_cad_nota), espelhando controle_nota.php OP=3.
+     * Só entram códigos/números/datas — nenhum texto acentuado — então não há
+     * conversão de charset aqui. VALOR 0–10 (vírgula vira ponto), DAT_LANC yyyy-mm-dd,
+     * MODULO é a lista de COD de conteúdo separada por "|" (ex.: "22|32").
+     */
+    public function lancarNota(string $codAlu, string $codMat, string $criterio, string $valor, string $modulo, string $data, string $chave): array
+    {
+        $codAlu = trim($codAlu);
+        $codMat = trim($codMat);
+        if ($codAlu === '' || $codMat === '') {
+            throw new ErroPonte('parametros', 'Informe o aluno e a matrícula.');
+        }
+        if (!isset(Escola::CRITERIOS_NOTA[$criterio])) {
+            throw new ErroPonte('criterio_invalido', 'Critério de avaliação inválido.');
+        }
+        // Módulos: só dígitos e "|"; descarta vazios.
+        $mods = array_values(array_filter(array_map(
+            fn($x) => preg_replace('/\D/', '', (string)$x),
+            explode('|', $modulo)
+        ), fn($x) => $x !== ''));
+        if (!$mods) {
+            throw new ErroPonte('sem_modulo', 'Selecione ao menos um módulo.');
+        }
+        $moduloLimpo = implode('|', $mods);
+        // Valor: vírgula -> ponto, entre 0 e 10, uma casa decimal.
+        $num = (float)str_replace(',', '.', trim($valor));
+        if (!is_finite($num) || $num < 0 || $num > 10) {
+            throw new ErroPonte('nota_invalida', 'A nota deve ficar entre 0 e 10.');
+        }
+        $valorBanco = number_format($num, 1, '.', '');
+        // Data do lançamento: usa a informada, ou hoje.
+        $dataIso = Texto::dataIso($data);
+        if ($dataIso === '') {
+            $dataIso = $this->agora()->format('Y-m-d');
+        }
+        // Confere que a matrícula é do aluno (evita lançar no aluno errado).
+        $mat = $this->db->um(
+            'SELECT COD_MATRICULA FROM s_cad_matricula WHERE COD_MATRICULA = ? AND COD_ALU = ? LIMIT 1',
+            [$codMat, $codAlu]
+        );
+        if (!$mat) {
+            throw new ErroPonte('matricula_invalida', 'Matrícula não pertence a este aluno.');
+        }
+        // Idempotência: se a mesma nota (aluno+matrícula+critério+módulos+data) já existe, devolve-a.
+        $existe = $this->db->um(
+            'SELECT COD FROM s_cad_nota WHERE COD_ALU = ? AND COD_MAT = ? AND CRIT_AVAL = ? AND MODULO = ? AND DAT_LANC = ? AND VALOR = ? LIMIT 1',
+            [$codAlu, $codMat, $criterio, $moduloLimpo, $dataIso, $valorBanco]
+        );
+        if ($existe) {
+            return ['cod' => (string)$existe['COD'], 'valor' => $num, 'ja_existia' => true];
+        }
+        $this->db->executar(
+            'INSERT INTO s_cad_nota (COD_ALU, COD_MAT, CRIT_AVAL, VALOR, MODULO, DAT_LANC) VALUES (?, ?, ?, ?, ?, ?)',
+            [$codAlu, $codMat, $criterio, $valorBanco, $moduloLimpo, $dataIso]
+        );
+        return ['cod' => (string)$this->db->ultimoId(), 'valor' => $num, 'ja_existia' => false];
+    }
+
+    /** Remove uma nota lançada (controle_nota.php OP=4). */
+    public function removerNota(string $cod): array
+    {
+        $cod = trim($cod);
+        if ($cod === '' || !ctype_digit($cod)) {
+            throw new ErroPonte('nota_invalida', 'Lançamento inválido.');
+        }
+        $this->db->executar('DELETE FROM s_cad_nota WHERE COD = ?', [$cod]);
+        return ['cod' => $cod, 'removida' => true];
+    }
 }
