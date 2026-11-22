@@ -117,6 +117,13 @@ confere('frequência: matrículas', count($freq), 1);
 confere('frequência: faltas seguidas', $freq[0]['faltas_seguidas_atuais'] ?? null, 2);
 confere('frequência: %', $freq[0]['percentual_presenca'] ?? null, 60.0);
 
+// Régua de formandos: reusa o cálculo de frequência sobre as matrículas ATIVAS.
+$fmTodos = $escola->formandos(['Ativo'], 0);
+confere('formandos(0): traz ativos com frequência', count($fmTodos) > 0, true);
+confere('formandos(0): inclui o aluno de 60%', in_array('13882', array_column($fmTodos, 'cod_alu'), true), true);
+confere('formandos(80): corta quem está abaixo de 80%', in_array('13882', array_column($escola->formandos(['Ativo'], 80), 'cod_alu'), true), false);
+confere('formandos(200): ninguém acima de 200%', count($escola->formandos(['Ativo'], 200)), 0);
+
 $fin = new Financeiro($db, $escola, ['usuario_id' => 175, 'login' => 'AGENTE IA'], new DateTimeImmutable('2026-11-04 10:00:00'));
 lanca('valor divergente bloqueia', fn() => $fin->baixar([326669, 326670], 17000, '2026-11-04', 'k0', true, 'teste'), 'valor_divergente');
 lanca('documento incompleto bloqueia', fn() => $fin->baixar([326669], 9000, '2026-11-04', 'k0', true, 'teste'), 'documento_incompleto');

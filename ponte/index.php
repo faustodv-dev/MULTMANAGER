@@ -130,6 +130,7 @@ try {
             'statuses' => (array)($req['statuses'] ?? []),
         ]),
         'faltantes_do_dia' => $escola->faltantesDoDia($s('data'), (array)($req['statuses'] ?? [])),
+        'formandos' => $escola->formandos((array)($req['statuses'] ?? []), (float)($req['min_pct'] ?? 80), (int)($req['limite'] ?? 3000)),
         'alunos_com_aula' => $escola->alunosComAula($s('data')),
         'justificativa_falta' => $escola->justificativaDeFalta($s('cod_alu'), $s('data')),
         'status_certificado' => $escola->statusCertificado($s('cod_alu')),

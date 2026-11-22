@@ -35,6 +35,7 @@ export default function Layout({ children }: { children: ReactNode }) {
     { to: "/comprovantes", rotulo: "Comprovantes", icone: Banknote, ok: pode("comprovantes") },
     { to: "/regua", rotulo: "Régua de cobrança", icone: BellRing, ok: pode("financeiro") },
     { to: "/faltantes", rotulo: "Régua de faltantes", icone: UserX, ok: pode("pedagogico") },
+    { to: "/formandos", rotulo: "Régua de formando", icone: GraduationCap, ok: pode("pedagogico") },
     { to: "/avisos", rotulo: "Régua de avisos", icone: BellPlus, ok: pode("pedagogico") },
     { to: "/pops", rotulo: "POPs", icone: ClipboardList, ok: perfil?.papel === "master" || perfil?.papel === "admin" },
     { to: "/simulador", rotulo: "Simulador", icone: FlaskConical, ok: perfil?.papel === "master" || perfil?.papel === "admin" },

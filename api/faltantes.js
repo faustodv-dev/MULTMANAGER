@@ -2,6 +2,7 @@ import { supabase, usuarioDaRequisicao, lerCorpo, registrar, digitos } from './_
 import { enfileirar } from './_lib/fila.js';
 import { faltantesDaUnidade, mesclarFaltantes, processarFaltantesUnidade, previaFaltantes, reavaliarFaltantes, FALTANTES_PADRAO } from './_lib/faltantes.js';
 import { avisoDaUnidade, mesclarAviso, previaAviso, processarAvisoUnidade, AVISO_PADRAO } from './_lib/avisos.js';
+import { formandoDaUnidade, mesclarFormando, previaFormando, processarFormandoUnidade, FORMANDO_PADRAO } from './_lib/formando.js';
 import { STATUS_CANONICOS } from './_lib/regua.js';
 
 export const config = { maxDuration: 60 };
@@ -50,6 +51,21 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true, previa: r });
     }
 
+    // ===== Régua de FORMANDO (funil 80%→100%) — config + prévia (sem envio) =====
+    if (acao === 'formando_obter') {
+      const regua = await formandoDaUnidade(unitId);
+      const { data: ultimos } = await supabase.from('fila_mensagens')
+        .select('categoria,telefone,alunos,status,agendado_para,enviado_em,enfileirado_em,erro')
+        .eq('unit_id', unitId).eq('origem', 'regua_formando')
+        .order('enfileirado_em', { ascending: false }).limit(25);
+      return res.status(200).json({ ok: true, regua, padrao: FORMANDO_PADRAO, ultimos: ultimos || [] });
+    }
+
+    if (acao === 'formando_previa') {
+      const r = await previaFormando(unitId);
+      return res.status(200).json({ ok: true, previa: r });
+    }
+
     if (!podeEditar) return res.status(403).json({ erro: 'sem_permissao' });
 
     if (acao === 'aviso_salvar') {
@@ -67,6 +83,19 @@ export default async function handler(req, res) {
     if (acao === 'aviso_rodar') {
       // Enfileira de verdade (para teste). forcar ignora o liga/desliga; respeita o alvo.
       const r = await processarAvisoUnidade(unitId, { dataIso: b.data || null, forcar: true });
+      return res.status(200).json({ ok: true, resumo: r });
+    }
+
+    if (acao === 'formando_salvar') {
+      const regua = mesclarFormando(b.regua);
+      const { error } = await supabase.from('units').update({ regua_formando: regua }).eq('id', unitId);
+      if (error) return res.status(400).json({ erro: 'falha_salvar', mensagem: error.message });
+      await registrar('formandos', 'salvar', true, { unitId, detalhe: { por: eu.id, ativa: regua.ativa } });
+      return res.status(200).json({ ok: true, regua });
+    }
+
+    if (acao === 'formando_rodar') {
+      const r = await processarFormandoUnidade(unitId, { forcar: true });
       return res.status(200).json({ ok: true, resumo: r });
     }
 
