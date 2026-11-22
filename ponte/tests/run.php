@@ -129,6 +129,7 @@ $rbi = $escola->resumoBi();
 confere('resumo_bi: matrículas ativas contadas', $rbi['matriculas_ativas'] >= 3, true);
 confere('resumo_bi: frequência média é número 0–100', is_numeric($rbi['frequencia_media']) && $rbi['frequencia_media'] <= 100, true);
 confere('resumo_bi: tem contagem de formandos (80%)', array_key_exists('formandos_80', $rbi), true);
+confere('resumo_bi: novas no mês é número (0 com dados antigos)', $rbi['novas_mes'], 0);
 
 $fin = new Financeiro($db, $escola, ['usuario_id' => 175, 'login' => 'AGENTE IA'], new DateTimeImmutable('2026-11-04 10:00:00'));
 lanca('valor divergente bloqueia', fn() => $fin->baixar([326669, 326670], 17000, '2026-11-04', 'k0', true, 'teste'), 'valor_divergente');

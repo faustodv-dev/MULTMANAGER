@@ -6,6 +6,7 @@ import { ponte } from './ponte.js';
 export const METRICAS = [
   { id: 'frequencia_media', rotulo: 'Frequência média', sufixo: '%', melhor: 'alto' },
   { id: 'matriculas_ativas', rotulo: 'Matrículas ativas', sufixo: '', melhor: 'alto' },
+  { id: 'novas_mes', rotulo: 'Novas no mês', sufixo: '', melhor: 'alto' },
   { id: 'formandos_80', rotulo: 'Formandos (≥80%)', sufixo: '', melhor: 'alto' },
   { id: 'evasao_total', rotulo: 'Risco de evasão', sufixo: '', melhor: 'baixo' },
 ];
@@ -21,6 +22,7 @@ async function metricasDaUnidade(unitId) {
   return {
     frequencia_media: r.frequencia_media ?? 0,
     matriculas_ativas: r.matriculas_ativas ?? 0,
+    novas_mes: r.novas_mes ?? 0,
     formandos_80: r.formandos_80 ?? 0,
     evasao_total: n1 + n2,
     evasao_n1: n1,
