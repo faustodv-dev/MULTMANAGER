@@ -1,5 +1,6 @@
 import { supabase, CFG, usuarioDaRequisicao, podeModulo, lerCorpo, hojeSP, digitos, reais, dataBr, registrar } from './_lib/base.js';
 import { ponte } from './_lib/ponte.js';
+import { rodarSnapshotBi, METRICAS } from './_lib/bi.js';
 
 export const config = { maxDuration: 30 };
 
@@ -231,6 +232,54 @@ async function notas(res, acao, unitId, b, eu) {
   return res.status(400).json({ erro: 'acao_desconhecida' });
 }
 
+/* ───────── BI de Metas (snapshots diários + metas digitadas) ───────── */
+async function bi(res, acao, unitId, b, eu) {
+  const master = eu.papel === 'master';
+
+  if (acao === 'bi_snapshot_agora') {
+    if (!master) return res.status(403).json({ erro: 'sem_permissao' });
+    const resumo = await rodarSnapshotBi();
+    return res.status(200).json({ ok: true, resumo });
+  }
+
+  if (acao === 'bi_meta_salvar') {
+    if (!master) return res.status(403).json({ erro: 'sem_permissao' });
+    const periodo = String(b.periodo || '').slice(0, 7);
+    const alvo = Number(String(b.alvo).replace(',', '.'));
+    if (!b.unit_id || !b.metrica || !/^\d{4}-\d{2}$/.test(periodo) || !isFinite(alvo)) {
+      return res.status(400).json({ erro: 'parametros', mensagem: 'Informe unidade, métrica, período (aaaa-mm) e alvo.' });
+    }
+    await supabase.from('metas').upsert({
+      unit_id: String(b.unit_id), metrica: String(b.metrica), periodo, alvo,
+      atualizado_por: eu.nome || eu.id, atualizado_em: new Date().toISOString()
+    }, { onConflict: 'unit_id,metrica,periodo' });
+    return res.status(200).json({ ok: true });
+  }
+
+  if (acao === 'bi_meta_remover') {
+    if (!master) return res.status(403).json({ erro: 'sem_permissao' });
+    await supabase.from('metas').delete()
+      .eq('unit_id', String(b.unit_id)).eq('metrica', String(b.metrica)).eq('periodo', String(b.periodo || '').slice(0, 7));
+    return res.status(200).json({ ok: true });
+  }
+
+  // bi_dados: snapshots do período + metas do mês. Master vê todas; demais, a sua unidade.
+  const dias = Math.min(Math.max(Number(b.dias) || 60, 7), 180);
+  const desde = iso(somaDias(emSP(), -dias));
+  const periodo = /^\d{4}-\d{2}$/.test(String(b.periodo || '')) ? String(b.periodo) : hojeSP().slice(0, 7);
+  const { data: todas } = await supabase.from('units').select('id, name').order('name');
+  const unidades = master ? (todas || []) : (todas || []).filter((u) => u.id === eu.unit_id);
+  const ids = unidades.map((u) => u.id);
+  const [snapsR, metasR] = await Promise.all([
+    supabase.from('bi_snapshots').select('unit_id, data, metricas').in('unit_id', ids).gte('data', desde).order('data', { ascending: true }),
+    supabase.from('metas').select('unit_id, metrica, periodo, alvo').in('unit_id', ids).eq('periodo', periodo)
+  ]);
+  return res.status(200).json({
+    ok: true, master, metricas: METRICAS, unidades, periodo,
+    snapshots: snapsR.data || [], metas: metasR.data || []
+  });
+}
+
 /* ───────── Feriados e fechamentos (configurações da unidade) ───────── */
 async function feriados(res, acao, unitId, b, eu) {
   if (acao === 'feriados_listar') {
@@ -390,6 +439,13 @@ export default async function handler(req, res) {
     if (eu.papel !== 'master' && eu.unit_id !== unitId) return res.status(403).json({ erro: 'sem_permissao' });
     try { return await feriados(res, acao, unitId, b, eu); }
     catch (e) { return res.status(500).json({ erro: 'erro', mensagem: e.message }); }
+  }
+
+  // BI de Metas: leitura p/ admin/master (admin vê a sua unidade); escrita só master.
+  if (acao.startsWith('bi_')) {
+    if (eu.papel !== 'master' && eu.papel !== 'admin') return res.status(403).json({ erro: 'sem_permissao' });
+    try { return await bi(res, acao, unitId, b, eu); }
+    catch (e) { return res.status(e?.http || 500).json({ erro: e?.codigo || 'erro', mensagem: e.message }); }
   }
 
   // Notas (lançamento pedagógico no MULT): coordenação (módulo pedagógico) + admin/master.

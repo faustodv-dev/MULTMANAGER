@@ -124,6 +124,12 @@ confere('formandos(0): inclui o aluno de 60%', in_array('13882', array_column($f
 confere('formandos(80): corta quem está abaixo de 80%', in_array('13882', array_column($escola->formandos(['Ativo'], 80), 'cod_alu'), true), false);
 confere('formandos(200): ninguém acima de 200%', count($escola->formandos(['Ativo'], 200)), 0);
 
+// Resumo BI (snapshot): agregados leves da unidade.
+$rbi = $escola->resumoBi();
+confere('resumo_bi: matrículas ativas contadas', $rbi['matriculas_ativas'] >= 3, true);
+confere('resumo_bi: frequência média é número 0–100', is_numeric($rbi['frequencia_media']) && $rbi['frequencia_media'] <= 100, true);
+confere('resumo_bi: tem contagem de formandos (80%)', array_key_exists('formandos_80', $rbi), true);
+
 $fin = new Financeiro($db, $escola, ['usuario_id' => 175, 'login' => 'AGENTE IA'], new DateTimeImmutable('2026-11-04 10:00:00'));
 lanca('valor divergente bloqueia', fn() => $fin->baixar([326669, 326670], 17000, '2026-11-04', 'k0', true, 'teste'), 'valor_divergente');
 lanca('documento incompleto bloqueia', fn() => $fin->baixar([326669], 9000, '2026-11-04', 'k0', true, 'teste'), 'documento_incompleto');

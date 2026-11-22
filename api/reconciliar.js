@@ -2,6 +2,7 @@ import { supabase, CFG, igual, registrar, usuarioDaRequisicao } from './_lib/bas
 import { segredosUnidade } from './_lib/conversa.js';
 import { ponte } from './_lib/ponte.js';
 import { excluirCobranca } from './_lib/asaas.js';
+import { rodarSnapshotBi } from './_lib/bi.js';
 
 export const config = { maxDuration: 60 };
 
@@ -56,5 +57,12 @@ export default async function handler(req, res) {
     }
   }
   await registrar('asaas', 'reconciliar', true, { detalhe: resumo });
-  return res.status(200).json({ ok: true, ...resumo });
+
+  // Snapshot diário de BI (todas as unidades) — dobrado neste cron porque o
+  // Hobby só permite 2 crons. Isolado: um erro aqui não afeta a reconciliação.
+  let bi = null;
+  try { bi = await rodarSnapshotBi(); }
+  catch (e) { await registrar('bi', 'snapshot_erro', false, { detalhe: { erro: e.message } }); }
+
+  return res.status(200).json({ ok: true, ...resumo, bi });
 }
