@@ -2,7 +2,7 @@ import { useEffect, useState, type ComponentType } from "react";
 import { toast } from "sonner";
 import {
   Plus, Search, Clock, CheckCircle2, Circle, Loader2, CalendarDays, Flag,
-  FileText, AlertTriangle, TrendingUp, Flame, History, CheckCheck, Building2,
+  FileText, AlertTriangle, TrendingUp, Flame, History, CheckCheck, Building2, Rocket,
 } from "lucide-react";
 import { api, supabase, reais, dataBr, dataHora } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
@@ -439,12 +439,22 @@ function DossieDialog({ dep, card, unidade, colabs, aoFechar, aoMudar, mover, ab
   const [dados, setDados] = useState<any>(null);
   const [parcelas, setParcelas] = useState<any[] | null>(null);
   const [carregandoSis, setCarregandoSis] = useState(false);
+  const [diario, setDiario] = useState<any | null>(null);
+  const [carregandoDiario, setCarregandoDiario] = useState(false);
+  const temDiario = ["rio_verde", "aparecida_goiania"].includes(unidade);
   const [nota, setNota] = useState("");
   const [busy, setBusy] = useState(false);
   const base = { departamento: dep, unidade };
 
   const carregar = async () => { const r = await api<any>("crm", { acao: "card_dossie", card_id: card.id, ...base }); setDados(r); };
-  useEffect(() => { carregar(); setParcelas(null); /* eslint-disable-next-line */ }, [card.id]);
+  useEffect(() => { carregar(); setParcelas(null); setDiario(null); /* eslint-disable-next-line */ }, [card.id]);
+
+  const verDiario = async () => {
+    if (!card.cod_alu) return;
+    setCarregandoDiario(true);
+    try { const r = await api<any>("crm", { acao: "diario_aluno", cod_alu: card.cod_alu, unidade }); setDiario(r); }
+    catch (e: any) { toast.error(e.message); } finally { setCarregandoDiario(false); }
+  };
 
   const verSistema = async () => {
     if (!card.cod_alu) return toast.info("Atendimento sem aluno vinculado.");
@@ -525,6 +535,45 @@ function DossieDialog({ dep, card, unidade, colabs, aoFechar, aoMudar, mover, ab
             )}
           </div>
         )}
+        {/* Diário de Bordo (só unidades com Diário) — sob demanda, lê o 2º Supabase */}
+        {card.cod_alu && temDiario && (
+          <div className="rounded-lg border p-3">
+            {diario === null ? (
+              <Button variant="outline" size="sm" onClick={verDiario} disabled={carregandoDiario}>
+                {carregandoDiario ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Rocket className="mr-1 h-4 w-4 text-primary" />}Ver Diário de Bordo
+              </Button>
+            ) : (
+              <>
+                <p className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+                  <Rocket className="h-3.5 w-3.5 text-primary" /> Diário de Bordo
+                  {diario.perfil?.xp != null && <span className="ml-1 rounded-full bg-primary/10 px-1.5 text-[10px] font-medium text-primary">{diario.perfil.xp} XP</span>}
+                  <span className="ml-auto font-normal">{diario.total} missã{diario.total === 1 ? "o" : "es"}</span>
+                </p>
+                {diario.entradas?.length ? (
+                  <ul className="max-h-60 space-y-1.5 overflow-y-auto">
+                    {diario.entradas.map((e: any, i: number) => (
+                      <li key={i} className="rounded-md border bg-card px-2.5 py-1.5 text-xs">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-medium">{[e.modulo, e.aula].filter(Boolean).join(" · ") || e.curso || "Missão"}</span>
+                          <span className="flex items-center gap-1.5 shrink-0 text-muted-foreground">
+                            {e.status && <Badge variant="secondary" className="text-[10px]">{e.status}</Badge>}
+                            {e.data && <span className="tabular-nums">{String(e.data).slice(0, 10).split("-").reverse().join("/")}</span>}
+                          </span>
+                        </div>
+                        {e.texto && <p className="mt-0.5 whitespace-pre-wrap text-muted-foreground">{e.texto}</p>}
+                        {e.feedback && <p className="mt-1 whitespace-pre-wrap rounded bg-muted px-1.5 py-1 text-[11px] italic text-muted-foreground"><span className="font-medium not-italic text-primary">IA:</span> {e.feedback}</p>}
+                        {e.xp != null && e.xp > 0 && <span className="mt-1 inline-block text-[10px] font-medium text-primary">+{e.xp} XP</span>}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-xs text-muted-foreground">Este aluno ainda não registrou nada no Diário.</p>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
         {dados?.boletos?.length > 0 && (
           <Bloco titulo="Boletos Asaas">
             {dados.boletos.map((bo: any) => (
