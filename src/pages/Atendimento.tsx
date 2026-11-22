@@ -64,9 +64,26 @@ export default function Atendimento() {
 
   useEffect(() => {
     carregar();
+    // Egress: em vez de re-buscar TODAS as conversas a cada mudança (o antigo `carregar`
+    // trazia até 300 linhas com o `contexto` pesado por evento), aplicamos só a linha que mudou.
     const canal = supabase
       .channel("atendimento-conversas")
-      .on("postgres_changes", { event: "*", schema: "public", table: "conversas" }, carregar)
+      .on("postgres_changes", { event: "*", schema: "public", table: "conversas" }, (payload) => {
+        if (payload.eventType === "DELETE") {
+          const id = (payload.old as { id?: string } | undefined)?.id;
+          if (id) setConversas((prev) => prev.filter((c) => c.id !== id));
+          return;
+        }
+        const nova = payload.new as Conversa | undefined;
+        if (!nova || (nova as any).unit_id !== unidade || (nova as any).canal !== "whatsapp") return;
+        setConversas((prev) => {
+          const i = prev.findIndex((c) => c.id === nova.id);
+          if (i === -1) return (de || ate) ? prev : [nova, ...prev]; // com filtro de período, não injeta conversa nova
+          const copia = [...prev];
+          copia[i] = { ...copia[i], ...nova };
+          return copia;
+        });
+      })
       .subscribe();
     return () => { supabase.removeChannel(canal); };
     /* eslint-disable-next-line */
@@ -74,12 +91,15 @@ export default function Atendimento() {
 
   const lista = useMemo(() => {
     const t = busca.trim().toLowerCase();
-    return conversas.filter(
-      (c) =>
-        (tipo === "grupos" ? ehGrupo(c) : !ehGrupo(c)) &&
-        (filtro === "todas" || c.status === filtro) &&
-        (!t || [c.nome_contato, c.nome_responsavel, c.telefone].some((v) => String(v || "").toLowerCase().includes(t)))
-    );
+    return conversas
+      .filter(
+        (c) =>
+          (tipo === "grupos" ? ehGrupo(c) : !ehGrupo(c)) &&
+          (filtro === "todas" || c.status === filtro) &&
+          (!t || [c.nome_contato, c.nome_responsavel, c.telefone].some((v) => String(v || "").toLowerCase().includes(t)))
+      )
+      // mantém a mais recente no topo após as atualizações incrementais do realtime
+      .sort((a, b) => String((b as any).ultimo_contato || "").localeCompare(String((a as any).ultimo_contato || "")));
   }, [conversas, filtro, tipo, busca]);
   const totalGrupos = conversas.filter(ehGrupo).length;
 
