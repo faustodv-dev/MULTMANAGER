@@ -1148,8 +1148,16 @@ final class Escola
                 $form80++;
             }
         }
+        // Novas matrículas no mês corrente (DAT_MAT_ALU no formato aaaa/mm/dd;
+        // normaliza '-' -> '/' por segurança). O dia não importa, só o prefixo aaaa/mm.
+        $novas = (int)(($this->db->um(
+            "SELECT COUNT(*) AS n FROM s_cad_matricula WHERE REPLACE(DAT_MAT_ALU, '-', '/') LIKE ?",
+            [date('Y/m') . '/%']
+        ) ?? [])['n'] ?? 0);
+
         return [
             'matriculas_ativas' => $ativas,
+            'novas_mes' => $novas,
             'frequencia_media' => $com ? round($soma / $com, 1) : 0.0,
             'formandos_80' => $form80,
         ];
