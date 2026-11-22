@@ -1,6 +1,7 @@
 import { supabase, CFG, usuarioDaRequisicao, podeModulo, lerCorpo, hojeSP, digitos, reais, dataBr, registrar } from './_lib/base.js';
 import { ponte } from './_lib/ponte.js';
 import { rodarSnapshotBi, METRICAS } from './_lib/bi.js';
+import { diarioDoAluno } from './_lib/diario.js';
 
 export const config = { maxDuration: 30 };
 
@@ -439,6 +440,17 @@ export default async function handler(req, res) {
     if (eu.papel !== 'master' && eu.unit_id !== unitId) return res.status(403).json({ erro: 'sem_permissao' });
     try { return await feriados(res, acao, unitId, b, eu); }
     catch (e) { return res.status(500).json({ erro: 'erro', mensagem: e.message }); }
+  }
+
+  // Diário de Bordo (2º Supabase, read-only): nível de unidade, fora do gate de departamento.
+  if (acao === 'diario_aluno') {
+    if (eu.papel !== 'master' && eu.unit_id !== unitId) return res.status(403).json({ erro: 'sem_permissao' });
+    try {
+      const cod = digitos(b.cod_alu || '');
+      if (!cod) return res.status(400).json({ erro: 'sem_codigo', mensagem: 'Código do aluno é obrigatório.' });
+      const r = await diarioDoAluno(unitId, cod);
+      return res.status(200).json({ ok: true, ...r });
+    } catch (e) { return res.status(500).json({ erro: 'erro', mensagem: e.message }); }
   }
 
   // BI de Metas: leitura p/ admin/master (admin vê a sua unidade); escrita só master.
