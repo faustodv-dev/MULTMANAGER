@@ -15,8 +15,9 @@ export const BOLETIM_PADRAO = {
   ativa: false,
   horario: 9,
   dia: 1,
+  espalhar_horas: 8, // distribui os envios ao longo de N horas (anti-bloqueio do chip); 0 = tudo junto
   statuses: ['Ativo'],
-  cabecalho: 'Olá, {responsavel}! 👋 Aqui é a MULT Profissões com o resumo de {mes} de {aluno_poss}.',
+  cabecalho: 'Olá, {responsavel}! 👋 Aqui é a MULT Profissões com o resumo de {mes}.',
   rodape: 'Qualquer dúvida sobre frequência, notas ou reposição, é só responder aqui. 💙',
 };
 
@@ -34,6 +35,7 @@ export function mesclarBoletim(salva) {
     ativa: salva.ativa === true,
     horario: Number.isInteger(salva.horario) ? Math.min(23, Math.max(0, salva.horario)) : base.horario,
     dia: Number.isInteger(salva.dia) ? Math.min(28, Math.max(1, salva.dia)) : base.dia,
+    espalhar_horas: Number.isInteger(salva.espalhar_horas) ? Math.min(12, Math.max(0, salva.espalhar_horas)) : base.espalhar_horas,
     statuses,
     cabecalho: String(salva.cabecalho || base.cabecalho).slice(0, 600),
     rodape: String(salva.rodape || base.rodape).slice(0, 600),
@@ -56,13 +58,12 @@ export function mesQueFechou(ref = new Date()) {
 /** Linha de dados de um aluno (frequência do mês + % no curso + notas + diário). */
 function blocoAluno(a, mesNm, diarioMap) {
   const linhas = [];
+  // Presença DO MÊS (clara para o responsável). NÃO mostramos o % acumulado do curso:
+  // para quem começou há pouco ele fica baixíssimo (ex.: 4%) e assusta sem necessidade.
   const aulas = (a.presencas_mes || 0) + (a.faltas_mes || 0);
   if (aulas > 0) {
-    const faltou = a.faltas_mes > 0 ? ` (faltou ${a.faltas_mes})` : '';
-    const pct = a.percentual_presenca != null ? ` · frequência no curso: ${Math.round(Math.min(a.percentual_presenca, 100))}%` : '';
-    linhas.push(`• Presença em ${mesNm}: ${a.presencas_mes} de ${aulas} aulas${faltou}${pct}`);
-  } else if (a.percentual_presenca != null) {
-    linhas.push(`• Frequência no curso: ${Math.round(Math.min(a.percentual_presenca, 100))}%`);
+    const faltou = a.faltas_mes > 0 ? ` — faltou ${a.faltas_mes}` : ' — presença total! 👏';
+    linhas.push(`• Presença em ${mesNm}: ${a.presencas_mes} de ${aulas} aulas${faltou}`);
   }
   const notas = a.notas_mes || [];
   if (notas.length) {
@@ -146,14 +147,18 @@ export async function processarBoletimUnidade(unitId, { mes = null, forcar = fal
   const msgs = montarMensagens(r?.alunos || [], cfg, mesIso, diarioMap);
   resumo.responsaveis = msgs.length;
 
-  const agendado = agendadoParaHoje(cfg.horario);
-  const itens = msgs.map((m) => ({
+  // Espalha os envios ao longo de `espalhar_horas` (anti-bloqueio do chip): em vez de
+  // disparar centenas de mensagens em rajada, distribui os horários agendados numa janela.
+  const base = new Date(agendadoParaHoje(cfg.horario)).getTime();
+  const janelaMs = Math.max(0, cfg.espalhar_horas || 0) * 3600 * 1000;
+  const n = Math.max(1, msgs.length);
+  const itens = msgs.map((m, i) => ({
     telefone: m.telefone,
     texto: m.texto,
     origem: 'regua_boletim',
     categoria: 'boletim',
     prioridade: 7,
-    agendado_para: agendado,
+    agendado_para: new Date(base + Math.round((i / n) * janelaMs)).toISOString(),
     chave: `boletim|${mesIso}|${m.tel}`,
     metadata: { mes: mesIso, alunos: m.qtd_alunos },
   }));
