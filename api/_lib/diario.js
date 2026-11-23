@@ -16,6 +16,33 @@ function cliente() {
 }
 
 /**
+ * Agregado do Diário de TODA a unidade em UMA query (não por aluno) — para o boletim.
+ * Retorna um mapa cod_alu → { missoes, xp }. Bate na quota do Diário 1x por rodada.
+ */
+export async function resumoDiarioDaUnidade(unitId) {
+  const franquia = DEPARA[unitId];
+  if (!franquia) return {};
+  const cli = cliente();
+  if (!cli) return {};
+  const porAluno = {};
+  const page = 1000;
+  for (let from = 0; ; from += page) {
+    const { data, error } = await cli.from('missoes')
+      .select('student_id, xp_awarded').eq('franquia_id', franquia).range(from, from + page - 1);
+    if (error || !data || !data.length) break;
+    for (const r of data) {
+      const cod = String(r.student_id || '').split('_').slice(1).join('_'); // "rio-verde_14017" → "14017"
+      if (!cod) continue;
+      if (!porAluno[cod]) porAluno[cod] = { missoes: 0, xp: 0 };
+      porAluno[cod].missoes++;
+      porAluno[cod].xp += Number(r.xp_awarded) || 0;
+    }
+    if (data.length < page) break;
+  }
+  return porAluno;
+}
+
+/**
  * Lê o Diário de Bordo de um aluno direto no Supabase do Diário (2º cliente, só no
  * servidor). A leitura bate na quota do PROJETO DO DIÁRIO, sob demanda — não toca
  * no nosso egress. Identidade: missoes.student_id == `${franquia}_${cod_alu}`.

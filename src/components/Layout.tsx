@@ -1,6 +1,6 @@
 import { NavLink } from "react-router-dom";
 import { useEffect, useState, type ReactNode } from "react";
-import { MessageCircle, Receipt, Users, Building2, LogOut, FlaskConical, Banknote, ClipboardList, GraduationCap, Briefcase, BellRing, UserX, LayoutDashboard, Handshake, BellPlus, Megaphone, ClipboardCheck, TrendingUp } from "lucide-react";
+import { MessageCircle, Receipt, Users, Building2, LogOut, FlaskConical, Banknote, ClipboardList, GraduationCap, Briefcase, BellRing, UserX, LayoutDashboard, Handshake, BellPlus, Megaphone, ClipboardCheck, TrendingUp, FileText } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 import { CentralNovidades } from "@/components/CentralNovidades";
@@ -39,6 +39,7 @@ export default function Layout({ children }: { children: ReactNode }) {
     { to: "/faltantes", rotulo: "Régua de faltantes", icone: UserX, ok: pode("pedagogico") },
     { to: "/formandos", rotulo: "Régua de formando", icone: GraduationCap, ok: pode("pedagogico") },
     { to: "/avisos", rotulo: "Régua de avisos", icone: BellPlus, ok: pode("pedagogico") },
+    { to: "/boletim", rotulo: "Boletim mensal", icone: FileText, ok: pode("pedagogico") },
     { to: "/pops", rotulo: "POPs", icone: ClipboardList, ok: perfil?.papel === "master" || perfil?.papel === "admin" },
     { to: "/simulador", rotulo: "Simulador", icone: FlaskConical, ok: perfil?.papel === "master" || perfil?.papel === "admin" },
     { to: "/boleto-teste", rotulo: "Boleto (teste)", icone: Banknote, ok: perfil?.papel === "master" },

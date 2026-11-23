@@ -1163,6 +1163,111 @@ final class Escola
         ];
     }
 
+    /**
+     * Dados do BOLETIM MENSAL para TODAS as matrículas ativas, em UMA leitura batch
+     * (nada de uma chamada por aluno — pesaria no cPanel). Por matrícula traz: contato,
+     * curso, % de frequência acumulada (reusa indicadoresDeMatriculas), e DO MÊS pedido:
+     * presenças/faltas e notas lançadas. O CRM agrupa por responsável e monta o texto.
+     *
+     * @param string $mes 'AAAA-MM' (o mês que fechou). Somente leitura.
+     */
+    public function boletimDoMes(string $mes, array $statuses = [], int $limite = 5000): array
+    {
+        if (!preg_match('/^\d{4}-\d{2}$/', $mes)) {
+            $mes = date('Y-m');
+        }
+        $mesIni = $mes . '-01';
+        $mesFim = date('Y-m-t', strtotime($mesIni));
+        $statuses = array_values(array_filter(array_map(fn($x) => trim((string)$x), $statuses), fn($x) => $x !== ''));
+        if (!$statuses) {
+            $statuses = ['Ativo'];
+        }
+        $hoje = date('Y-m-d');
+
+        $sql = "SELECT DISTINCT m.COD_ALU, m.COD_MATRICULA AS COD_MATRICULA_PRES, '' AS COD_TUR,
+                       a.NOM_ALU, a.NOM_PAI_ALU, a.WHATS, a.CEL_ALU, a.TEL_RESP, a.FON_ALU,
+                       m.STATUS_MAT, m.NOM_CUR
+                FROM s_cad_matricula m
+                JOIN s_cad_aluno a ON a.COD_ALU = m.COD_ALU
+                WHERE m.STATUS_MAT IN (" . implode(',', array_fill(0, count($statuses), '?')) . ")
+                LIMIT " . (int)max(1, $limite);
+        $seed = $this->db->todos($sql, $statuses);
+        if (!$seed) {
+            return ['mes' => $mes, 'alunos' => []];
+        }
+
+        $ind = $this->indicadoresDeMatriculas($seed, $hoje);
+        $codAlus = array_values(array_unique(array_map(fn($r) => (string)$r['COD_ALU'], $seed)));
+
+        $presMes = [];   // [alu|mat] => ['p'=>int,'f'=>int]
+        $notasRaw = [];  // [alu] => [ ['crit'=>, 'valor'=>, 'modulo'=>pipe, 'data'=>] ]
+        $codsMod = [];   // COD de conteúdo a resolver (nome do módulo)
+        for ($i = 0; $i < count($codAlus); $i += 200) {
+            $slice = array_slice($codAlus, $i, 200);
+            $ph = implode(',', array_fill(0, count($slice), '?'));
+            $pp = array_merge($slice, [$mesIni, $mesFim]);
+            foreach ($this->db->todos("SELECT COD_ALU, COD_MATRICULA_PRES, FAL_PRE, COUNT(*) n FROM s_cad_pres_aluno WHERE COD_ALU IN ($ph) AND DAT_FAL >= ? AND DAT_FAL <= ? GROUP BY COD_ALU, COD_MATRICULA_PRES, FAL_PRE", $pp) as $r) {
+                $k = (string)$r['COD_ALU'] . '|' . (string)($r['COD_MATRICULA_PRES'] ?? '');
+                if (!isset($presMes[$k])) { $presMes[$k] = ['p' => 0, 'f' => 0]; }
+                $v = strtoupper((string)$r['FAL_PRE']);
+                if ($v === 'S') { $presMes[$k]['p'] += (int)$r['n']; }
+                elseif ($v === 'N') { $presMes[$k]['f'] += (int)$r['n']; }
+            }
+            foreach ($this->db->todos("SELECT COD_ALU, CRIT_AVAL, VALOR, MODULO, DAT_LANC FROM s_cad_nota WHERE COD_ALU IN ($ph) AND DAT_LANC >= ? AND DAT_LANC <= ? ORDER BY DAT_LANC", $pp) as $r) {
+                $a = (string)$r['COD_ALU'];
+                $notasRaw[$a][] = [
+                    'crit' => (string)$r['CRIT_AVAL'],
+                    'valor' => (float)str_replace(',', '.', (string)$r['VALOR']),
+                    'modulo' => (string)($r['MODULO'] ?? ''),
+                    'data' => Texto::dataBr((string)($r['DAT_LANC'] ?? '')),
+                ];
+                foreach (explode('|', (string)$r['MODULO']) as $c) { $c = (int)$c; if ($c > 0) { $codsMod[$c] = true; } }
+            }
+        }
+
+        // Resolve TODOS os nomes de módulo numa tacada (não por nota).
+        $mapMod = [];
+        if ($codsMod) {
+            $ids = array_keys($codsMod);
+            for ($j = 0; $j < count($ids); $j += 500) {
+                $sl = array_slice($ids, $j, 500);
+                $ph2 = implode(',', array_fill(0, count($sl), '?'));
+                foreach ($this->db->todos("SELECT COD, MODULO FROM s_cad_conteudo WHERE COD IN ($ph2)", $sl) as $r) {
+                    $mapMod[(int)$r['COD']] = trim(Texto::doBanco($r['MODULO'] ?? ''));
+                }
+            }
+        }
+        $nomeMods = function (string $pipe) use ($mapMod): string {
+            $ns = [];
+            foreach (explode('|', $pipe) as $c) { $c = (int)$c; if ($c > 0 && isset($mapMod[$c])) { $ns[] = $mapMod[$c]; } }
+            return implode(', ', array_filter($ns));
+        };
+
+        $out = [];
+        foreach ($ind as $r) {
+            $k = (string)$r['cod_alu'] . '|' . (string)($r['matricula'] ?? '');
+            $pm = $presMes[$k] ?? ['p' => 0, 'f' => 0];
+            $notas = array_map(fn($n) => [
+                'criterio' => self::CRITERIOS_NOTA[$n['crit']] ?? $n['crit'],
+                'valor' => $n['valor'],
+                'modulos' => $nomeMods($n['modulo']),
+                'data' => $n['data'],
+            ], $notasRaw[(string)$r['cod_alu']] ?? []);
+            $out[] = [
+                'cod_alu' => $r['cod_alu'],
+                'nome_aluno' => $r['nome_aluno'],
+                'nome_responsavel' => $r['nome_responsavel'],
+                'telefone' => $r['telefone'],
+                'curso' => $r['curso'],
+                'percentual_presenca' => $r['percentual_presenca'],
+                'presencas_mes' => $pm['p'],
+                'faltas_mes' => $pm['f'],
+                'notas_mes' => $notas,
+            ];
+        }
+        return ['mes' => $mes, 'alunos' => $out];
+    }
+
     /** Dados da unidade (tabela franquia) para o carnê. */
     public function unidade(): array
     {

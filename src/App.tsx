@@ -20,6 +20,7 @@ import Formandos from "@/pages/Formandos";
 import Avisos from "@/pages/Avisos";
 import Notas from "@/pages/Notas";
 import Bi from "@/pages/Bi";
+import Boletim from "@/pages/Boletim";
 import Dashboard from "@/pages/Dashboard";
 import Agencia from "@/pages/Agencia";
 import Novidades from "@/pages/Novidades";
@@ -68,6 +69,7 @@ export default function App() {
             <Route path="/avisos" element={<Protegida modulo="pedagogico"><Avisos /></Protegida>} />
             <Route path="/notas" element={<Protegida modulo="pedagogico"><Notas /></Protegida>} />
             <Route path="/bi" element={<Protegida><Bi /></Protegida>} />
+            <Route path="/boletim" element={<Protegida modulo="pedagogico"><Boletim /></Protegida>} />
             <Route path="/pops" element={<Protegida><Pops /></Protegida>} />
             <Route path="/boleto-teste" element={<Protegida><BoletoTeste /></Protegida>} />
             <Route path="/unidades" element={<Protegida modulo="configuracoes"><Unidades /></Protegida>} />
