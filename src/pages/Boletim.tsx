@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { FileText, Save, Loader2, Send, History, Eye } from "lucide-react";
 
-type Boletim = { ativa: boolean; horario: number; dia: number; statuses: string[]; cabecalho: string; rodape: string };
+type Boletim = { ativa: boolean; horario: number; dia: number; espalhar_horas: number; statuses: string[]; cabecalho: string; rodape: string };
 type Previa = { mes: string; responsaveis: number; alunos: number; amostra: string[] };
 type Fila = { categoria: string | null; telefone: string | null; alunos: string | null; status: string; agendado_para: string | null; enviado_em: string | null; enfileirado_em: string; erro: string | null };
 
@@ -119,11 +119,20 @@ export default function Boletim() {
               </select>
             </div>
             <div>
-              <Label className="text-xs">Horário de envio</Label>
+              <Label className="text-xs">Horário de início</Label>
               <select className="mt-1 h-10 w-full rounded-md border bg-background px-2 text-sm" value={cfg.horario} disabled={!podeEditar} onChange={(e) => setCfg({ ...cfg, horario: Number(e.target.value) })}>
                 {Array.from({ length: 15 }, (_, i) => i + 6).map((h) => <option key={h} value={h}>{String(h).padStart(2, "0")}:00</option>)}
               </select>
             </div>
+          </div>
+
+          <div>
+            <Label className="text-xs">Espalhar envio ao longo de</Label>
+            <select className="mt-1 h-10 w-full rounded-md border bg-background px-2 text-sm sm:w-56" value={cfg.espalhar_horas} disabled={!podeEditar} onChange={(e) => setCfg({ ...cfg, espalhar_horas: Number(e.target.value) })}>
+              <option value={0}>Tudo de uma vez (não recomendado)</option>
+              {[2, 4, 6, 8, 10, 12].map((h) => <option key={h} value={h}>{h} horas</option>)}
+            </select>
+            <p className="mt-1 text-xs text-muted-foreground">Distribui as mensagens na janela escolhida (a partir do horário de início) para <b>proteger o chip de bloqueio</b> — nada de rajada.</p>
           </div>
 
           <div>
