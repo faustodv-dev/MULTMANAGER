@@ -1,4 +1,5 @@
 import { supabase, hojeSP, digitos, registrar } from './base.js';
+import { agendarComLimite } from './disparos.js';
 
 /**
  * Fila única de disparos. O Vercel enfileira aqui; o gateway (always-on) drena
@@ -16,8 +17,16 @@ export function agendadoParaHoje(horario) {
  * item: { telefone, texto, origem, categoria, prioridade, agendado_para, chave, cod_alu, alunos }
  */
 export async function enfileirar(unitId, itens) {
-  const lista = (itens || []).filter((i) => i && i.telefone && i.texto && digitos(i.telefone).length >= 10);
+  let lista = (itens || []).filter((i) => i && i.telefone && i.texto && digitos(i.telefone).length >= 10);
   if (!lista.length) return 0;
+
+  // Agendador central anti-bloqueio: só para RÉGUAS (origem regua_*). Classifica
+  // aberta/nova, respeita o teto diário por unidade e espalha o agendado_para.
+  // Mensagens diretas (agente/humano) passam direto, sem controle.
+  if (lista.some((i) => String(i.origem || '').startsWith('regua_'))) {
+    lista = await agendarComLimite(unitId, lista);
+    if (!lista.length) return 0;
+  }
 
   // Dedup DENTRO do lote: a constraint é UNIQUE (unit_id, chave), então duas linhas
   // com a mesma chave (ex.: mesmo telefone/etapa/dia — aluno em 2 turmas ou irmãos no
