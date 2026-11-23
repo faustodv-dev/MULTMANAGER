@@ -3,6 +3,7 @@ import { enviarWhatsapp } from './_lib/gateway.js';
 import { reguaDaUnidade, mesclarRegua, processarReguaUnidade, previaManual, dispararManual, preencherDemo, REGUA_PADRAO, STATUS_CANONICOS } from './_lib/regua.js';
 import { mesclarFaltantes, processarFaltantesUnidade } from './_lib/faltantes.js';
 import { mesclarAviso, processarAvisoUnidade } from './_lib/avisos.js';
+import { mesclarBoletim, processarBoletimUnidade } from './_lib/boletim.js';
 import { flushOcorrenciasEnviadas } from './_lib/ocorrencias.js';
 
 export const config = { maxDuration: 60 };
@@ -22,8 +23,9 @@ function ehDomingoSP() {
 async function rodarCron(res) {
   const hora = horaSP();
   const domingo = ehDomingoSP();
-  const { data: units } = await supabase.from('units').select('id, regua, regua_faltantes, regua_aviso');
-  const resumo = { hora, processadas: 0, enviados: 0, pulados: 0, erros: 0, faltantes_unidades: 0, faltantes_enfileiradas: 0, avisos_unidades: 0, avisos_enfileiradas: 0 };
+  const diaMes = Number(new Intl.DateTimeFormat('en-US', { timeZone: 'America/Sao_Paulo', day: 'numeric' }).format(new Date()));
+  const { data: units } = await supabase.from('units').select('id, regua, regua_faltantes, regua_aviso, regua_boletim');
+  const resumo = { hora, dia_mes: diaMes, processadas: 0, enviados: 0, pulados: 0, erros: 0, faltantes_unidades: 0, faltantes_enfileiradas: 0, avisos_unidades: 0, avisos_enfileiradas: 0, boletim_unidades: 0, boletim_enfileiradas: 0 };
   for (const u of units || []) {
     // Régua financeira (envio direto — inalterada)
     const regua = mesclarRegua(u.regua);
@@ -47,6 +49,13 @@ async function rodarCron(res) {
       resumo.avisos_unidades++;
       const ra = await processarAvisoUnidade(u.id);
       resumo.avisos_enfileiradas += ra.enfileiradas || 0;
+    }
+    // Régua de boletim (mensal): só no dia configurado (padrão 01). Dedup por mês garante 1x.
+    const boletim = mesclarBoletim(u.regua_boletim);
+    if (boletim.ativa && diaMes === (boletim.dia || 1)) {
+      resumo.boletim_unidades++;
+      const rb = await processarBoletimUnidade(u.id);
+      resumo.boletim_enfileiradas += rb.enfileiradas || 0;
     }
   }
   // Piso diário: grava as ocorrências informativas pendentes (o gateway também cutuca

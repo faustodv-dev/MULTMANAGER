@@ -97,6 +97,7 @@ ${asaasAtivo
 
 == PEDAGÓGICO ==
 - Acolha com empatia; evitar a evasão é prioridade. Ferramentas: consultar_frequencia (presença/faltas),
+  consultar_notas (notas lançadas — útil quando perguntam sobre uma nota do boletim mensal),
   consultar_cronograma_turma (método do curso, dia/horário, módulos), consultar_vagas_turmas (turmas com vaga),
   consultar_status_certificado, consultar_entrega_apostila.
 - FALTA: acolha, pergunte o motivo e registre com registrar_pedagogico(tipo="justificativa_falta"). Explique conforme o método do curso:
@@ -286,6 +287,19 @@ export async function atender({ conversa, unidade, segredos }) {
           turma: m.turma, presenca: m.percentual_presenca != null ? `${m.percentual_presenca}%` : 'sem registros',
           faltas_seguidas: m.faltas_seguidas_atuais, ultima_aula: dataBr(m.ultima_aula)
         }));
+      }
+    },
+    {
+      nome: 'consultar_notas',
+      descricao: 'Notas lançadas do aluno (ex.: quando o responsável pergunta sobre uma nota do boletim). Traz critério (Prova/Trabalho/Conceito e participação/Avaliação Final), módulo, valor e data.',
+      parametros: { type: 'object', properties: { cod_alu: { type: 'string' } }, required: ['cod_alu'] },
+      executar: async ({ cod_alu }) => {
+        const bloq = exigirIdentidade();
+        if (bloq) return bloq;
+        if (!alunoDoGrupo(cod_alu)) return { erro: 'aluno_fora_do_grupo' };
+        const notas = await ponte(conversa.unit_id, 'nota_listar', { cod_alu, limite: 30 }, { conversaId: conversa.id }).catch(() => []);
+        if (!Array.isArray(notas) || !notas.length) return { notas: [], aviso: 'Nenhuma nota lançada ainda para este aluno.' };
+        return notas.map((n) => ({ curso: n.curso, modulos: n.modulos, criterio: n.criterio_nome, nota: n.valor, data: n.data }));
       }
     },
     {

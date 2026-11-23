@@ -131,6 +131,15 @@ confere('resumo_bi: frequência média é número 0–100', is_numeric($rbi['fre
 confere('resumo_bi: tem contagem de formandos (80%)', array_key_exists('formandos_80', $rbi), true);
 confere('resumo_bi: novas no mês é número (0 com dados antigos)', $rbi['novas_mes'], 0);
 
+// Boletim mensal (batch): presenças/faltas do mês + % acumulada + notas do mês.
+$bol = $escola->boletimDoMes('2026-10');
+confere('boletim: mês ecoado', $bol['mes'], '2026-10');
+$a13882 = array_values(array_filter($bol['alunos'], fn($x) => $x['cod_alu'] === '13882'));
+confere('boletim: aluno ativo aparece (por matrícula)', count($a13882) >= 1, true);
+confere('boletim: presenças do mês somam > 0', array_sum(array_map(fn($x) => $x['presencas_mes'], $a13882)) > 0, true);
+confere('boletim: faltas do mês somam > 0', array_sum(array_map(fn($x) => $x['faltas_mes'], $a13882)) > 0, true);
+confere('boletim: traz contato e curso', $a13882[0]['telefone'] !== '' && $a13882[0]['curso'] !== '', true);
+
 $fin = new Financeiro($db, $escola, ['usuario_id' => 175, 'login' => 'AGENTE IA'], new DateTimeImmutable('2026-11-04 10:00:00'));
 lanca('valor divergente bloqueia', fn() => $fin->baixar([326669, 326670], 17000, '2026-11-04', 'k0', true, 'teste'), 'valor_divergente');
 lanca('documento incompleto bloqueia', fn() => $fin->baixar([326669], 9000, '2026-11-04', 'k0', true, 'teste'), 'documento_incompleto');
