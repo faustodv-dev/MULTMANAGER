@@ -4,6 +4,7 @@ import { faltantesDaUnidade, mesclarFaltantes, processarFaltantesUnidade, previa
 import { avisoDaUnidade, mesclarAviso, previaAviso, processarAvisoUnidade, AVISO_PADRAO } from './_lib/avisos.js';
 import { formandoDaUnidade, mesclarFormando, previaFormando, processarFormandoUnidade, FORMANDO_PADRAO } from './_lib/formando.js';
 import { boletimDaUnidade, mesclarBoletim, previaBoletim, processarBoletimUnidade, BOLETIM_PADRAO } from './_lib/boletim.js';
+import { panoramaDisparos, mesclarDisparos, configDisparos } from './_lib/disparos.js';
 import { STATUS_CANONICOS } from './_lib/regua.js';
 
 export const config = { maxDuration: 60 };
@@ -82,6 +83,12 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true, previa: r });
     }
 
+    // ===== Central de Disparos (anti-bloqueio): panorama + teto por unidade =====
+    if (acao === 'disparos_obter') {
+      const [config, panorama] = await Promise.all([configDisparos(unitId), panoramaDisparos(unitId)]);
+      return res.status(200).json({ ok: true, config, panorama });
+    }
+
     if (!podeEditar) return res.status(403).json({ erro: 'sem_permissao' });
 
     if (acao === 'aviso_salvar') {
@@ -126,6 +133,14 @@ export default async function handler(req, res) {
     if (acao === 'boletim_rodar') {
       const r = await processarBoletimUnidade(unitId, { mes: b.mes || null, forcar: true });
       return res.status(200).json({ ok: true, resumo: r });
+    }
+
+    if (acao === 'disparos_salvar') {
+      const config = mesclarDisparos(b.config);
+      const { error } = await supabase.from('units').update({ disparos: config }).eq('id', unitId);
+      if (error) return res.status(400).json({ erro: 'falha_salvar', mensagem: error.message });
+      await registrar('disparos', 'salvar', true, { unitId, detalhe: { por: eu.id, teto: config.teto_novas_dia } });
+      return res.status(200).json({ ok: true, config });
     }
 
     // Disparo por LISTA (palestra/aviso geral): envia a mensagem para uma lista de nome+telefone.
