@@ -435,6 +435,19 @@ export default async function handler(req, res) {
     catch (e) { return res.status(500).json({ erro: 'erro', mensagem: e.message }); }
   }
 
+  // Cards abertos de uma conversa/aluno (tela Conversas, ao encerrar): nível de conversa.
+  if (acao === 'cards_abertos') {
+    if (eu.papel !== 'master' && eu.unit_id !== unitId) return res.status(403).json({ erro: 'sem_permissao' });
+    const cod = digitos(b.cod_alu || '');
+    let q = supabase.from('cards').select('id, titulo, departamento, status, nome_aluno').eq('unit_id', unitId).neq('status', 'resolvido');
+    if (b.conversa_id && cod) q = q.or(`conversa_id.eq.${b.conversa_id},cod_alu.eq.${cod}`);
+    else if (cod) q = q.eq('cod_alu', cod);
+    else if (b.conversa_id) q = q.eq('conversa_id', b.conversa_id);
+    else return res.status(200).json({ ok: true, cards: [] });
+    const { data } = await q.order('created_at', { ascending: true }).limit(20);
+    return res.status(200).json({ ok: true, cards: data || [] });
+  }
+
   // Feriados e fechamentos (configurações da unidade): nível de unidade, fora do gate de departamento.
   if (acao === 'feriados_listar' || acao === 'feriado_criar' || acao === 'feriado_remover') {
     if (eu.papel !== 'master' && eu.unit_id !== unitId) return res.status(403).json({ erro: 'sem_permissao' });
