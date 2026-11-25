@@ -209,9 +209,9 @@ export default function Dashboard() {
           <>
             {/* Pedagógico — prioridade */}
             {temPed && (
-              <Painel titulo="Pedagógico" accent="emerald" acao={<GraduationCap className="h-4 w-4 text-emerald-600" />}>
+              <Painel titulo="Tarefas Pedagógicas" accent="emerald" acao={<GraduationCap className="h-4 w-4 text-emerald-600" />}>
                 <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-                  <Kpi rotulo="Atendimentos abertos" valor={ped?.abertos ?? 0} sub={`${ped?.alta ?? 0} de alta prioridade`} accent="sky" icon={<GraduationCap className="h-4 w-4" />} />
+                  <Kpi rotulo="Tarefas abertas" valor={ped?.abertos ?? 0} sub={`${ped?.alta ?? 0} de alta prioridade`} accent="sky" icon={<GraduationCap className="h-4 w-4" />} />
                   <Kpi rotulo="Resolvidos no período" valor={ped?.resolvidos_periodo ?? 0} accent="emerald" />
                   <Kpi rotulo="Risco de evasão" valor={dados.risco?.total ?? 0} sub={`${dados.risco?.nivel2 ?? 0} em nível 2 · ${dados.risco?.novos_periodo ?? 0} novos`} accent="red" icon={<AlertTriangle className="h-4 w-4" />} />
                   <Kpi rotulo="Aguardando aluno" valor={ped?.aguardando ?? 0} accent="amber" />
@@ -221,9 +221,9 @@ export default function Dashboard() {
 
             {/* Financeiro — segundo */}
             {temFin && (
-              <Painel titulo="Financeiro" accent="sky" acao={<Receipt className="h-4 w-4 text-sky-600" />}>
+              <Painel titulo="Tarefas Financeiras" accent="sky" acao={<Receipt className="h-4 w-4 text-sky-600" />}>
                 <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-                  <Kpi rotulo="Atendimentos abertos" valor={fin?.abertos ?? 0} sub={`${fin?.alta ?? 0} de alta prioridade`} accent="sky" icon={<Receipt className="h-4 w-4" />} />
+                  <Kpi rotulo="Tarefas abertas" valor={fin?.abertos ?? 0} sub={`${fin?.alta ?? 0} de alta prioridade`} accent="sky" icon={<Receipt className="h-4 w-4" />} />
                   <Kpi rotulo="Resolvidos no período" valor={fin?.resolvidos_periodo ?? 0} accent="emerald" />
                   <Kpi rotulo="Cobranças enviadas" valor={dados.fila?.cobranca ?? 0} sub="no período (fila)" accent="violet" icon={<Send className="h-4 w-4" />} />
                   <Kpi rotulo="Aguardando" valor={fin?.aguardando ?? 0} accent="amber" />
@@ -237,7 +237,7 @@ export default function Dashboard() {
                 <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
                   <Kpi rotulo="Alunos encaminhados" valor={dados.agencia_kpi?.encaminhados_periodo ?? 0} sub={`${dados.agencia_kpi?.contratados_periodo ?? 0} contratado(s) no período`} accent="violet" icon={<Briefcase className="h-4 w-4" />} />
                   <Kpi rotulo="Vagas abertas" valor={dados.agencia_kpi?.vagas_abertas ?? 0} accent="sky" />
-                  <Kpi rotulo="Atendimentos abertos" valor={enc?.abertos ?? 0} sub={`${enc?.alta ?? 0} de alta prioridade`} accent="amber" />
+                  <Kpi rotulo="Tarefas abertas" valor={enc?.abertos ?? 0} sub={`${enc?.alta ?? 0} de alta prioridade`} accent="amber" />
                   <Kpi rotulo="Resolvidos no período" valor={enc?.resolvidos_periodo ?? 0} accent="emerald" />
                 </div>
               </Painel>
@@ -277,7 +277,7 @@ export default function Dashboard() {
 
             {/* Gráficos */}
             <div className="grid gap-4 lg:grid-cols-2">
-              <Painel titulo="Atendimentos resolvidos por dia" accent="emerald">
+              <Painel titulo="Tarefas resolvidas por dia" accent="emerald">
                 {dados.serie.length ? (
                   <ResponsiveContainer width="100%" height={220}>
                     <AreaChart data={dados.serie} margin={{ left: -20, right: 8, top: 4 }}>

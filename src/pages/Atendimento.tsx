@@ -32,6 +32,7 @@ function SeloTemp({ t }: { t?: Temp }) {
   return <span className={cn("shrink-0 text-xs", s.cls)} title={`${s.r} (${t.score}/100)${t.motivos?.length ? " — " + t.motivos.join(", ") : ""}`}>{s.e}</span>;
 }
 const codAluConversa = (c: any): string | null => c?.contexto?.grupo?.alunos?.[0]?.cod_alu || null;
+const ROTULO_DEP: Record<string, string> = { financeiro: "Tarefa financeira", pedagogico: "Tarefa pedagógica", encaminhamento: "Encaminhamento" };
 const ehGrupo = (c: any) => String(c?.remote_jid || "").includes("@g.us");
 
 export default function Atendimento() {
@@ -315,6 +316,34 @@ function Chat({ conversa, meuId, voltar }: { conversa: Conversa; meuId: string; 
     toast.success(status === "ia" ? "Conversa devolvida para a assistente" : status === "humano" ? "Você assumiu a conversa" : "Conversa encerrada");
   };
 
+  // Ao encerrar: se o aluno tem tarefas (cards) abertas, oferece finalizá-las junto — sem pular de tela.
+  const codAluEnc = conversa.contexto?.grupo?.alunos?.[0]?.cod_alu || null;
+  const [encCards, setEncCards] = useState<any[] | null>(null);
+  const [encSel, setEncSel] = useState<Set<string>>(new Set());
+  const [encBusy, setEncBusy] = useState(false);
+
+  const iniciarEncerrar = async () => {
+    try {
+      const r = await api<{ cards: any[] }>("crm", { acao: "cards_abertos", unidade: conversa.unit_id, conversa_id: conversa.id, cod_alu: codAluEnc });
+      if (!r.cards?.length) { await mudarStatus("encerrada"); return; }
+      setEncSel(new Set()); setEncCards(r.cards);
+    } catch { await mudarStatus("encerrada"); }
+  };
+
+  const confirmarEncerrar = async (ids: string[]) => {
+    setEncBusy(true);
+    let falhas = 0;
+    for (const id of ids) {
+      const c = (encCards || []).find((x) => x.id === id);
+      try { await api("crm", { acao: "card_mover", card_id: id, status: "resolvido", departamento: c?.departamento, unidade: conversa.unit_id }); }
+      catch { falhas++; }
+    }
+    await mudarStatus("encerrada");
+    if (falhas) toast.error(`${falhas} tarefa(s) sem permissão para finalizar.`);
+    else if (ids.length) toast.success(`${ids.length} tarefa(s) finalizada(s).`);
+    setEncBusy(false); setEncCards(null);
+  };
+
   const abrir = async (path: string) => {
     const u = await urlArquivo(path);
     if (u) window.open(u, "_blank", "noopener"); else toast.error("Não foi possível abrir o arquivo.");
@@ -341,8 +370,27 @@ function Chat({ conversa, meuId, voltar }: { conversa: Conversa; meuId: string; 
         <VincularAluno conversa={conversa} />
         {conversa.status !== "humano" && <Button size="sm" variant="outline" onClick={() => mudarStatus("humano")}><UserRound className="mr-1 h-4 w-4" />Assumir</Button>}
         {conversa.status !== "ia" && <Button size="sm" variant="outline" onClick={() => mudarStatus("ia")}><Bot className="mr-1 h-4 w-4" />Devolver à assistente</Button>}
-        {conversa.status !== "encerrada" && <Button size="sm" variant="outline" onClick={() => mudarStatus("encerrada")}><CheckCircle2 className="mr-1 h-4 w-4" />Encerrar</Button>}
+        {conversa.status !== "encerrada" && <Button size="sm" variant="outline" onClick={iniciarEncerrar}><CheckCircle2 className="mr-1 h-4 w-4" />Encerrar</Button>}
       </header>
+
+      <Dialog open={!!encCards} onOpenChange={(o) => !o && !encBusy && setEncCards(null)}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Encerrar conversa</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">Este aluno tem {encCards?.length} tarefa(s) aberta(s). Marque as que você já resolveu para finalizar junto — ou só encerre a conversa e deixe as tarefas abertas.</p>
+          <div className="max-h-64 space-y-1.5 overflow-y-auto">
+            {(encCards || []).map((c) => (
+              <label key={c.id} className="flex items-start gap-2 rounded-lg border p-2.5 text-sm">
+                <input type="checkbox" className="mt-1" checked={encSel.has(c.id)} onChange={(e) => setEncSel((s) => { const n = new Set(s); e.target.checked ? n.add(c.id) : n.delete(c.id); return n; })} />
+                <span><span className="font-medium">{c.titulo}</span> <span className="text-xs text-muted-foreground">· {ROTULO_DEP[c.departamento] || c.departamento}</span></span>
+              </label>
+            ))}
+          </div>
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button variant="outline" onClick={() => confirmarEncerrar([])} disabled={encBusy}>Só encerrar conversa</Button>
+            <Button onClick={() => confirmarEncerrar([...encSel])} disabled={encBusy || !encSel.size}>Encerrar e finalizar ({encSel.size})</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <div className="flex-1 space-y-2 overflow-y-auto bg-muted/40 p-4">
         {msgs.map((m) => (

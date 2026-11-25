@@ -137,7 +137,7 @@ export default function Departamento({ departamento, titulo, Icone }: { departam
           <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary"><Icone className="h-5 w-5" /></span>
           <div>
             <h1 className="text-lg font-bold leading-tight tracking-tight">{titulo}</h1>
-            <p className="text-xs text-muted-foreground">Atendimentos e rotina da unidade</p>
+            <p className="text-xs text-muted-foreground">Tarefas e rotina da unidade</p>
           </div>
         </div>
         {perfil?.papel === "master" && unidades.length > 1 && (
@@ -145,7 +145,7 @@ export default function Departamento({ departamento, titulo, Icone }: { departam
             {unidades.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
           </select>
         )}
-        <Button onClick={() => setNovo(true)}><Plus className="mr-1 h-4 w-4" />Novo atendimento</Button>
+        <Button onClick={() => setNovo(true)}><Plus className="mr-1 h-4 w-4" />Nova tarefa</Button>
       </header>
 
       {carregando ? (
@@ -176,7 +176,7 @@ export default function Departamento({ departamento, titulo, Icone }: { departam
 
           {resumo && (
             <section className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-              <Kpi icone={<FileText className="h-4 w-4" />} valor={resumo.atendimentos_abertos} rotulo="Atendimentos abertos" cor="text-orange-600" chip="bg-orange-500/10" barra="bg-orange-500" />
+              <Kpi icone={<FileText className="h-4 w-4" />} valor={resumo.atendimentos_abertos} rotulo="Tarefas abertas" cor="text-orange-600" chip="bg-orange-500/10" barra="bg-orange-500" />
               <Kpi icone={<Flame className="h-4 w-4" />} valor={resumo.atendimentos_alta} rotulo="Prioridade alta" cor="text-red-600" chip="bg-red-500/10" barra="bg-red-500" alerta={resumo.atendimentos_alta > 0} />
               <Kpi icone={<CheckCheck className="h-4 w-4" />} valor={resumo.atendimentos_resolvidos_mes} rotulo="Resolvidos no mês" cor="text-green-600" chip="bg-green-500/10" barra="bg-green-500" />
               <Kpi icone={<TrendingUp className="h-4 w-4" />} valor={`${resumo.pops_pct}%`} rotulo="Rotina do mês" sub={`${resumo.pops_feitos}/${resumo.pops_total}`} cor="text-green-700" chip="bg-green-600/10" barra="bg-green-600" />
@@ -187,7 +187,7 @@ export default function Departamento({ departamento, titulo, Icone }: { departam
 
           {filtro !== "encerrados" && (
           <section>
-            <SecHeader icone={<FileText className="h-4 w-4" />} titulo="Atendimentos" sub="Finalize um card para arquivá-lo no histórico do aluno" />
+            <SecHeader icone={<FileText className="h-4 w-4" />} titulo="Tarefas" sub="Finalize uma tarefa para arquivá-la no histórico do aluno" />
             <div className={cn("grid gap-3", DEP === "pedagogico" ? "lg:grid-cols-5" : "lg:grid-cols-3")}>
               {colsDoDep(DEP).map((col) => {
                 const lista = abertosVis.filter((c) => c.status === col.id);
@@ -230,11 +230,11 @@ export default function Departamento({ departamento, titulo, Icone }: { departam
 
           {mostrarEncerrados && (
             <section>
-              <SecHeader icone={<CheckCheck className="h-4 w-4" />} titulo="Atendimentos encerrados" sub={fDe || fAte ? "no período selecionado (por data de conclusão)" : "mais recentes (até 300)"} />
+              <SecHeader icone={<CheckCheck className="h-4 w-4" />} titulo="Tarefas encerradas" sub={fDe || fAte ? "no período selecionado (por data de conclusão)" : "mais recentes (até 300)"} />
               {carregandoEnc ? (
                 <div className="flex items-center gap-2 py-6 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Carregando encerrados…</div>
               ) : !encerrados.length ? (
-                <p className="rounded-xl border bg-background py-8 text-center text-sm text-muted-foreground">Nenhum atendimento encerrado{fDe || fAte ? " nesse período" : ""}.</p>
+                <p className="rounded-xl border bg-background py-8 text-center text-sm text-muted-foreground">Nenhuma tarefa encerrada{fDe || fAte ? " nesse período" : ""}.</p>
               ) : (
                 <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                   {encerrados.map((card) => (
@@ -364,7 +364,7 @@ function NovoAtendimento({ dep, unidade, colabs, aoFechar, aoCriar }: any) {
       const corpo = d.length === 11 ? { cpf: d } : { telefone: d };
       const r = await api<any>("crm", { acao: "buscar_aluno", departamento: dep, unidade, ...corpo });
       setGrupos(r.grupos);
-      if (!r.grupos.length) toast.info("Nada encontrado. Crie um atendimento avulso se preciso.");
+      if (!r.grupos.length) toast.info("Nada encontrado. Crie uma tarefa avulsa se preciso.");
     } catch (e: any) { toast.error(e.message); } finally { setBusy(false); }
   };
   const criar = async () => {
@@ -379,7 +379,7 @@ function NovoAtendimento({ dep, unidade, colabs, aoFechar, aoCriar }: any) {
       if (sel) Object.assign(corpo, { cod_alu: sel.cod_alu, nome_aluno: sel.nome, nome_responsavel: sel.nome_responsavel, telefone: sel.telefone });
       else Object.assign(corpo, { nome_aluno: form.nome_aluno, nome_responsavel: form.nome_responsavel, telefone: form.telefone });
       await api<any>("crm", corpo);
-      toast.success("Atendimento criado.");
+      toast.success("Tarefa criada.");
       aoCriar();
     } catch (e: any) { toast.error(e.message); } finally { setBusy(false); }
   };
@@ -387,7 +387,7 @@ function NovoAtendimento({ dep, unidade, colabs, aoFechar, aoCriar }: any) {
   return (
     <Dialog open onOpenChange={aoFechar}>
       <DialogContent className="max-h-[90vh] overflow-y-auto">
-        <DialogHeader><DialogTitle>Novo atendimento</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>Nova tarefa</DialogTitle></DialogHeader>
         {!avulso && (
           <div className="flex items-end gap-2">
             <div className="flex-1"><Label className="text-xs">CPF ou telefone</Label>
@@ -429,7 +429,7 @@ function NovoAtendimento({ dep, unidade, colabs, aoFechar, aoCriar }: any) {
             </div>
           </div>
         )}
-        <DialogFooter><Button onClick={criar} disabled={busy || (!sel && !avulso)}>Criar atendimento</Button></DialogFooter>
+        <DialogFooter><Button onClick={criar} disabled={busy || (!sel && !avulso)}>Criar tarefa</Button></DialogFooter>
       </DialogContent>
     </Dialog>
   );
@@ -457,7 +457,7 @@ function DossieDialog({ dep, card, unidade, colabs, aoFechar, aoMudar, mover, ab
   };
 
   const verSistema = async () => {
-    if (!card.cod_alu) return toast.info("Atendimento sem aluno vinculado.");
+    if (!card.cod_alu) return toast.info("Tarefa sem aluno vinculado.");
     setCarregandoSis(true);
     try { const r = await api<any>("crm", { acao: "aluno_financeiro", cod_alu: card.cod_alu, ...base }); setParcelas(r.parcelas); }
     catch (e: any) { toast.error(e.message); } finally { setCarregandoSis(false); }
@@ -476,7 +476,7 @@ function DossieDialog({ dep, card, unidade, colabs, aoFechar, aoMudar, mover, ab
   return (
     <Dialog open onOpenChange={aoFechar}>
       <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
-        <DialogHeader><DialogTitle className="pr-6">{card.nome_aluno || card.nome_responsavel || "Atendimento"}</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle className="pr-6">{card.nome_aluno || card.nome_responsavel || "Tarefa"}</DialogTitle></DialogHeader>
         <p className="-mt-2 text-sm text-muted-foreground">{card.titulo}</p>
 
         <div className="grid grid-cols-2 gap-x-4 gap-y-1 rounded-lg bg-muted/50 p-3 text-sm md:grid-cols-4">
@@ -612,7 +612,7 @@ function DossieDialog({ dep, card, unidade, colabs, aoFechar, aoMudar, mover, ab
           </Bloco>
         )}
 
-        <Bloco titulo="Linha do tempo do atendimento">
+        <Bloco titulo="Linha do tempo da tarefa">
           <Textarea rows={2} placeholder="Anotar interação…" value={nota} onChange={(e) => setNota(e.target.value)} />
           <div className="mt-2 flex flex-wrap gap-2">
             <Button size="sm" onClick={() => addNota(true)} disabled={busy || !card.cod_alu} title={!card.cod_alu ? "Sem aluno vinculado" : ""}>Registrar no CRM e no sistema</Button>
@@ -630,8 +630,8 @@ function DossieDialog({ dep, card, unidade, colabs, aoFechar, aoMudar, mover, ab
         </Bloco>
 
         <DialogFooter className="flex-wrap gap-2 sm:justify-between">
-          <span className="text-xs text-muted-foreground">Finalize quando o atendimento terminar — vai para o histórico.</span>
-          <Button onClick={finalizar}><CheckCheck className="mr-1 h-4 w-4" />Finalizar atendimento</Button>
+          <span className="text-xs text-muted-foreground">Finalize quando a tarefa terminar — vai para o histórico.</span>
+          <Button onClick={finalizar}><CheckCheck className="mr-1 h-4 w-4" />Finalizar tarefa</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
